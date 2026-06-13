@@ -97,7 +97,7 @@ Request:
 }
 ```
 
-Set `display_name` to `null` to clear it.
+The `display_name` field is required. Set `display_name` to `null` to clear it; omitting the field is rejected as `invalid_request`.
 
 Success: `200 OK`, returning the updated user summary.
 
@@ -121,7 +121,7 @@ Success: `200 OK`
 
 ## Error Format
 
-Errors use stable machine-readable codes:
+Errors use stable machine-readable codes. Request parsing errors (for example malformed JSON, non-JSON request content, or invalid query parameters) use this same envelope.
 
 ```json
 {

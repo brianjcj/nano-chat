@@ -1,12 +1,19 @@
-use axum::{Json, Router, extract::Query, extract::State, routing::get};
+use axum::{
+    Json, Router,
+    extract::{
+        Query, State,
+        rejection::{JsonRejection, QueryRejection},
+    },
+    routing::get,
+};
 
 use crate::{
     app::AppState,
     auth::types::CurrentUser,
-    error::AppResult,
+    error::{AppError, AppResult},
     users::{
         service,
-        types::{UpdateMeRequest, UserSummary, UsernameLookupQuery},
+        types::{PatchField, UpdateMeRequest, UserSummary, UsernameLookupQuery},
     },
 };
 
@@ -23,19 +30,27 @@ async fn get_me(current_user: CurrentUser) -> Json<UserSummary> {
 async fn patch_me(
     current_user: CurrentUser,
     State(state): State<AppState>,
-    Json(request): Json<UpdateMeRequest>,
+    request: Result<Json<UpdateMeRequest>, JsonRejection>,
 ) -> AppResult<Json<UserSummary>> {
+    let Json(request) = request.map_err(AppError::from_json_rejection)?;
+    let display_name = match request.display_name {
+        PatchField::Missing => {
+            return Err(AppError::invalid_request("display_name field is required"));
+        }
+        PatchField::Present(display_name) => display_name,
+    };
+
     let user =
-        service::update_display_name(&state.pool, current_user.user_id, request.display_name)
-            .await?;
+        service::update_display_name(&state.pool, current_user.user_id, display_name).await?;
     Ok(Json(user))
 }
 
 async fn get_user_by_username(
     _current_user: CurrentUser,
     State(state): State<AppState>,
-    Query(query): Query<UsernameLookupQuery>,
+    query: Result<Query<UsernameLookupQuery>, QueryRejection>,
 ) -> AppResult<Json<UserSummary>> {
+    let Query(query) = query.map_err(AppError::from_query_rejection)?;
     let user = service::get_user_by_username(&state.pool, &query.username).await?;
     Ok(Json(user))
 }

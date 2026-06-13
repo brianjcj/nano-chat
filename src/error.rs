@@ -1,4 +1,9 @@
-use axum::{Json, http::StatusCode, response::IntoResponse};
+use axum::{
+    Json,
+    extract::rejection::{JsonRejection, QueryRejection},
+    http::StatusCode,
+    response::IntoResponse,
+};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,6 +94,24 @@ impl AppError {
             code,
             message: message.into(),
         }
+    }
+
+    pub fn invalid_request(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::BAD_REQUEST, ErrorCode::InvalidRequest, message)
+    }
+
+    pub fn from_json_rejection(rejection: JsonRejection) -> Self {
+        Self::invalid_request(match rejection {
+            JsonRejection::MissingJsonContentType(_) => "Request body must be JSON",
+            JsonRejection::JsonSyntaxError(_) => "Malformed JSON request body",
+            JsonRejection::JsonDataError(_) => "Invalid JSON request body",
+            JsonRejection::BytesRejection(_) => "Invalid request body",
+            _ => "Invalid request",
+        })
+    }
+
+    pub fn from_query_rejection(_rejection: QueryRejection) -> Self {
+        Self::invalid_request("Invalid query parameters")
     }
 }
 

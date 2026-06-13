@@ -1,6 +1,6 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 
 static USERNAME_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-z0-9_]{3,32}$").unwrap());
@@ -28,7 +28,28 @@ pub struct UserSummary {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateMeRequest {
-    pub display_name: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_patch_field")]
+    pub(crate) display_name: PatchField<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PatchField<T> {
+    Missing,
+    Present(Option<T>),
+}
+
+impl<T> Default for PatchField<T> {
+    fn default() -> Self {
+        Self::Missing
+    }
+}
+
+fn deserialize_patch_field<'de, D, T>(deserializer: D) -> Result<PatchField<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(PatchField::Present)
 }
 
 #[derive(Debug, Deserialize)]
