@@ -21,7 +21,8 @@ export function useMarkRead({
   const queryClient = useQueryClient();
   const realtimeClient = useRealtimeClient();
   const visibilityState = useDocumentVisibilityState();
-  const lastRequestedReadSeqRef = useRef<Record<string, number>>({});
+  const inFlightReadSeqRef = useRef<Record<string, number>>({});
+  const lastSucceededReadSeqRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     if (!conversation || visibilityState !== "visible" || !isNearBottom) {
@@ -32,30 +33,45 @@ export function useMarkRead({
       return;
     }
 
-    if (
-      lastRequestedReadSeqRef.current[conversation.conversation_id] >=
-      highestContiguousSeq
-    ) {
+    const conversationId = conversation.conversation_id;
+    const lastSucceededReadSeq = Math.max(
+      lastSucceededReadSeqRef.current[conversationId] ?? 0,
+      conversation.read_seq,
+    );
+
+    if (lastSucceededReadSeq >= highestContiguousSeq) {
       return;
     }
 
-    lastRequestedReadSeqRef.current[conversation.conversation_id] =
-      highestContiguousSeq;
+    if (inFlightReadSeqRef.current[conversationId] >= highestContiguousSeq) {
+      return;
+    }
+
+    inFlightReadSeqRef.current[conversationId] = highestContiguousSeq;
 
     void realtimeClient
       .sendCommand<"conversation.read", ConversationReadResult>(
         "conversation.read",
         {
-          conversation_id: conversation.conversation_id,
+          conversation_id: conversationId,
           read_seq: highestContiguousSeq,
         },
       )
       .then((result) => {
+        lastSucceededReadSeqRef.current[result.conversation_id] = Math.max(
+          lastSucceededReadSeqRef.current[result.conversation_id] ?? 0,
+          result.read_seq,
+        );
         applyReadResult(queryClient, result);
         useImStore.getState().clearUnreadCorrection(result.conversation_id);
       })
       .catch(() => {
         // Server state remains authoritative for out-of-range or business errors.
+      })
+      .finally(() => {
+        if (inFlightReadSeqRef.current[conversationId] === highestContiguousSeq) {
+          delete inFlightReadSeqRef.current[conversationId];
+        }
       });
   }, [
     conversation,

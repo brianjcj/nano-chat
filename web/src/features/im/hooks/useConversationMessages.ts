@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type SetStateAction,
@@ -10,6 +11,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useApiClient } from "@/app/AppProviders";
 import { imQueryKeys } from "@/features/im/api/imQueries";
+import { useImStore } from "@/features/im/state/imStore";
 import type { ConversationSummary, Message } from "@/shared/api/types";
 import {
   isServerSequenced,
@@ -18,6 +20,7 @@ import {
 } from "@/shared/utils/message";
 
 const HISTORY_PAGE_SIZE = 50;
+const HISTORY_SYNC_PAGE_SIZE = 100;
 
 type UseConversationMessagesResult = {
   messages: ChatMessage[];
@@ -38,6 +41,10 @@ export function useConversationMessages(
   const [isFetchingOlder, setIsFetchingOlder] = useState(false);
   const [loadedAllHistoryByConversationId, setLoadedAllHistoryByConversationId] =
     useState<Record<string, boolean>>({});
+  const inFlightHistorySyncsRef = useRef<Record<string, number>>({});
+  const historySyncMarker = useImStore((state) =>
+    conversationId ? state.historySyncMarkers[conversationId] : undefined,
+  );
 
   const latestQuery = useMemo(
     () => ({
@@ -76,6 +83,49 @@ export function useConversationMessages(
         mergeMessagesBySeq(existingMessages, fetchedMessages),
     );
   }, [conversation, latestMessagesQuery.data, queryClient]);
+
+  useEffect(() => {
+    if (!conversation || !historySyncMarker) {
+      return;
+    }
+
+    const conversationId = conversation.conversation_id;
+    const afterSeq = historySyncMarker.after_seq;
+
+    if (inFlightHistorySyncsRef.current[conversationId] === afterSeq) {
+      return;
+    }
+
+    inFlightHistorySyncsRef.current[conversationId] = afterSeq;
+
+    void apiClient
+      .listMessages(conversationId, {
+        after_seq: afterSeq,
+        limit: HISTORY_SYNC_PAGE_SIZE,
+      })
+      .then((syncedMessages) => {
+        queryClient.setQueryData<ChatMessage[]>(
+          imQueryKeys.messages(conversationId),
+          (existingMessages = []) =>
+            mergeMessagesBySeq(existingMessages, syncedMessages),
+        );
+
+        const latestMarker =
+          useImStore.getState().historySyncMarkers[conversationId];
+
+        if (latestMarker?.after_seq === afterSeq) {
+          useImStore.getState().clearHistorySyncMarker(conversationId);
+        }
+      })
+      .catch(() => {
+        // Keep the marker so a later render/reconnect can retry the sync.
+      })
+      .finally(() => {
+        if (inFlightHistorySyncsRef.current[conversationId] === afterSeq) {
+          delete inFlightHistorySyncsRef.current[conversationId];
+        }
+      });
+  }, [apiClient, conversation, historySyncMarker, queryClient]);
 
   const messages = canonicalMessagesQuery.data ?? [];
   const hasLoadedAllKnownHistory = Boolean(
