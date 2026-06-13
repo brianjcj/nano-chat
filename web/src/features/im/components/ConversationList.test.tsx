@@ -13,9 +13,10 @@ import {
 } from "@/app/test-utils";
 import { ConversationList } from "./ConversationList";
 import { imQueryKeys } from "@/features/im/api/imQueries";
+import { applyRealtimeEvent } from "@/features/im/state/cacheUpdates";
 import { useImStore } from "@/features/im/state/imStore";
 import type { ApiClient } from "@/shared/api/client";
-import type { ConversationSummary, UserSummary } from "@/shared/api/types";
+import type { ConversationSummary, Message, UserSummary } from "@/shared/api/types";
 import { createAppI18n } from "@/shared/i18n/i18n";
 
 const localUser: UserSummary = {
@@ -166,6 +167,87 @@ describe("ConversationList", () => {
     expect(
       screen.getByText("Look up a user for a direct chat or create a group."),
     ).toBeInTheDocument();
+  });
+
+  it("preserves realtime unread corrections until a conversation refetch returns authoritative unread", async () => {
+    const queryClient = createQueryClient();
+    const realtimeMessage: Message = {
+      message_id: "message-realtime-1",
+      conversation_id: "direct-1",
+      message_seq: 2,
+      sender: directUser,
+      body: "Realtime ping",
+      created_at: "2026-06-14T00:03:00.000Z",
+    };
+    const listConversations = vi
+      .fn<ApiClient["listConversations"]>()
+      .mockResolvedValueOnce([
+        conversation({
+          conversation_id: "direct-1",
+          type: "direct",
+          name: null,
+          latest_message_seq: 1,
+          unread_count: 0,
+          direct_user: directUser,
+        }),
+      ])
+      .mockResolvedValueOnce([
+        conversation({
+          conversation_id: "direct-1",
+          type: "direct",
+          name: null,
+          latest_message_seq: 2,
+          unread_count: 1,
+          direct_user: directUser,
+          latest_message: {
+            message_id: realtimeMessage.message_id,
+            message_seq: realtimeMessage.message_seq,
+            sender: realtimeMessage.sender,
+            body: realtimeMessage.body,
+            created_at: realtimeMessage.created_at,
+          },
+        }),
+      ]);
+
+    await renderConversationList({ listConversations, queryClient });
+    expect(await screen.findByText("Alice A.")).toBeInTheDocument();
+
+    act(() => {
+      useImStore.getState().setCurrentConversationId("current-conversation");
+      applyRealtimeEvent({
+        queryClient,
+        store: useImStore,
+        currentUserId: "user-local",
+        event: {
+          type: "message.created",
+          payload: {
+            conversation_id: "direct-1",
+            message: realtimeMessage,
+          },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("1 unread")).toHaveTextContent("1");
+    });
+    expect(useImStore.getState().unreadCorrections).toMatchObject({
+      "direct-1": 1,
+    });
+
+    await act(async () => {
+      await queryClient.refetchQueries({
+        queryKey: imQueryKeys.conversations(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(listConversations).toHaveBeenCalledTimes(2);
+      expect(screen.getByLabelText("1 unread")).toHaveTextContent("1");
+    });
+    expect(useImStore.getState().unreadCorrections).not.toHaveProperty(
+      "direct-1",
+    );
   });
 
   it("clears local unread corrections when fresh conversation query data arrives", async () => {

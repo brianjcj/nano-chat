@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { useApiClient } from "@/app/AppProviders";
-import type { MessageHistoryQuery } from "@/shared/api/types";
+import { useImStore } from "@/features/im/state/imStore";
+import type { ConversationSummary, MessageHistoryQuery } from "@/shared/api/types";
 
 export const imQueryKeys = {
   all: ["im"] as const,
@@ -27,8 +28,30 @@ export function useConversationsQuery() {
 
   return useQuery({
     queryKey: imQueryKeys.conversations(),
-    queryFn: () => apiClient.listConversations(),
+    queryFn: async () => {
+      const conversations = await apiClient.listConversations();
+
+      reconcileUnreadCorrections(conversations);
+
+      return conversations;
+    },
   });
+}
+
+function reconcileUnreadCorrections(conversations: ConversationSummary[]) {
+  const store = useImStore.getState();
+  const currentCorrections = store.unreadCorrections;
+
+  for (const conversation of conversations) {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        currentCorrections,
+        conversation.conversation_id,
+      )
+    ) {
+      store.clearUnreadCorrection(conversation.conversation_id);
+    }
+  }
 }
 
 export function useMessagesQuery(

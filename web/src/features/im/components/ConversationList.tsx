@@ -1,5 +1,5 @@
 import { MessageCircleHeart, MessagesSquare } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router";
 
@@ -16,48 +16,11 @@ export function ConversationList() {
     conversationId?: string;
   }>();
   const conversationsQuery = useConversationsQuery();
-  const lastReconciledDataUpdatedAtRef = useRef(
-    conversationsQuery.dataUpdatedAt,
-  );
   const unreadCorrections = useImStore((state) => state.unreadCorrections);
   const setCurrentConversationId = useImStore(
     (state) => state.setCurrentConversationId,
   );
-  const clearUnreadCorrection = useImStore(
-    (state) => state.clearUnreadCorrection,
-  );
   const setMobilePanel = useImStore((state) => state.setMobilePanel);
-
-  useEffect(() => {
-    if (!conversationsQuery.data || conversationsQuery.dataUpdatedAt === 0) {
-      return;
-    }
-
-    if (
-      lastReconciledDataUpdatedAtRef.current === conversationsQuery.dataUpdatedAt
-    ) {
-      return;
-    }
-
-    lastReconciledDataUpdatedAtRef.current = conversationsQuery.dataUpdatedAt;
-
-    const currentCorrections = useImStore.getState().unreadCorrections;
-
-    for (const conversation of conversationsQuery.data) {
-      if (
-        Object.prototype.hasOwnProperty.call(
-          currentCorrections,
-          conversation.conversation_id,
-        )
-      ) {
-        clearUnreadCorrection(conversation.conversation_id);
-      }
-    }
-  }, [
-    clearUnreadCorrection,
-    conversationsQuery.data,
-    conversationsQuery.dataUpdatedAt,
-  ]);
 
   function selectConversation(conversationId: string) {
     setCurrentConversationId(conversationId);
