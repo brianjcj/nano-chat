@@ -1,5 +1,5 @@
 import { ArrowDown, Loader2 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/shared/ui/button";
@@ -33,16 +33,56 @@ export function MessageList({
 }: MessageListProps) {
   const { t } = useTranslation();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const pendingHistoryPrependRef = useRef<PendingHistoryPrepend | null>(null);
+  const oldestMessageSeq = getMinimumMessageSeq(messages);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const scrollContainer = scrollContainerRef.current;
 
-    if (!scrollContainer || !isNearBottom) {
+    if (!scrollContainer) {
       return;
     }
 
-    scrollContainer.scrollTop = scrollContainer.scrollHeight;
-  }, [isNearBottom, messages.length]);
+    const pendingHistoryPrepend = pendingHistoryPrependRef.current;
+
+    if (pendingHistoryPrepend) {
+      const didPrependOlderMessages =
+        messages.length > pendingHistoryPrepend.messageCount &&
+        oldestMessageSeq < pendingHistoryPrepend.oldestMessageSeq;
+
+      if (didPrependOlderMessages) {
+        pendingHistoryPrependRef.current = null;
+        scrollContainer.scrollTop =
+          pendingHistoryPrepend.scrollTop +
+          scrollContainer.scrollHeight -
+          pendingHistoryPrepend.scrollHeight;
+        return;
+      }
+
+      if (!isFetchingOlder) {
+        pendingHistoryPrependRef.current = null;
+      }
+    }
+
+    if (isNearBottom) {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    }
+  }, [isFetchingOlder, isNearBottom, messages.length, oldestMessageSeq]);
+
+  async function handleLoadOlderClick() {
+    const scrollContainer = scrollContainerRef.current;
+
+    if (scrollContainer) {
+      pendingHistoryPrependRef.current = {
+        messageCount: messages.length,
+        oldestMessageSeq,
+        scrollHeight: scrollContainer.scrollHeight,
+        scrollTop: scrollContainer.scrollTop,
+      };
+    }
+
+    await loadOlder();
+  }
 
   function updateNearBottom() {
     const scrollContainer = scrollContainerRef.current;
@@ -68,7 +108,7 @@ export function MessageList({
             <Button
               disabled={isFetchingOlder || isLoading}
               onClick={() => {
-                void loadOlder();
+                void handleLoadOlderClick();
               }}
               size="sm"
               type="button"
@@ -121,6 +161,13 @@ export function MessageList({
     </div>
   );
 }
+
+type PendingHistoryPrepend = {
+  messageCount: number;
+  oldestMessageSeq: number;
+  scrollHeight: number;
+  scrollTop: number;
+};
 
 function MessageBubble({
   currentUserId,
@@ -194,4 +241,16 @@ function isScrollNearBottom(scrollContainer: HTMLDivElement) {
       scrollContainer.clientHeight <=
     NEAR_BOTTOM_THRESHOLD_PX
   );
+}
+
+function getMinimumMessageSeq(messages: ChatMessage[]) {
+  const seqs = messages
+    .map((message) => message.message_seq)
+    .filter((messageSeq): messageSeq is number => typeof messageSeq === "number");
+
+  if (seqs.length === 0) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return Math.min(...seqs);
 }
