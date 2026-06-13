@@ -5,6 +5,7 @@ use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 use crate::{
+    app::AppLifecycle,
     conversations::service as conversations_service,
     error::AppError,
     realtime::{
@@ -89,12 +90,32 @@ impl NotifyListener {
         pool: PgPool,
         registry: ConnectionRegistry,
     ) -> JoinHandle<()> {
+        Self::start_with_readiness(
+            database_url,
+            channel,
+            local_instance_id,
+            pool,
+            registry,
+            AppLifecycle::new(),
+        )
+    }
+
+    pub fn start_with_readiness(
+        database_url: &str,
+        channel: impl Into<String>,
+        local_instance_id: impl Into<String>,
+        pool: PgPool,
+        registry: ConnectionRegistry,
+        lifecycle: AppLifecycle,
+    ) -> JoinHandle<()> {
         let database_url = database_url.to_string();
         let channel = channel.into();
         let local_instance_id = local_instance_id.into();
+        lifecycle.mark_notify_listener_not_ready();
 
         tokio::spawn(async move {
             loop {
+                lifecycle.mark_notify_listener_not_ready();
                 match Self::connect(
                     &database_url,
                     channel.clone(),
@@ -105,11 +126,14 @@ impl NotifyListener {
                 .await
                 {
                     Ok(listener) => {
+                        lifecycle.mark_notify_listener_ready();
                         if let Err(error) = listener.run().await {
+                            lifecycle.mark_notify_listener_not_ready();
                             tracing::error!(%error, "postgres notify listener stopped; reconnecting");
                         }
                     }
                     Err(error) => {
+                        lifecycle.mark_notify_listener_not_ready();
                         tracing::error!(%error, "failed to connect postgres notify listener; retrying");
                     }
                 }

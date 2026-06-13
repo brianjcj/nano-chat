@@ -3,7 +3,7 @@ use nano_chat::{
     app::{AppState, build_router},
     config::Config,
     db,
-    realtime::notify::NotifyListener,
+    realtime::{notify::NotifyListener, types::RealtimeEvent},
 };
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
@@ -17,22 +17,38 @@ async fn main() -> anyhow::Result<()> {
     let pool = db::create_lazy_pool(&config.database_url)?;
     let bind_addr = config.bind_addr.clone();
     let state = AppState::new(config, pool);
-    let _notify_listener = NotifyListener::start(
+    let _notify_listener = NotifyListener::start_with_readiness(
         &state.config.database_url,
         state.config.notify_channel.clone(),
         state.instance_id.clone(),
         state.pool.clone(),
         state.registry.clone(),
+        state.lifecycle(),
     );
-    let app = build_router(state).layer(TraceLayer::new_for_http());
+    let app = build_router(state.clone()).layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind(&bind_addr)
         .await
         .with_context(|| format!("failed to bind {bind_addr}"))?;
     tracing::info!(%bind_addr, "serving nano chat");
 
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal(state))
+        .await?;
     Ok(())
+}
+
+async fn shutdown_signal(state: AppState) {
+    if let Err(error) = tokio::signal::ctrl_c().await {
+        tracing::error!(%error, "failed to listen for shutdown signal");
+        return;
+    }
+
+    state.mark_draining();
+    let delivered = state
+        .registry
+        .send_to_all(RealtimeEvent::ServerDraining.server_envelope(), None);
+    tracing::info!(delivered, "shutdown signal received; app is draining");
 }
 
 fn init_tracing(rust_log: &str) -> anyhow::Result<()> {

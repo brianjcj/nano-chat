@@ -1,14 +1,18 @@
 use std::collections::HashSet;
 
 use axum::http::StatusCode;
+use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::{
-    conversations::types::{ConversationMember, ConversationSummary, CreateGroupRequest},
+    conversations::types::{
+        ConversationMember, ConversationSummary, CreateGroupRequest, LatestMessageSummary,
+    },
     error::{AppError, AppResult, ErrorCode},
     ids::new_uuid_v7,
     time::now_utc,
+    users::types::UserSummary,
 };
 
 const GROUP_MEMBER_LIMIT: usize = 500;
@@ -23,6 +27,16 @@ struct ConversationSummaryRow {
     read_seq: i64,
     unread_count: i64,
     active_member_count: i64,
+    direct_user_id: Option<Uuid>,
+    direct_username: Option<String>,
+    direct_display_name: Option<String>,
+    latest_message_id: Option<Uuid>,
+    latest_message_message_seq: Option<i64>,
+    latest_sender_user_id: Option<Uuid>,
+    latest_sender_username: Option<String>,
+    latest_sender_display_name: Option<String>,
+    latest_message_body: Option<String>,
+    latest_message_created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -45,9 +59,9 @@ struct MemberStateRow {
 }
 
 #[derive(Debug, sqlx::FromRow)]
-struct MarkReadRow {
-    read_seq: i64,
+struct ReadBoundsRow {
     old_read_seq: i64,
+    max_visible_seq: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,6 +83,43 @@ pub struct LeaveGroupResult {
 
 impl From<ConversationSummaryRow> for ConversationSummary {
     fn from(row: ConversationSummaryRow) -> Self {
+        let direct_user = match (row.direct_user_id, row.direct_username) {
+            (Some(user_id), Some(username)) => Some(UserSummary {
+                user_id,
+                username,
+                display_name: row.direct_display_name,
+            }),
+            _ => None,
+        };
+        let latest_message = match (
+            row.latest_message_id,
+            row.latest_message_message_seq,
+            row.latest_sender_user_id,
+            row.latest_sender_username,
+            row.latest_message_body,
+            row.latest_message_created_at,
+        ) {
+            (
+                Some(message_id),
+                Some(message_seq),
+                Some(sender_user_id),
+                Some(sender_username),
+                Some(body),
+                Some(created_at),
+            ) => Some(LatestMessageSummary {
+                message_id,
+                message_seq,
+                sender: UserSummary {
+                    user_id: sender_user_id,
+                    username: sender_username,
+                    display_name: row.latest_sender_display_name,
+                },
+                body,
+                created_at,
+            }),
+            _ => None,
+        };
+
         Self {
             conversation_id: row.conversation_id,
             conversation_type: row.conversation_type,
@@ -78,6 +129,8 @@ impl From<ConversationSummaryRow> for ConversationSummary {
             read_seq: row.read_seq,
             unread_count: row.unread_count,
             active_member_count: row.active_member_count,
+            direct_user,
+            latest_message,
         }
     }
 }
@@ -109,9 +162,29 @@ pub async fn list_conversations(
                     from conversation_members active_cm
                     where active_cm.conversation_id = c.conversation_id
                       and active_cm.state = 'active'
-                ) as active_member_count
+                ) as active_member_count,
+                direct_user.user_id as direct_user_id,
+                direct_user.username as direct_username,
+                direct_user.display_name as direct_display_name,
+                latest_message.message_id as latest_message_id,
+                latest_message.message_seq as latest_message_message_seq,
+                latest_sender.user_id as latest_sender_user_id,
+                latest_sender.username as latest_sender_username,
+                latest_sender.display_name as latest_sender_display_name,
+                latest_message.body as latest_message_body,
+                latest_message.created_at as latest_message_created_at
          from conversation_members cm
          join conversations c on c.conversation_id = cm.conversation_id
+         left join direct_conversation_pairs dcp
+           on dcp.conversation_id = c.conversation_id
+          and c.type = 'direct'
+         left join users direct_user
+           on direct_user.user_id = case
+               when dcp.user_low = $1 then dcp.user_high
+               when dcp.user_high = $1 then dcp.user_low
+           end
+         left join messages latest_message on latest_message.message_id = c.last_message_id
+         left join users latest_sender on latest_sender.user_id = latest_message.sender_user_id
          where cm.user_id = $1
            and cm.state = 'active'
            and c.state = 'active'
@@ -469,40 +542,66 @@ pub async fn mark_read_with_status(
         ));
     }
 
-    let conversation = get_conversation(pool, conversation_id).await?;
+    let mut tx = pool.begin().await.map_err(internal_error)?;
+    let conversation = lock_conversation(&mut tx, conversation_id).await?;
     ensure_not_dissolved(&conversation)?;
 
-    let row = sqlx::query_as::<_, MarkReadRow>(
-        "with target as (
-             select read_seq as old_read_seq
-             from conversation_members
-             where conversation_id = $1
-               and user_id = $2
-               and state = 'active'
-             for update
-         ), updated as (
-             update conversation_members cm
-             set read_seq = greatest(cm.read_seq, least($3, $4))
-             from target
-             where cm.conversation_id = $1
-               and cm.user_id = $2
-               and cm.state = 'active'
-             returning cm.read_seq, target.old_read_seq
-         )
-         select read_seq, old_read_seq from updated",
+    let bounds = sqlx::query_as::<_, ReadBoundsRow>(
+        "select cm.read_seq as old_read_seq,
+                case
+                    when exists (
+                        select 1
+                        from conversation_member_spans open_span
+                        where open_span.conversation_id = cm.conversation_id
+                          and open_span.user_id = cm.user_id
+                          and open_span.to_seq is null
+                    ) then $3
+                    else coalesce((
+                        select max(closed_span.to_seq)
+                        from conversation_member_spans closed_span
+                        where closed_span.conversation_id = cm.conversation_id
+                          and closed_span.user_id = cm.user_id
+                          and closed_span.to_seq is not null
+                    ), 0)
+                end as max_visible_seq
+         from conversation_members cm
+         where cm.conversation_id = $1
+           and cm.user_id = $2
+         for update",
     )
     .bind(conversation_id)
     .bind(user_id)
-    .bind(read_seq)
     .bind(conversation.last_message_seq)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(internal_error)?
     .ok_or_else(not_conversation_member)?;
 
+    if read_seq > bounds.max_visible_seq {
+        return Err(AppError::invalid_request(
+            "read_seq exceeds latest visible message sequence",
+        ));
+    }
+
+    let updated_read_seq = sqlx::query_scalar::<_, i64>(
+        "update conversation_members
+         set read_seq = greatest(read_seq, $3)
+         where conversation_id = $1
+           and user_id = $2
+         returning read_seq",
+    )
+    .bind(conversation_id)
+    .bind(user_id)
+    .bind(read_seq)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(internal_error)?;
+
+    tx.commit().await.map_err(internal_error)?;
+
     Ok(MarkReadResult {
-        read_seq: row.read_seq,
-        changed: row.read_seq > row.old_read_seq,
+        read_seq: updated_read_seq,
+        changed: updated_read_seq > bounds.old_read_seq,
     })
 }
 
@@ -627,9 +726,29 @@ async fn conversation_summary_for_user_tx(
                     from conversation_members active_cm
                     where active_cm.conversation_id = c.conversation_id
                       and active_cm.state = 'active'
-                ) as active_member_count
+                ) as active_member_count,
+                direct_user.user_id as direct_user_id,
+                direct_user.username as direct_username,
+                direct_user.display_name as direct_display_name,
+                latest_message.message_id as latest_message_id,
+                latest_message.message_seq as latest_message_message_seq,
+                latest_sender.user_id as latest_sender_user_id,
+                latest_sender.username as latest_sender_username,
+                latest_sender.display_name as latest_sender_display_name,
+                latest_message.body as latest_message_body,
+                latest_message.created_at as latest_message_created_at
          from conversation_members cm
          join conversations c on c.conversation_id = cm.conversation_id
+         left join direct_conversation_pairs dcp
+           on dcp.conversation_id = c.conversation_id
+          and c.type = 'direct'
+         left join users direct_user
+           on direct_user.user_id = case
+               when dcp.user_low = $1 then dcp.user_high
+               when dcp.user_high = $1 then dcp.user_low
+           end
+         left join messages latest_message on latest_message.message_id = c.last_message_id
+         left join users latest_sender on latest_sender.user_id = latest_message.sender_user_id
          where cm.user_id = $1
            and cm.conversation_id = $2
            and cm.state = 'active'",

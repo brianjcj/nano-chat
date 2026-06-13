@@ -84,7 +84,26 @@ pub async fn send_message(
     client_msg_id: String,
     body: String,
 ) -> AppResult<SendMessageResult> {
-    let input = validate_message_input(client_msg_id, body)?;
+    send_message_with_max_bytes(
+        pool,
+        sender,
+        conversation_id,
+        client_msg_id,
+        body,
+        DEFAULT_MAX_MESSAGE_BYTES,
+    )
+    .await
+}
+
+pub async fn send_message_with_max_bytes(
+    pool: &PgPool,
+    sender: CurrentUser,
+    conversation_id: Uuid,
+    client_msg_id: String,
+    body: String,
+    max_message_bytes: usize,
+) -> AppResult<SendMessageResult> {
+    let input = validate_message_input(client_msg_id, body, max_message_bytes)?;
     let mut tx = pool.begin().await.map_err(internal_error)?;
 
     let conversation = lock_conversation(&mut tx, conversation_id).await?;
@@ -122,7 +141,26 @@ pub async fn send_direct_message(
     client_msg_id: String,
     body: String,
 ) -> AppResult<SendMessageResult> {
-    let input = validate_message_input(client_msg_id, body)?;
+    send_direct_message_with_max_bytes(
+        pool,
+        sender,
+        target,
+        client_msg_id,
+        body,
+        DEFAULT_MAX_MESSAGE_BYTES,
+    )
+    .await
+}
+
+pub async fn send_direct_message_with_max_bytes(
+    pool: &PgPool,
+    sender: CurrentUser,
+    target: DirectTarget,
+    client_msg_id: String,
+    body: String,
+    max_message_bytes: usize,
+) -> AppResult<SendMessageResult> {
+    let input = validate_message_input(client_msg_id, body, max_message_bytes)?;
     let mut tx = pool.begin().await.map_err(internal_error)?;
 
     let target_user = resolve_direct_target(&mut tx, target).await?;
@@ -599,7 +637,11 @@ async fn ensure_has_visibility_span(
     }
 }
 
-fn validate_message_input(client_msg_id: String, body: String) -> AppResult<ValidatedMessageInput> {
+fn validate_message_input(
+    client_msg_id: String,
+    body: String,
+    max_message_bytes: usize,
+) -> AppResult<ValidatedMessageInput> {
     let client_msg_id_len = client_msg_id.chars().count();
     if !(1..=MAX_CLIENT_MSG_ID_CHARS).contains(&client_msg_id_len) {
         return Err(AppError::invalid_request(
@@ -611,7 +653,7 @@ fn validate_message_input(client_msg_id: String, body: String) -> AppResult<Vali
         return Err(empty_message());
     }
 
-    if body.len() > DEFAULT_MAX_MESSAGE_BYTES {
+    if body.len() > max_message_bytes {
         return Err(message_too_large());
     }
 

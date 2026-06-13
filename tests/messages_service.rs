@@ -1,7 +1,7 @@
 mod common;
 
 use axum::http::StatusCode;
-use nano_chat::conversations::service as conversations_service;
+use nano_chat::{conversations::service as conversations_service, error::ErrorCode};
 use serde_json::json;
 use sqlx::Row;
 use tower::ServiceExt;
@@ -30,6 +30,20 @@ async fn direct_message_creates_or_reuses_direct_conversation_atomically() {
     assert_eq!(listed.conversation_type, "direct");
     assert_eq!(listed.latest_message_seq, 2);
     assert_eq!(listed.active_member_count, 2);
+    let direct_user = listed
+        .direct_user
+        .as_ref()
+        .expect("direct list item should include counterpart summary");
+    assert_eq!(direct_user.user_id, bob.user_id);
+    assert_eq!(direct_user.username, "bob");
+    let latest_message = listed
+        .latest_message
+        .as_ref()
+        .expect("direct list item should include latest message summary");
+    assert_eq!(latest_message.message_id, second.message.message_id);
+    assert_eq!(latest_message.message_seq, 2);
+    assert_eq!(latest_message.sender.user_id, alice.user_id);
+    assert_eq!(latest_message.body, "second");
 
     let bob_conversations = ctx.conversations(&bob).await;
     assert!(
@@ -141,6 +155,57 @@ async fn sender_read_seq_advances_to_sent_message_seq() {
     .await
     .unwrap();
     assert_eq!(recipient_row.get::<i64, _>("read_seq"), 0);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn mark_read_beyond_latest_visible_seq_is_invalid_request() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+
+    let sent = ctx
+        .send_direct_message(&alice, "bob", "read-too-far", "hello")
+        .await;
+
+    let error = conversations_service::mark_read(
+        &ctx.pool,
+        bob.user_id,
+        sent.conversation_id,
+        sent.message.message_seq + 1,
+    )
+    .await
+    .expect_err("read_seq beyond visible range should be rejected");
+
+    assert_eq!(error.status, StatusCode::BAD_REQUEST);
+    assert_eq!(error.code, ErrorCode::InvalidRequest);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn mark_read_for_former_member_is_limited_to_closed_visibility_span() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+
+    let group = ctx.create_group(&alice, "project", &[bob.user_id]).await;
+    ctx.send_message(&alice, group.conversation_id, "visible", "visible to bob")
+        .await;
+    ctx.leave_group(&bob, group.conversation_id).await;
+    ctx.send_message(&alice, group.conversation_id, "hidden", "hidden from bob")
+        .await;
+
+    let error = conversations_service::mark_read(&ctx.pool, bob.user_id, group.conversation_id, 2)
+        .await
+        .expect_err("former member should not mark unreadable messages as read");
+    assert_eq!(error.status, StatusCode::BAD_REQUEST);
+    assert_eq!(error.code, ErrorCode::InvalidRequest);
+
+    let read_seq =
+        conversations_service::mark_read(&ctx.pool, bob.user_id, group.conversation_id, 1)
+            .await
+            .expect("former member can mark visible messages as read");
+    assert_eq!(read_seq, 1);
 }
 
 #[tokio::test]

@@ -1,5 +1,8 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::users::types::UserSummary;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateGroupRequest {
@@ -24,6 +27,17 @@ pub struct ConversationSummary {
     pub read_seq: i64,
     pub unread_count: i64,
     pub active_member_count: i64,
+    pub direct_user: Option<UserSummary>,
+    pub latest_message: Option<LatestMessageSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LatestMessageSummary {
+    pub message_id: Uuid,
+    pub message_seq: i64,
+    pub sender: UserSummary,
+    pub body: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

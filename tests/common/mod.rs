@@ -364,6 +364,8 @@ pub struct TestConversation {
     pub read_seq: i64,
     pub unread_count: i64,
     pub active_member_count: i64,
+    pub direct_user: Option<TestMember>,
+    pub latest_message: Option<TestLatestMessage>,
 }
 
 #[allow(dead_code)]
@@ -372,6 +374,16 @@ pub struct TestMember {
     pub user_id: Uuid,
     pub username: String,
     pub display_name: Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize)]
+pub struct TestLatestMessage {
+    pub message_id: Uuid,
+    pub message_seq: i64,
+    pub sender: TestMember,
+    pub body: String,
+    pub created_at: String,
 }
 
 #[allow(dead_code)]

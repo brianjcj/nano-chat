@@ -283,12 +283,13 @@ async fn handle_message_send(
         }
     };
 
-    match messages_service::send_message(
+    match messages_service::send_message_with_max_bytes(
         &state.pool,
         current_user.clone(),
         payload.conversation_id,
         payload.client_msg_id,
         payload.body,
+        state.config.max_message_bytes,
     )
     .await
     {
@@ -333,12 +334,13 @@ async fn handle_direct_message_send(
         }
     };
 
-    match messages_service::send_direct_message(
+    match messages_service::send_direct_message_with_max_bytes(
         &state.pool,
         current_user.clone(),
         target,
         payload.client_msg_id,
         payload.body,
+        state.config.max_message_bytes,
     )
     .await
     {
@@ -598,6 +600,55 @@ mod tests {
         assert_eq!(
             response.error.expect("error envelope").code,
             ErrorCode::InvalidRequest.as_str()
+        );
+    }
+
+    #[tokio::test]
+    async fn direct_message_send_uses_configured_message_size_limit() {
+        let mut state = test_state();
+        state.config.max_message_bytes = 5;
+        let current_user = test_current_user();
+        let (outbound_tx, mut outbound_rx) = mpsc::channel(1);
+        let registered = state
+            .registry
+            .register(
+                current_user.user_id,
+                current_user.client_id,
+                outbound_tx.clone(),
+            )
+            .expect("register websocket connection");
+
+        let keep_processing = handle_incoming_message(
+            Message::Text(
+                json!({
+                    "id": "dm-too-large",
+                    "type": "direct_message.send",
+                    "payload": {
+                        "target_username": "bob",
+                        "client_msg_id": "too-large",
+                        "body": "sixsix"
+                    }
+                })
+                .to_string()
+                .into(),
+            ),
+            &state,
+            &current_user,
+            registered.connection_id,
+            &outbound_tx,
+        )
+        .await;
+
+        assert!(keep_processing);
+        let response = outbound_rx
+            .recv()
+            .await
+            .expect("message size error envelope");
+        assert_eq!(response.id.as_deref(), Some("dm-too-large"));
+        assert_eq!(response.message_type, "error");
+        assert_eq!(
+            response.error.expect("error envelope").code,
+            ErrorCode::MessageTooLarge.as_str()
         );
     }
 
