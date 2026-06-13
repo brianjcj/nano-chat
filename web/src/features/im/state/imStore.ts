@@ -13,8 +13,10 @@ export type HistorySyncMarker = {
 };
 
 export type MobilePanelState = "conversations" | "chat" | "details";
+export type FeatureArea = "im";
 
 type ImStoreData = {
+  currentFeatureArea: FeatureArea;
   currentConversationId: string | null;
   directDraft: DirectDraft | null;
   realtimeStatus: RealtimeStatus;
@@ -24,6 +26,7 @@ type ImStoreData = {
 };
 
 type ImStoreActions = {
+  setCurrentFeatureArea: (featureArea: FeatureArea) => void;
   setCurrentConversationId: (conversationId: string | null) => void;
   setDirectDraft: (draft: DirectDraft | null) => void;
   setRealtimeStatus: (status: RealtimeStatus) => void;
@@ -40,6 +43,9 @@ export type ImStoreApi = UseBoundStore<StoreApi<ImStoreState>>;
 
 export const useImStore = create<ImStoreState>((set) => ({
   ...createInitialImStoreData(),
+  setCurrentFeatureArea(featureArea) {
+    set({ currentFeatureArea: featureArea });
+  },
   setCurrentConversationId(conversationId) {
     set({ currentConversationId: conversationId });
   },
@@ -92,6 +98,7 @@ export const useImStore = create<ImStoreState>((set) => ({
 
 export function createInitialImStoreData(): ImStoreData {
   return {
+    currentFeatureArea: "im",
     currentConversationId: null,
     directDraft: null,
     realtimeStatus: "idle",
