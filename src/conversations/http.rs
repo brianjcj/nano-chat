@@ -132,7 +132,10 @@ async fn leave_group(
     if result.dissolved {
         publish_conversation_event(
             &state,
-            RealtimeEvent::ConversationDissolved { conversation_id },
+            RealtimeEvent::ConversationDissolved {
+                conversation_id,
+                user_id: current_user.user_id,
+            },
         )
         .await;
     }

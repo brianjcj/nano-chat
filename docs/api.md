@@ -528,12 +528,13 @@ Other events use the same server envelope shape:
 {
   "type": "conversation.dissolved",
   "payload": {
-    "conversation_id": "018f0000-0000-7000-8000-000000000010"
+    "conversation_id": "018f0000-0000-7000-8000-000000000010",
+    "user_id": "018f0000-0000-7000-8000-000000000001"
   }
 }
 ```
 
-The origin WebSocket connection receives only its command response, such as `message.send.ok`, `direct_message.send.ok`, or `conversation.read.ok`; it does not receive a duplicate event for that same command. Other connections owned by the same user can receive the event. HTTP-originated membership events do not have an origin WebSocket connection to skip. Fan-out uses bounded per-connection queues; recipients whose local queue is full or closed are skipped.
+The origin WebSocket connection receives only its command response, such as `message.send.ok`, `direct_message.send.ok`, or `conversation.read.ok`; it does not receive a duplicate event for that same command. Other connections owned by the same user can receive the event. HTTP-originated membership events do not have an origin WebSocket connection to skip. `conversation.dissolved` is sent only to the final leaving user's remaining connections, not to other historical members. Fan-out uses bounded per-connection queues; recipients whose local queue is full or closed are skipped.
 
 Postgres NOTIFY payloads include `origin_instance_id`, optional `origin_connection_id`, and the event, and are rejected by the server if the serialized payload is 8000 bytes or larger. The receiving instance uses the same visibility rules as local delivery and ignores notifications published by its own `origin_instance_id` to avoid duplicates. Cross-instance fan-out does not require sticky sessions.
 

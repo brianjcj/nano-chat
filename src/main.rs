@@ -23,8 +23,7 @@ async fn main() -> anyhow::Result<()> {
         state.instance_id.clone(),
         state.pool.clone(),
         state.registry.clone(),
-    )
-    .await?;
+    );
     let app = build_router(state).layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind(&bind_addr)

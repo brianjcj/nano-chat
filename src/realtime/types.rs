@@ -47,7 +47,10 @@ pub enum RealtimeEvent {
         user_id: Uuid,
     },
     #[serde(rename = "conversation.dissolved")]
-    ConversationDissolved { conversation_id: Uuid },
+    ConversationDissolved {
+        conversation_id: Uuid,
+        user_id: Uuid,
+    },
     #[serde(rename = "server.draining")]
     ServerDraining,
 }
@@ -96,8 +99,12 @@ impl RealtimeEvent {
                 "conversation_id": conversation_id,
                 "user_id": user_id,
             }),
-            Self::ConversationDissolved { conversation_id } => serde_json::json!({
+            Self::ConversationDissolved {
+                conversation_id,
+                user_id,
+            } => serde_json::json!({
                 "conversation_id": conversation_id,
+                "user_id": user_id,
             }),
             Self::ServerDraining => serde_json::json!({}),
         }

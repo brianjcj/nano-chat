@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use sqlx::{PgPool, postgres::PgListener};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -80,18 +82,41 @@ impl NotifyListener {
         })
     }
 
-    pub async fn start(
+    pub fn start(
         database_url: &str,
         channel: impl Into<String>,
         local_instance_id: impl Into<String>,
         pool: PgPool,
         registry: ConnectionRegistry,
-    ) -> Result<JoinHandle<()>, NotifyError> {
-        Ok(
-            Self::connect(database_url, channel, local_instance_id, pool, registry)
-                .await?
-                .spawn(),
-        )
+    ) -> JoinHandle<()> {
+        let database_url = database_url.to_string();
+        let channel = channel.into();
+        let local_instance_id = local_instance_id.into();
+
+        tokio::spawn(async move {
+            loop {
+                match Self::connect(
+                    &database_url,
+                    channel.clone(),
+                    local_instance_id.clone(),
+                    pool.clone(),
+                    registry.clone(),
+                )
+                .await
+                {
+                    Ok(listener) => {
+                        if let Err(error) = listener.run().await {
+                            tracing::error!(%error, "postgres notify listener stopped; reconnecting");
+                        }
+                    }
+                    Err(error) => {
+                        tracing::error!(%error, "failed to connect postgres notify listener; retrying");
+                    }
+                }
+
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        })
     }
 
     pub fn spawn(self) -> JoinHandle<()> {
@@ -178,9 +203,8 @@ pub async fn fanout_notify_payload(
             let user_ids = active_or_specific_member_ids(pool, *conversation_id, *user_id).await?;
             registry.send_to_users(user_ids, envelope, skip_connection_id)
         }
-        RealtimeEvent::ConversationDissolved { conversation_id } => {
-            let user_ids = all_conversation_member_ids(pool, *conversation_id).await?;
-            registry.send_to_users(user_ids, envelope, skip_connection_id)
+        RealtimeEvent::ConversationDissolved { user_id, .. } => {
+            registry.send_to_users(std::iter::once(*user_id), envelope, skip_connection_id)
         }
         RealtimeEvent::ServerDraining => registry.send_to_all(envelope, skip_connection_id),
     };
@@ -201,21 +225,6 @@ async fn active_or_specific_member_ids(
     )
     .bind(conversation_id)
     .bind(user_id)
-    .fetch_all(pool)
-    .await
-}
-
-async fn all_conversation_member_ids(
-    pool: &PgPool,
-    conversation_id: Uuid,
-) -> Result<Vec<Uuid>, sqlx::Error> {
-    sqlx::query_scalar::<_, Uuid>(
-        "select user_id
-         from conversation_members
-         where conversation_id = $1
-         order by user_id",
-    )
-    .bind(conversation_id)
     .fetch_all(pool)
     .await
 }

@@ -15,7 +15,7 @@ use nano_chat::{
     users::types::UserSummary,
 };
 use serde_json::Value;
-use sqlx::{Executor, PgPool};
+use sqlx::{Executor, PgPool, postgres::PgPoolOptions};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -121,6 +121,76 @@ async fn local_notify_fanout_skips_origin_and_uses_message_visibility_spans() {
 
 #[tokio::test]
 #[serial_test::serial]
+async fn dissolved_notify_fanout_targets_final_leaver_other_connections_only() {
+    let ctx = RealtimeTestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+
+    let group = ctx.create_group(&alice, "project", &[bob.user_id]).await;
+    ctx.leave_group(&bob, group.conversation_id).await;
+    ctx.leave_group(&alice, group.conversation_id).await;
+
+    let registry = ConnectionRegistry::new(10);
+    let (alice_origin_tx, mut alice_origin_rx) = mpsc::channel(10);
+    let (alice_other_tx, mut alice_other_rx) = mpsc::channel(10);
+    let (bob_tx, mut bob_rx) = mpsc::channel(10);
+
+    let alice_origin = registry
+        .register(alice.user_id, alice.client_id, alice_origin_tx)
+        .unwrap();
+    registry
+        .register(alice.user_id, Uuid::now_v7(), alice_other_tx)
+        .unwrap();
+    registry
+        .register(bob.user_id, bob.client_id, bob_tx)
+        .unwrap();
+
+    let payload = RealtimeNotifyPayload {
+        origin_instance_id: "instance-a".to_string(),
+        origin_connection_id: Some(alice_origin.connection_id),
+        event: RealtimeEvent::ConversationDissolved {
+            conversation_id: group.conversation_id,
+            user_id: alice.user_id,
+        },
+    };
+
+    let delivered = fanout_notify_payload(&ctx.pool, &registry, &payload)
+        .await
+        .expect("fanout should resolve dissolved recipient");
+
+    assert_eq!(delivered, 1);
+    assert!(alice_origin_rx.try_recv().is_err());
+    assert_conversation_dissolved_for(&mut alice_other_rx, group.conversation_id, alice.user_id)
+        .await;
+    assert!(bob_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn notify_listener_start_keeps_supervisor_alive_when_initial_listen_connect_fails() {
+    let database_url = "postgres://nano:nano@127.0.0.1:1/nano_chat_test";
+    let pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect_lazy(database_url)
+        .expect("lazy pool should not connect during setup");
+
+    let listener_task = NotifyListener::start(
+        database_url,
+        unique_notify_channel(),
+        "instance-a".to_string(),
+        pool,
+        ConnectionRegistry::new(1),
+    );
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(
+        !listener_task.is_finished(),
+        "supervisor should keep retrying instead of finishing after a connect failure"
+    );
+    listener_task.abort();
+}
+
+#[tokio::test]
+#[serial_test::serial]
 async fn postgres_notify_listener_fans_out_to_another_instance_registry() {
     let ctx = RealtimeTestContext::new().await;
     let alice = ctx.register("alice").await;
@@ -196,6 +266,24 @@ async fn assert_message_created_for(
         payload["message"]["message_id"],
         Value::String(message_id.to_string())
     );
+}
+
+async fn assert_conversation_dissolved_for(
+    receiver: &mut mpsc::Receiver<nano_chat::ws::protocol::ServerEnvelope>,
+    conversation_id: Uuid,
+    user_id: Uuid,
+) {
+    let envelope = tokio::time::timeout(Duration::from_secs(2), receiver.recv())
+        .await
+        .expect("recipient should receive event before timeout")
+        .expect("recipient channel should be open");
+    assert_eq!(envelope.message_type, "conversation.dissolved");
+    let payload = envelope.payload.expect("event payload");
+    assert_eq!(
+        payload["conversation_id"],
+        Value::String(conversation_id.to_string())
+    );
+    assert_eq!(payload["user_id"], Value::String(user_id.to_string()));
 }
 
 fn test_message() -> MessageDto {
