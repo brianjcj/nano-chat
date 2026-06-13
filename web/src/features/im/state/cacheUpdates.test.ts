@@ -12,12 +12,16 @@ const sender: UserSummary = {
   display_name: "Alice",
 };
 
-function makeMessage(message_seq: number, conversation_id = "conversation-1"): Message {
+function makeMessage(
+  message_seq: number,
+  conversation_id = "conversation-1",
+  messageSender = sender,
+): Message {
   return {
     message_id: `message-${conversation_id}-${message_seq}`,
     conversation_id,
     message_seq,
-    sender,
+    sender: messageSender,
     body: `message ${message_seq}`,
     created_at: `2026-06-13T00:00:0${message_seq}.000Z`,
   };
@@ -128,6 +132,45 @@ describe("IM realtime cache updates", () => {
     ).toHaveLength(1);
   });
 
+  it("does not create a message cache for message.created when the conversation messages are not loaded", () => {
+    const queryClient = createQueryClient();
+    const message = makeMessage(1, "conversation-2");
+
+    applyRealtimeEvent({
+      queryClient,
+      store: useImStore,
+      event: messageCreated(message),
+    });
+
+    expect(
+      queryClient.getQueryState(imQueryKeys.messages("conversation-2")),
+    ).toBeUndefined();
+    expect(
+      queryClient.getQueryData<Message[]>(imQueryKeys.messages("conversation-2")),
+    ).toBeUndefined();
+  });
+
+  it("does not insert message.created into query-specific history page caches", () => {
+    const queryClient = createQueryClient();
+    const historyPageKey = imQueryKeys.messages("conversation-1", {
+      before_seq: 10,
+      limit: 2,
+    });
+    queryClient.setQueryData(historyPageKey, [makeMessage(5), makeMessage(6)]);
+
+    applyRealtimeEvent({
+      queryClient,
+      store: useImStore,
+      event: messageCreated(makeMessage(11)),
+    });
+
+    expect(
+      queryClient
+        .getQueryData<Message[]>(historyPageKey)
+        ?.map((message) => message.message_seq),
+    ).toEqual([5, 6]);
+  });
+
   it("increments local unread count for message.created in a non-current conversation", () => {
     const queryClient = createQueryClient();
     useImStore.getState().setCurrentConversationId("conversation-1");
@@ -143,6 +186,71 @@ describe("IM realtime cache updates", () => {
     });
   });
 
+  it("does not increment unread correction for a non-current duplicate message.created", () => {
+    const queryClient = createQueryClient();
+    const knownMessage = makeMessage(1, "conversation-2");
+    queryClient.setQueryData(imQueryKeys.messages("conversation-2"), [
+      knownMessage,
+    ]);
+    useImStore.getState().setCurrentConversationId("conversation-1");
+
+    applyRealtimeEvent({
+      queryClient,
+      store: useImStore,
+      event: messageCreated(knownMessage),
+    });
+
+    expect(useImStore.getState().unreadCorrections).not.toHaveProperty(
+      "conversation-2",
+    );
+  });
+
+  it("does not increment unread correction twice when duplicate message.created is already reflected in the conversations cache", () => {
+    const queryClient = createQueryClient();
+    const existingLatest = makeMessage(1, "conversation-2");
+    const incomingMessage = makeMessage(2, "conversation-2");
+    queryClient.setQueryData(imQueryKeys.conversations(), [
+      makeConversation("conversation-2", existingLatest),
+    ]);
+    useImStore.getState().setCurrentConversationId("conversation-1");
+
+    applyRealtimeEvent({
+      queryClient,
+      store: useImStore,
+      event: messageCreated(incomingMessage),
+    });
+    applyRealtimeEvent({
+      queryClient,
+      store: useImStore,
+      event: messageCreated(incomingMessage),
+    });
+
+    expect(useImStore.getState().unreadCorrections).toMatchObject({
+      "conversation-2": 1,
+    });
+  });
+
+  it("does not increment unread correction for the current user's message.created in a non-current conversation", () => {
+    const queryClient = createQueryClient();
+    const localSender: UserSummary = {
+      user_id: "user-local",
+      username: "local",
+      display_name: "Local User",
+    };
+    useImStore.getState().setCurrentConversationId("conversation-1");
+
+    applyRealtimeEvent({
+      queryClient,
+      store: useImStore,
+      currentUserId: "user-local",
+      event: messageCreated(makeMessage(1, "conversation-2", localSender)),
+    });
+
+    expect(useImStore.getState().unreadCorrections).not.toHaveProperty(
+      "conversation-2",
+    );
+  });
+
   it("marks history sync needed when message.created reveals a sequence gap in the current conversation", () => {
     const queryClient = createQueryClient();
     queryClient.setQueryData(imQueryKeys.messages("conversation-1"), [
@@ -154,6 +262,25 @@ describe("IM realtime cache updates", () => {
       queryClient,
       store: useImStore,
       event: messageCreated(makeMessage(3)),
+    });
+
+    expect(useImStore.getState().historySyncMarkers).toMatchObject({
+      "conversation-1": { after_seq: 1 },
+    });
+  });
+
+  it("marks history sync needed after the highest contiguous sequence when cached messages have an existing gap", () => {
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(imQueryKeys.messages("conversation-1"), [
+      makeMessage(1),
+      makeMessage(3),
+    ]);
+    useImStore.getState().setCurrentConversationId("conversation-1");
+
+    applyRealtimeEvent({
+      queryClient,
+      store: useImStore,
+      event: messageCreated(makeMessage(4)),
     });
 
     expect(useImStore.getState().historySyncMarkers).toMatchObject({
@@ -188,6 +315,31 @@ describe("IM realtime cache updates", () => {
       read_seq: 4,
       unread_count: 1,
     });
+    expect(useImStore.getState().unreadCorrections).not.toHaveProperty(
+      "conversation-1",
+    );
+  });
+
+  it("clears unread correction for the current user's conversation.read_updated even when the conversation is not open", () => {
+    const queryClient = createQueryClient();
+    const latest = makeMessage(5);
+    queryClient.setQueryData(imQueryKeys.conversations(), [
+      {
+        ...makeConversation("conversation-1", latest),
+        read_seq: 2,
+        unread_count: 3,
+      },
+    ]);
+    useImStore.getState().setCurrentConversationId("conversation-2");
+    useImStore.getState().incrementUnreadCorrection("conversation-1", 2);
+
+    applyRealtimeEvent({
+      queryClient,
+      store: useImStore,
+      currentUserId: "user-local",
+      event: readUpdated("conversation-1", "user-local", 4),
+    });
+
     expect(useImStore.getState().unreadCorrections).not.toHaveProperty(
       "conversation-1",
     );

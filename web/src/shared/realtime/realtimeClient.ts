@@ -1,4 +1,5 @@
 import type {
+  ClientCommandPayloadByType,
   ClientCommandType,
   RealtimeErrorEnvelope,
   RealtimeIncoming,
@@ -111,16 +112,16 @@ export class RealtimeClient {
     this.setStatus("closed");
   }
 
-  sendCommand<TPayload, TResult>(
-    type: ClientCommandType,
-    payload: TPayload,
+  sendCommand<TType extends ClientCommandType, TResult>(
+    type: TType,
+    payload: ClientCommandPayloadByType[TType],
   ): Promise<TResult> {
     if (!this.isSocketOpen()) {
       return Promise.reject(new Error("Realtime client is not connected."));
     }
 
     const id = `req-${this.nextCommandId++}`;
-    const envelope: RealtimeOutgoing<ClientCommandType, TPayload> = {
+    const envelope: RealtimeOutgoing<TType> = {
       id,
       type,
       payload,

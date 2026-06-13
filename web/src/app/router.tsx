@@ -12,6 +12,7 @@ import { AuthLayout } from "@/features/auth/AuthLayout";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { RegisterPage } from "@/features/auth/RegisterPage";
 import { AppShellPlaceholder } from "@/features/shell/AppShellPlaceholder";
+import { AuthenticatedAppLayout } from "@/features/shell/AuthenticatedAppLayout";
 
 type CreateAppMemoryRouterOptions = {
   initialEntries?: string[];
@@ -57,33 +58,27 @@ function createAppRoutes(): RouteObject[] {
       path: "/app",
       element: (
         <ProtectedRoute>
-          <Navigate replace to="/app/im" />
+          <AuthenticatedAppLayout />
         </ProtectedRoute>
       ),
-    },
-    {
-      path: "/app/im",
-      element: (
-        <ProtectedRoute>
-          <AppShellPlaceholder />
-        </ProtectedRoute>
-      ),
-    },
-    {
-      path: "/app/im/conversations/:conversationId",
-      element: (
-        <ProtectedRoute>
-          <AppShellPlaceholder />
-        </ProtectedRoute>
-      ),
-    },
-    {
-      path: "/app/*",
-      element: (
-        <ProtectedRoute>
-          <Navigate replace to="/app/im" />
-        </ProtectedRoute>
-      ),
+      children: [
+        {
+          index: true,
+          element: <Navigate replace to="/app/im" />,
+        },
+        {
+          path: "im",
+          element: <AppShellPlaceholder />,
+        },
+        {
+          path: "im/conversations/:conversationId",
+          element: <AppShellPlaceholder />,
+        },
+        {
+          path: "*",
+          element: <Navigate replace to="/app/im" />,
+        },
+      ],
     },
     {
       path: "*",

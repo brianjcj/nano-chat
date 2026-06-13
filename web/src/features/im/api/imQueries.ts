@@ -6,6 +6,9 @@ import type { MessageHistoryQuery } from "@/shared/api/types";
 export const imQueryKeys = {
   all: ["im"] as const,
   conversations: () => [...imQueryKeys.all, "conversations"] as const,
+  // imQueryKeys.messages(conversationId) is the canonical loaded-message cache.
+  // Query-specific message keys are authoritative fetch pages and should not be
+  // mutated by realtime events.
   messages: (conversationId: string, query?: MessageHistoryQuery) =>
     query
       ? ([

@@ -1,7 +1,32 @@
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const realtimeBridgeLifecycle = vi.hoisted(() => ({
+  activeMounts: 0,
+  cleanupCount: 0,
+  mountCount: 0,
+}));
+
+vi.mock("@/shared/realtime/useRealtimeBridge", async () => {
+  const React = await import("react");
+
+  return {
+    useRealtimeBridge: () => {
+      React.useEffect(() => {
+        realtimeBridgeLifecycle.activeMounts += 1;
+        realtimeBridgeLifecycle.mountCount += 1;
+
+        return () => {
+          realtimeBridgeLifecycle.activeMounts -= 1;
+          realtimeBridgeLifecycle.cleanupCount += 1;
+        };
+      }, []);
+    },
+  };
+});
 
 import {
+  act,
   createFakeApiClient,
   makeAuthResponse,
   renderAppRoute,
@@ -16,6 +41,12 @@ const validSession = makeAuthResponse({
 });
 
 describe("auth routes", () => {
+  beforeEach(() => {
+    realtimeBridgeLifecycle.activeMounts = 0;
+    realtimeBridgeLifecycle.cleanupCount = 0;
+    realtimeBridgeLifecycle.mountCount = 0;
+  });
+
   it("redirects unauthenticated /app/im requests to /login", async () => {
     const { router } = await renderAppRoute({ initialEntries: ["/app/im"] });
 
@@ -34,6 +65,29 @@ describe("auth routes", () => {
     expect(await screen.findByText("Temporary IM shell")).toBeInTheDocument();
     expect(screen.getByText("Nano Chat")).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/app/im");
+  });
+
+  it("keeps the realtime bridge mounted while navigating between authenticated IM child routes", async () => {
+    const { router } = await renderAppRoute({
+      initialEntries: ["/app/im"],
+      session: validSession,
+    });
+
+    expect(await screen.findByText("Temporary IM shell")).toBeInTheDocument();
+    expect(realtimeBridgeLifecycle.mountCount).toBe(1);
+    expect(realtimeBridgeLifecycle.activeMounts).toBe(1);
+
+    await act(async () => {
+      await router.navigate("/app/im/conversations/conversation-1");
+    });
+
+    expect(await screen.findByText("Temporary IM shell")).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe(
+      "/app/im/conversations/conversation-1",
+    );
+    expect(realtimeBridgeLifecycle.mountCount).toBe(1);
+    expect(realtimeBridgeLifecycle.cleanupCount).toBe(0);
+    expect(realtimeBridgeLifecycle.activeMounts).toBe(1);
   });
 
   it("logs in, stores the session, and navigates to /app/im", async () => {

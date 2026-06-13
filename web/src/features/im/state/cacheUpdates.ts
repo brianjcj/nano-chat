@@ -27,7 +27,7 @@ export function applyRealtimeEvent({
 }: ApplyRealtimeEventOptions): void {
   switch (event.type) {
     case "message.created":
-      applyMessageCreated(queryClient, store, event);
+      applyMessageCreated(queryClient, store, currentUserId, event);
       return;
     case "conversation.read_updated":
       applyConversationReadUpdated(queryClient, store, currentUserId, event);
@@ -52,21 +52,34 @@ export function applyRealtimeEvent({
 function applyMessageCreated(
   queryClient: QueryClient,
   store: ImStoreApi,
+  currentUserId: string | null | undefined,
   event: MessageCreatedEvent,
 ): void {
   const { conversation_id: conversationId, message } = event.payload;
   const currentConversationId = store.getState().currentConversationId;
-  const highestKnownSeq = getHighestKnownMessageSeq(queryClient, conversationId);
+  const highestContiguousSeq = getHighestContiguousMessageSeq(
+    queryClient,
+    conversationId,
+  );
+  const isAlreadyKnown = isMessageAlreadyKnown(
+    queryClient,
+    conversationId,
+    message,
+  );
 
   updateConversationLatestMessage(queryClient, conversationId, message);
-  upsertMessageInCaches(queryClient, conversationId, message);
+  upsertMessageInCanonicalCache(queryClient, conversationId, message);
 
   if (currentConversationId === conversationId) {
-    if (message.message_seq > highestKnownSeq + 1) {
+    if (message.message_seq > highestContiguousSeq + 1) {
       store
         .getState()
-        .markHistorySyncNeeded(conversationId, Math.max(highestKnownSeq, 0));
+        .markHistorySyncNeeded(conversationId, highestContiguousSeq);
     }
+    return;
+  }
+
+  if (isAlreadyKnown || message.sender.user_id === currentUserId) {
     return;
   }
 
@@ -111,9 +124,7 @@ function applyConversationReadUpdated(
       }),
   );
 
-  if (store.getState().currentConversationId === conversationId) {
-    store.getState().clearUnreadCorrection(conversationId);
-  }
+  store.getState().clearUnreadCorrection(conversationId);
 }
 
 function invalidateMembershipQueries(
@@ -177,57 +188,120 @@ function updateConversationLatestMessage(
   );
 }
 
-function upsertMessageInCaches(
+function upsertMessageInCanonicalCache(
   queryClient: QueryClient,
   conversationId: string,
   message: Message,
 ): void {
-  const defaultMessagesKey = imQueryKeys.messages(conversationId);
-
-  queryClient.setQueryData<Message[]>(defaultMessagesKey, (messages) =>
-    insertMessage(messages, message),
+  const canonicalMessagesKey = imQueryKeys.messages(conversationId);
+  const existingMessages = queryClient.getQueryData<Message[]>(
+    canonicalMessagesKey,
   );
-  queryClient.setQueriesData<Message[]>(
-    { queryKey: defaultMessagesKey },
-    (messages) => insertMessage(messages, message),
+
+  // The base messages key is the canonical loaded-message cache. Query-specific
+  // history page keys are authoritative fetch pages and realtime events must not
+  // mutate them because the incoming message may not belong to that page.
+  if (existingMessages === undefined) {
+    return;
+  }
+
+  queryClient.setQueryData<Message[]>(
+    canonicalMessagesKey,
+    insertMessage(existingMessages, message),
   );
 }
 
-function insertMessage(messages: Message[] | undefined, message: Message) {
-  const existingMessages = messages ?? [];
-
+function insertMessage(messages: Message[], message: Message) {
   if (
-    existingMessages.some(
+    messages.some(
       (existingMessage) =>
         existingMessage.message_id === message.message_id ||
         existingMessage.message_seq === message.message_seq,
     )
   ) {
-    return [...existingMessages].sort(compareMessageSeq);
+    return [...messages].sort(compareMessageSeq);
   }
 
-  return [...existingMessages, message].sort(compareMessageSeq);
+  return [...messages, message].sort(compareMessageSeq);
 }
 
-function getHighestKnownMessageSeq(
+function isMessageAlreadyKnown(
+  queryClient: QueryClient,
+  conversationId: string,
+  message: Message,
+) {
+  return (
+    isMessageInCanonicalCache(queryClient, conversationId, message) ||
+    isMessageCoveredByConversationSummary(queryClient, conversationId, message)
+  );
+}
+
+function isMessageInCanonicalCache(
+  queryClient: QueryClient,
+  conversationId: string,
+  message: Message,
+) {
+  const messages = queryClient.getQueryData<Message[]>(
+    imQueryKeys.messages(conversationId),
+  );
+
+  return Boolean(
+    messages?.some(
+      (existingMessage) =>
+        existingMessage.message_id === message.message_id ||
+        existingMessage.message_seq === message.message_seq,
+    ),
+  );
+}
+
+function isMessageCoveredByConversationSummary(
+  queryClient: QueryClient,
+  conversationId: string,
+  message: Message,
+) {
+  const conversations = queryClient.getQueryData<ConversationSummary[]>(
+    imQueryKeys.conversations(),
+  );
+  const conversation = conversations?.find(
+    (candidate) => candidate.conversation_id === conversationId,
+  );
+
+  return Boolean(
+    conversation &&
+      (conversation.latest_message?.message_id === message.message_id ||
+        conversation.latest_message_seq >= message.message_seq),
+  );
+}
+
+function getHighestContiguousMessageSeq(
   queryClient: QueryClient,
   conversationId: string,
 ): number {
-  const messageCaches = queryClient.getQueriesData<Message[]>({
-    queryKey: imQueryKeys.messages(conversationId),
-  });
+  const messages = queryClient.getQueryData<Message[]>(
+    imQueryKeys.messages(conversationId),
+  );
 
-  return messageCaches.reduce((highestSeq, [, messages]) => {
-    if (!messages) {
-      return highestSeq;
+  if (!messages?.length) {
+    return 0;
+  }
+
+  const messageSeqs = [...new Set(messages.map((message) => message.message_seq))]
+    .filter((messageSeq) => messageSeq > 0)
+    .sort((left, right) => left - right);
+  let highestContiguousSeq = 0;
+
+  for (const messageSeq of messageSeqs) {
+    if (messageSeq === highestContiguousSeq + 1) {
+      highestContiguousSeq = messageSeq;
+      continue;
     }
 
-    return messages.reduce(
-      (messageHighestSeq, message) =>
-        Math.max(messageHighestSeq, message.message_seq),
-      highestSeq,
-    );
-  }, 0);
+    if (messageSeq > highestContiguousSeq + 1) {
+      break;
+    }
+  }
+
+  return highestContiguousSeq;
 }
 
 function toLatestMessage(message: Message): ConversationSummary["latest_message"] {
