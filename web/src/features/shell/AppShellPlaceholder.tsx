@@ -1,8 +1,11 @@
 import { MessageCircleHeart } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { useRealtimeBridge } from "@/shared/realtime/useRealtimeBridge";
+
 export function AppShellPlaceholder() {
   const { t } = useTranslation();
+  useRealtimeBridge();
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
