@@ -370,6 +370,29 @@ pub async fn active_member_ids(pool: &PgPool, conversation_id: Uuid) -> AppResul
     .map_err(internal_error)
 }
 
+pub async fn visible_user_ids_for_message(
+    pool: &PgPool,
+    conversation_id: Uuid,
+    message_seq: i64,
+) -> AppResult<Vec<Uuid>> {
+    let conversation = get_conversation(pool, conversation_id).await?;
+    ensure_not_dissolved(&conversation)?;
+
+    sqlx::query_scalar::<_, Uuid>(
+        "select distinct user_id
+         from conversation_member_spans
+         where conversation_id = $1
+           and from_seq <= $2
+           and (to_seq is null or $2 <= to_seq)
+         order by user_id",
+    )
+    .bind(conversation_id)
+    .bind(message_seq)
+    .fetch_all(pool)
+    .await
+    .map_err(internal_error)
+}
+
 pub async fn mark_read(
     pool: &PgPool,
     user_id: Uuid,

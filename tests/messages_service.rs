@@ -1,6 +1,7 @@
 mod common;
 
 use axum::http::StatusCode;
+use nano_chat::conversations::service as conversations_service;
 use serde_json::json;
 use sqlx::Row;
 use tower::ServiceExt;
@@ -253,6 +254,41 @@ async fn history_filters_group_messages_through_visibility_spans() {
 
     let alice_messages = ctx.messages(&alice, group.conversation_id, "").await;
     assert_eq!(alice_messages.len(), 2);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn visible_user_ids_for_message_uses_message_visibility_spans() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+    let carol = ctx.register("carol").await;
+
+    let group = ctx.create_group(&alice, "project", &[bob.user_id]).await;
+    ctx.add_member(&alice, group.conversation_id, carol.user_id)
+        .await;
+    ctx.leave_group(&carol, group.conversation_id).await;
+
+    let sent = ctx
+        .send_message(&bob, group.conversation_id, "seq-1", "hello before rejoin")
+        .await;
+    assert_eq!(sent.message.message_seq, 1);
+
+    ctx.add_member(&alice, group.conversation_id, carol.user_id)
+        .await;
+
+    let visible_user_ids = conversations_service::visible_user_ids_for_message(
+        &ctx.pool,
+        group.conversation_id,
+        sent.message.message_seq,
+    )
+    .await
+    .expect("visible user ids should load");
+
+    assert!(visible_user_ids.contains(&alice.user_id));
+    assert!(visible_user_ids.contains(&bob.user_id));
+    assert!(!visible_user_ids.contains(&carol.user_id));
+    assert_eq!(visible_user_ids.len(), 2);
 }
 
 #[tokio::test]

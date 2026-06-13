@@ -433,7 +433,13 @@ async fn fanout_message_created(
     message: MessageDto,
     origin_connection_id: ConnectionId,
 ) {
-    match conversations_service::active_member_ids(&state.pool, conversation_id).await {
+    match conversations_service::visible_user_ids_for_message(
+        &state.pool,
+        conversation_id,
+        message.message_seq,
+    )
+    .await
+    {
         Ok(user_ids) => {
             state.registry.send_to_users(
                 user_ids,
