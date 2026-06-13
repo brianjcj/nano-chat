@@ -354,6 +354,55 @@ pub async fn leave_group(pool: &PgPool, user_id: Uuid, conversation_id: Uuid) ->
     Ok(())
 }
 
+pub async fn active_member_ids(pool: &PgPool, conversation_id: Uuid) -> AppResult<Vec<Uuid>> {
+    let conversation = get_conversation(pool, conversation_id).await?;
+    ensure_not_dissolved(&conversation)?;
+
+    sqlx::query_scalar::<_, Uuid>(
+        "select user_id
+         from conversation_members
+         where conversation_id = $1
+           and state = 'active'",
+    )
+    .bind(conversation_id)
+    .fetch_all(pool)
+    .await
+    .map_err(internal_error)
+}
+
+pub async fn mark_read(
+    pool: &PgPool,
+    user_id: Uuid,
+    conversation_id: Uuid,
+    read_seq: i64,
+) -> AppResult<i64> {
+    if read_seq < 0 {
+        return Err(AppError::invalid_request(
+            "read_seq must be greater than or equal to 0",
+        ));
+    }
+
+    let conversation = get_conversation(pool, conversation_id).await?;
+    ensure_not_dissolved(&conversation)?;
+
+    sqlx::query_scalar::<_, i64>(
+        "update conversation_members
+         set read_seq = greatest(read_seq, least($3, $4))
+         where conversation_id = $1
+           and user_id = $2
+           and state = 'active'
+         returning read_seq",
+    )
+    .bind(conversation_id)
+    .bind(user_id)
+    .bind(read_seq)
+    .bind(conversation.last_message_seq)
+    .fetch_optional(pool)
+    .await
+    .map_err(internal_error)?
+    .ok_or_else(not_conversation_member)
+}
+
 fn normalize_group_name(name: String) -> AppResult<String> {
     let name = name.trim().to_string();
     let len = name.chars().count();
@@ -582,6 +631,14 @@ fn conversation_not_found() -> AppError {
         StatusCode::NOT_FOUND,
         ErrorCode::ConversationNotFound,
         "Conversation was not found",
+    )
+}
+
+fn not_conversation_member() -> AppError {
+    AppError::new(
+        StatusCode::FORBIDDEN,
+        ErrorCode::NotConversationMember,
+        "User is not a conversation member",
     )
 }
 

@@ -26,6 +26,8 @@ pub enum ErrorCode {
     TooManyConnections,
     UnsupportedWsVersion,
     InvalidWsEnvelope,
+    WsPayloadTooLarge,
+    HeartbeatTimeout,
     UserNotFound,
     Internal,
 }
@@ -51,6 +53,8 @@ impl ErrorCode {
             Self::TooManyConnections => "too_many_connections",
             Self::UnsupportedWsVersion => "unsupported_ws_version",
             Self::InvalidWsEnvelope => "invalid_ws_envelope",
+            Self::WsPayloadTooLarge => "ws_payload_too_large",
+            Self::HeartbeatTimeout => "heartbeat_timeout",
             Self::UserNotFound => "user_not_found",
             Self::Internal => "internal",
         }

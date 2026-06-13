@@ -280,6 +280,200 @@ Rules:
 
 Direct sends target a user by username or user id. The first direct message creates the direct conversation, inserts both direct members, creates visibility spans from sequence `1`, allocates message sequence `1`, and commits all of that atomically. Later direct sends reuse the same direct conversation. Empty direct conversations are not exposed in conversation lists.
 
+## WebSocket
+
+Connect to `GET /ws?version=1`.
+
+Authentication is required before upgrade. Browser clients may pass `token=<access_token>` in the query string. Non-browser clients may also use:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+Unsupported or missing `version=1`, missing/invalid auth, and per-user connection-limit rejections return the normal HTTP error envelope before upgrade when practical.
+
+### Client envelope
+
+All client commands use a common snake_case JSON envelope. `id` is optional for heartbeat and recommended for commands where the client wants request/response correlation.
+
+```json
+{
+  "id": "req-1",
+  "type": "message.send",
+  "payload": {}
+}
+```
+
+Invalid JSON, non-text frames, unknown command types, invalid command payloads, and oversized WebSocket payloads are returned as a WebSocket `error` envelope and the connection is closed.
+
+### Server envelopes
+
+Success response:
+
+```json
+{
+  "id": "req-1",
+  "type": "message.send.ok",
+  "payload": {}
+}
+```
+
+Event:
+
+```json
+{
+  "type": "message.created",
+  "payload": {}
+}
+```
+
+Error:
+
+```json
+{
+  "id": "req-1",
+  "type": "error",
+  "error": {
+    "code": "empty_message",
+    "message": "Message body must not be empty"
+  }
+}
+```
+
+Business errors, such as `empty_message`, `conversation_dissolved`, or `idempotency_conflict`, return an `error` envelope without closing the connection.
+
+### Commands
+
+#### Send to an existing conversation
+
+`message.send`
+
+```json
+{
+  "id": "req-1",
+  "type": "message.send",
+  "payload": {
+    "conversation_id": "018f0000-0000-7000-8000-000000000010",
+    "client_msg_id": "c1",
+    "body": "hello"
+  }
+}
+```
+
+Success type: `message.send.ok`
+
+The success payload is the same shape as `SendMessageResult`:
+
+```json
+{
+  "conversation_id": "018f0000-0000-7000-8000-000000000010",
+  "message": {
+    "message_id": "018f0000-0000-7000-8000-000000000020",
+    "conversation_id": "018f0000-0000-7000-8000-000000000010",
+    "message_seq": 1,
+    "sender": {
+      "user_id": "018f0000-0000-7000-8000-000000000001",
+      "username": "alice",
+      "display_name": "Alice"
+    },
+    "body": "hello",
+    "created_at": "2026-06-13T00:00:00.000Z"
+  }
+}
+```
+
+#### Send or create a direct conversation
+
+`direct_message.send`
+
+Specify exactly one of `target_username` or `target_user_id`.
+
+```json
+{
+  "id": "req-2",
+  "type": "direct_message.send",
+  "payload": {
+    "target_username": "bob",
+    "client_msg_id": "d1",
+    "body": "hello bob"
+  }
+}
+```
+
+Success type: `direct_message.send.ok`; payload shape is the same as `message.send.ok`.
+
+#### Mark a conversation read
+
+`conversation.read`
+
+```json
+{
+  "id": "req-3",
+  "type": "conversation.read",
+  "payload": {
+    "conversation_id": "018f0000-0000-7000-8000-000000000010",
+    "read_seq": 12
+  }
+}
+```
+
+`read_seq` is monotonic and is capped at the conversation's current latest message sequence.
+
+Success:
+
+```json
+{
+  "id": "req-3",
+  "type": "conversation.read.ok",
+  "payload": {
+    "conversation_id": "018f0000-0000-7000-8000-000000000010",
+    "read_seq": 12
+  }
+}
+```
+
+#### Heartbeat
+
+`heartbeat.ping`
+
+```json
+{
+  "type": "heartbeat.ping",
+  "payload": {
+    "client_time": "2026-06-13T00:00:00Z"
+  }
+}
+```
+
+Success type: `heartbeat.pong`.
+
+```json
+{
+  "type": "heartbeat.pong",
+  "payload": {
+    "server_time": "2026-06-13T00:00:00.000Z"
+  }
+}
+```
+
+Recommended client heartbeat interval is the configured server interval, default `30` seconds. Connections that do not send any valid envelope for the idle timeout, default `90` seconds, are removed from the local registry and closed.
+
+### Local event fan-out
+
+After a successful `message.send` or `direct_message.send`, other local WebSocket connections for active members of the conversation are eligible to receive:
+
+```json
+{
+  "type": "message.created",
+  "payload": {
+    "conversation_id": "018f0000-0000-7000-8000-000000000010",
+    "message": {}
+  }
+}
+```
+
+The origin connection receives only `message.send.ok` or `direct_message.send.ok`; it does not receive a duplicate `message.created` event for its own command. Other connections owned by the same user can receive the event. This fan-out is instance-local only until cross-instance Postgres `LISTEN/NOTIFY` is added.
+
 ## Error Format
 
 Errors use stable machine-readable codes. Request parsing errors (for example malformed JSON, non-JSON request content, invalid query parameters, or invalid path IDs such as malformed `conversation_id` UUIDs) use this same envelope.
@@ -314,3 +508,11 @@ Conversation and message error codes introduced here:
 - `empty_message`: message body is empty after trimming whitespace.
 - `message_too_large`: message body exceeds the configured maximum, currently 4096 bytes.
 - `idempotency_conflict`: `client_msg_id` was reused for a different message request.
+
+WebSocket error codes introduced here:
+
+- `too_many_connections`: user exceeded the configured local WebSocket connection limit.
+- `unsupported_ws_version`: `/ws` version is missing or unsupported.
+- `invalid_ws_envelope`: WebSocket JSON envelope or command payload is invalid.
+- `ws_payload_too_large`: WebSocket frame exceeds the configured maximum payload size.
+- `heartbeat_timeout`: connection exceeded the heartbeat idle timeout.

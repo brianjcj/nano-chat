@@ -1,17 +1,34 @@
 use axum::{Router, http::StatusCode, routing::get};
 use sqlx::PgPool;
 
-use crate::{auth, config::Config, conversations, users};
+use crate::{
+    auth, config::Config, conversations, realtime::connection_registry::ConnectionRegistry, users,
+    ws,
+};
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: Config,
     pub pool: PgPool,
+    pub registry: ConnectionRegistry,
 }
 
 impl AppState {
     pub fn new(config: Config, pool: PgPool) -> Self {
-        Self { config, pool }
+        let registry = ConnectionRegistry::new(config.max_connections_per_user);
+        Self {
+            config,
+            pool,
+            registry,
+        }
+    }
+
+    pub fn with_registry(config: Config, pool: PgPool, registry: ConnectionRegistry) -> Self {
+        Self {
+            config,
+            pool,
+            registry,
+        }
     }
 }
 
@@ -19,6 +36,7 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
+        .merge(ws::router())
         .nest("/api/v1", api_router())
         .with_state(state)
 }
