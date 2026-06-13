@@ -11,7 +11,6 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 
 import { useApiClient, useSession } from "@/app/AppProviders";
-import { useImStore } from "@/features/im/state/imStore";
 import { Button } from "@/shared/ui/button";
 import {
   Dialog,
@@ -64,7 +63,6 @@ export function UserMenu() {
   }
 
   function logout() {
-    useImStore.getState().reset();
     clearSession();
     navigate("/login", { replace: true });
   }

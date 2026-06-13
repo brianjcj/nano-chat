@@ -7,6 +7,7 @@ import {
   makeAuthResponse,
   renderAppRoute,
 } from "@/app/test-utils";
+import { imQueryKeys } from "@/features/im/api/imQueries";
 import { useImStore } from "@/features/im/state/imStore";
 import type { ApiClient } from "@/shared/api/client";
 import type { UserSummary } from "@/shared/api/types";
@@ -137,11 +138,30 @@ describe("AppShell", () => {
 
   it("logs out from the user menu by clearing session and leaving the authenticated area", async () => {
     const user = userEvent.setup();
-    const { router, sessionStore } = await renderAppRoute({
+    const { queryClient, router, sessionStore } = await renderAppRoute({
       initialEntries: ["/app/im"],
       session: makeAuthResponse(),
       apiClient: createShellApiClient(),
     });
+    await screen.findByText("No conversations yet");
+    const cachedConversations = [
+      {
+        active_member_count: 1,
+        conversation_id: "cached-conversation",
+        direct_user: null,
+        latest_message: null,
+        latest_message_seq: 0,
+        name: "Cached group",
+        read_seq: 0,
+        state: "active" as const,
+        type: "group" as const,
+        unread_count: 0,
+      },
+    ];
+    queryClient.setQueryData(imQueryKeys.conversations(), cachedConversations);
+    expect(queryClient.getQueryData(imQueryKeys.conversations())).toEqual(
+      cachedConversations,
+    );
 
     await user.click(await screen.findByRole("button", { name: /User menu/i }));
     await user.click(screen.getByRole("button", { name: "Sign out" }));
@@ -150,6 +170,9 @@ describe("AppShell", () => {
       expect(router.state.location.pathname).toBe("/login");
     });
     expect(sessionStore.getValidSession()).toBeNull();
+    expect(
+      queryClient.getQueryData(imQueryKeys.conversations()),
+    ).toBeUndefined();
     expect(useImStore.getState().currentConversationId).toBeNull();
     expect(
       await screen.findByRole("heading", { name: "Sign in to Nano Chat" }),

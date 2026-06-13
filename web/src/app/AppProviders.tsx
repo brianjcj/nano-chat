@@ -1,4 +1,8 @@
-import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
+import {
+  QueryClientProvider,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import type { i18n as I18nInstance } from "i18next";
 import {
   createContext,
@@ -12,6 +16,7 @@ import {
 import { I18nextProvider } from "react-i18next";
 
 import { queryClient as defaultQueryClient } from "./queryClient";
+import { useImStore } from "@/features/im/state/imStore";
 import { createApiClient, type ApiClient } from "@/shared/api/client";
 import { getAppEnv } from "@/shared/config/env";
 import {
@@ -90,6 +95,7 @@ function SessionProvider({
   children,
   sessionStore,
 }: PropsWithChildren<{ sessionStore: SessionStore }>) {
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(() =>
     sessionStore.getValidSession(),
   );
@@ -101,18 +107,30 @@ function SessionProvider({
     return isSessionFresh(currentSession) ? currentSession : null;
   }, [session, sessionStore]);
 
+  const resetSessionScopedClientState = useCallback(() => {
+    queryClient.clear();
+    useImStore.getState().reset();
+  }, [queryClient]);
+
   const saveSession = useCallback(
     (nextSession: Session) => {
+      const currentSession = sessionStore.getValidSession() ?? session;
+
+      if (!isSameSessionIdentity(currentSession, nextSession)) {
+        resetSessionScopedClientState();
+      }
+
       sessionStore.save(nextSession);
       setSession(nextSession);
     },
-    [sessionStore],
+    [resetSessionScopedClientState, session, sessionStore],
   );
 
   const clearSession = useCallback(() => {
     sessionStore.clear();
+    resetSessionScopedClientState();
     setSession(null);
-  }, [sessionStore]);
+  }, [resetSessionScopedClientState, sessionStore]);
 
   const currentSession = getValidSession();
   const value = useMemo(
@@ -194,4 +212,18 @@ function isSessionFresh(session: Session | null) {
   const expiresAtMs = Date.parse(session.expires_at);
 
   return !Number.isNaN(expiresAtMs) && expiresAtMs > Date.now();
+}
+
+function isSameSessionIdentity(
+  currentSession: Session | null,
+  nextSession: Session,
+) {
+  if (!currentSession) {
+    return false;
+  }
+
+  return (
+    currentSession.user.user_id === nextSession.user.user_id &&
+    currentSession.client_id === nextSession.client_id
+  );
 }
