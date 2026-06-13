@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  font-family:
+    ui-rounded,
+    "Nunito Sans",
+    "Avenir Next Rounded Std",
+    "Hiragino Maru Gothic ProN",
+    system-ui,
+    sans-serif;
+
+  --background: #fff8f1;
+  --foreground: #21191b;
+  --surface: #ffffff;
+  --surface-muted: #fff0e7;
+  --muted: #f5ddd4;
+  --muted-foreground: #756168;
+  --primary: #ff715f;
+  --primary-foreground: #ffffff;
+  --primary-shadow: rgb(255 113 95 / 32%);
+  --accent: #8a6dff;
+  --accent-foreground: #ffffff;
+  --bubble-outgoing: #ffdfd6;
+  --bubble-incoming: #ffffff;
+  --border: #ecd7cf;
+  --ring: #ff9b8b;
+  --destructive: #d94242;
+  --destructive-foreground: #ffffff;
+  --shadow-color: rgb(98 63 48 / 14%);
+  --radius: 1.25rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+  background: var(--background);
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgb(255 190 164 / 45%), transparent 34rem),
+    radial-gradient(circle at bottom right, rgb(138 109 255 / 18%), transparent 32rem),
+    var(--background);
+  color: var(--foreground);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--primary) 30%, white);
+  color: var(--foreground);
+}
+
+:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--ring) 76%, white);
+  outline-offset: 3px;
+}
+
+#root {
+  min-height: 100vh;
+}
