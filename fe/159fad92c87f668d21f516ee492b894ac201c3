@@ -1,0 +1,40 @@
+CONTEXT.md
+  s_712973d404db18::t_b7da30e9428016 51-54,58-61
+  s_712973d404db18::t_2aed9f8ceda7fa 55,57,66
+  s_712973d404db18::t_792ecb257f2efe 28-33
+  s_712973d404db18::t_b3241c3ea91921 67-78
+  s_712973d404db18::t_2e0bf027cee473 15-18
+  s_712973d404db18::t_b535db05ef7bdb 11-14,43,45-47,49-50
+  s_712973d404db18::t_fa248d4757dd55 1-10,79-81
+  s_712973d404db18::t_9ec7ef43fffb4c 20-21
+  s_712973d404db18::t_9e4c872bebdda3 27,34
+  s_712973d404db18::t_c00c0c3962e115 23-26
+  s_712973d404db18::t_ba1eafc84d684f 48
+  s_712973d404db18::t_ff7792092c02ac 56,62-65
+  s_712973d404db18::t_28cc3bf0b03ec8 44
+  s_712973d404db18::t_d2eea905532f97 19,22
+  s_712973d404db18::t_2ce222b4b547e7 39-42
+docs/superpowers/specs/2026-06-13-nano-chat-backend-design.md
+  s_712973d404db18::t_1a155334acc21b 1-166,169-796
+  s_712973d404db18::t_5558ffb3a2617e 167-168
+docs/adr/0001-postgres-notify-for-cross-instance-realtime.md
+  s_712973d404db18::t_3886aa746f41ea 1-2,4-6,9-12
+  s_712973d404db18::t_c1e183e0eb07fe 3,7-8,13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "fe159fad92c87f668d21f516ee492b894ac201c3",
+  "prompts": {},
+  "logical_commit_id": "fe159fad92c87f668d21f516ee492b894ac201c3",
+  "sessions": {
+    "s_712973d404db18": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019ebe83-4f68-7035-a257-78dde5d4f0cb",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
