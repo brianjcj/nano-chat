@@ -150,11 +150,13 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, current_user: Cur
             _ = cleanup_interval.tick() => {
                 let removed = state.registry.cleanup_idle(now_utc(), idle_timeout);
                 if removed.contains(&connection_id) || !state.registry.contains(connection_id) {
-                    let _ = outbound_tx.try_send(ServerEnvelope::error(
+                    send_and_close(
+                        &outbound_tx,
                         None,
                         ErrorCode::HeartbeatTimeout,
                         "WebSocket heartbeat timed out",
-                    ));
+                    )
+                    .await;
                     break;
                 }
             }
@@ -181,36 +183,36 @@ async fn handle_incoming_message(
     match message {
         Message::Text(text) => {
             if text.as_str().len() > state.config.max_ws_payload_bytes {
-                send_and_close(
+                return send_and_close(
                     outbound_tx,
                     None,
                     ErrorCode::WsPayloadTooLarge,
                     "WebSocket payload exceeds the maximum size",
-                );
-                return false;
+                )
+                .await;
             }
 
             let envelope = match serde_json::from_str::<ClientEnvelope>(text.as_str()) {
                 Ok(envelope) => envelope,
                 Err(_) => {
-                    send_and_close(
+                    return send_and_close(
                         outbound_tx,
                         None,
                         ErrorCode::InvalidWsEnvelope,
                         "Invalid WebSocket envelope",
-                    );
-                    return false;
+                    )
+                    .await;
                 }
             };
 
             if !state.registry.touch(connection_id) {
-                send_and_close(
+                return send_and_close(
                     outbound_tx,
                     None,
                     ErrorCode::HeartbeatTimeout,
                     "WebSocket heartbeat timed out",
-                );
-                return false;
+                )
+                .await;
             }
 
             dispatch_client_envelope(state, current_user, connection_id, outbound_tx, envelope)
@@ -227,8 +229,7 @@ async fn handle_incoming_message(
             } else {
                 "WebSocket envelope must be JSON text"
             };
-            send_and_close(outbound_tx, None, code, message);
-            false
+            send_and_close(outbound_tx, None, code, message).await
         }
         Message::Ping(_) | Message::Pong(_) => true,
         Message::Close(_) => false,
@@ -253,15 +254,15 @@ async fn dispatch_client_envelope(
         "conversation.read" => {
             handle_conversation_read(state, current_user, outbound_tx, envelope).await
         }
-        "heartbeat.ping" => handle_heartbeat_ping(outbound_tx, envelope),
+        "heartbeat.ping" => handle_heartbeat_ping(outbound_tx, envelope).await,
         _ => {
             send_and_close(
                 outbound_tx,
                 envelope.id,
                 ErrorCode::InvalidWsEnvelope,
                 "Unsupported WebSocket command",
-            );
-            false
+            )
+            .await
         }
     }
 }
@@ -277,8 +278,7 @@ async fn handle_message_send(
     let payload = match parse_payload::<MessageSendPayload>(&envelope) {
         Ok(payload) => payload,
         Err(message) => {
-            send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message);
-            return false;
+            return send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message).await;
         }
     };
 
@@ -293,7 +293,9 @@ async fn handle_message_send(
     {
         Ok(result) => {
             let newly_created = result.newly_created;
-            send_ok(outbound_tx, id, "message.send.ok", json!(result));
+            if !send_ok(outbound_tx, id, "message.send.ok", json!(result)).await {
+                return false;
+            }
             if newly_created {
                 fanout_message_created(
                     state,
@@ -305,10 +307,7 @@ async fn handle_message_send(
             }
             true
         }
-        Err(error) => {
-            send_app_error(outbound_tx, id, error);
-            true
-        }
+        Err(error) => send_app_error(outbound_tx, id, error).await,
     }
 }
 
@@ -323,16 +322,14 @@ async fn handle_direct_message_send(
     let payload = match parse_payload::<DirectMessageSendPayload>(&envelope) {
         Ok(payload) => payload,
         Err(message) => {
-            send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message);
-            return false;
+            return send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message).await;
         }
     };
 
     let target = match direct_target(payload.target_user_id, payload.target_username) {
         Ok(target) => target,
         Err(error) => {
-            send_app_error(outbound_tx, id, error);
-            return true;
+            return send_app_error(outbound_tx, id, error).await;
         }
     };
 
@@ -347,7 +344,9 @@ async fn handle_direct_message_send(
     {
         Ok(result) => {
             let newly_created = result.newly_created;
-            send_ok(outbound_tx, id, "direct_message.send.ok", json!(result));
+            if !send_ok(outbound_tx, id, "direct_message.send.ok", json!(result)).await {
+                return false;
+            }
             if newly_created {
                 fanout_message_created(
                     state,
@@ -359,10 +358,7 @@ async fn handle_direct_message_send(
             }
             true
         }
-        Err(error) => {
-            send_app_error(outbound_tx, id, error);
-            true
-        }
+        Err(error) => send_app_error(outbound_tx, id, error).await,
     }
 }
 
@@ -376,8 +372,7 @@ async fn handle_conversation_read(
     let payload = match parse_payload::<ConversationReadPayload>(&envelope) {
         Ok(payload) => payload,
         Err(message) => {
-            send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message);
-            return false;
+            return send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message).await;
         }
     };
 
@@ -395,17 +390,14 @@ async fn handle_conversation_read(
                 id,
                 "conversation.read.ok",
                 json!({"conversation_id": payload.conversation_id, "read_seq": read_seq}),
-            );
-            true
+            )
+            .await
         }
-        Err(error) => {
-            send_app_error(outbound_tx, id, error);
-            true
-        }
+        Err(error) => send_app_error(outbound_tx, id, error).await,
     }
 }
 
-fn handle_heartbeat_ping(
+async fn handle_heartbeat_ping(
     outbound_tx: &mpsc::Sender<ServerEnvelope>,
     envelope: ClientEnvelope,
 ) -> bool {
@@ -413,8 +405,7 @@ fn handle_heartbeat_ping(
     let _payload = match parse_payload::<HeartbeatPingPayload>(&envelope) {
         Ok(payload) => payload,
         Err(message) => {
-            send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message);
-            return false;
+            return send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message).await;
         }
     };
 
@@ -423,8 +414,8 @@ fn handle_heartbeat_ping(
         id,
         "heartbeat.pong",
         json!({"server_time": to_rfc3339_utc(now_utc())}),
-    );
-    true
+    )
+    .await
 }
 
 async fn fanout_message_created(
@@ -479,26 +470,48 @@ fn direct_target(
     }
 }
 
-fn send_ok(
+async fn send_ok(
     outbound_tx: &mpsc::Sender<ServerEnvelope>,
     id: Option<String>,
     message_type: &'static str,
     payload: serde_json::Value,
-) {
-    let _ = outbound_tx.try_send(ServerEnvelope::ok(id, message_type, payload));
+) -> bool {
+    enqueue_origin_envelope(outbound_tx, ServerEnvelope::ok(id, message_type, payload)).await
 }
 
-fn send_app_error(outbound_tx: &mpsc::Sender<ServerEnvelope>, id: Option<String>, error: AppError) {
-    let _ = outbound_tx.try_send(ServerEnvelope::error(id, error.code, error.message));
+async fn send_app_error(
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
+    id: Option<String>,
+    error: AppError,
+) -> bool {
+    enqueue_origin_envelope(
+        outbound_tx,
+        ServerEnvelope::error(id, error.code, error.message),
+    )
+    .await
 }
 
-fn send_and_close(
+async fn send_and_close(
     outbound_tx: &mpsc::Sender<ServerEnvelope>,
     id: Option<String>,
     code: ErrorCode,
     message: impl Into<String>,
-) {
-    let _ = outbound_tx.try_send(ServerEnvelope::error(id, code, message));
+) -> bool {
+    let _ = enqueue_origin_envelope(outbound_tx, ServerEnvelope::error(id, code, message)).await;
+    false
+}
+
+async fn enqueue_origin_envelope(
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
+    envelope: ServerEnvelope,
+) -> bool {
+    match outbound_tx.send(envelope).await {
+        Ok(()) => true,
+        Err(error) => {
+            tracing::debug!(%error, "failed to enqueue websocket command response");
+            false
+        }
+    }
 }
 
 async fn send_envelope_to_socket(socket: &mut WebSocket, envelope: ServerEnvelope) {
@@ -519,6 +532,7 @@ fn too_many_connections_error() -> AppError {
 mod tests {
     use super::*;
     use crate::{config::Config, db, realtime::connection_registry::ConnectionRegistry};
+    use futures_util::FutureExt;
     use serde_json::json;
 
     #[tokio::test]
@@ -550,6 +564,101 @@ mod tests {
             envelope.error.expect("error envelope").code,
             ErrorCode::HeartbeatTimeout.as_str()
         );
+    }
+
+    #[tokio::test]
+    async fn ok_command_response_waits_for_full_origin_queue() {
+        let (keep_processing, response) = run_command_with_full_origin_queue(json!({
+            "id": "hb-1",
+            "type": "heartbeat.ping",
+            "payload": {}
+        }))
+        .await;
+
+        assert!(keep_processing);
+        assert_eq!(response.id.as_deref(), Some("hb-1"));
+        assert_eq!(response.message_type, "heartbeat.pong");
+    }
+
+    #[tokio::test]
+    async fn app_error_response_waits_for_full_origin_queue() {
+        let (keep_processing, response) = run_command_with_full_origin_queue(json!({
+            "id": "dm-1",
+            "type": "direct_message.send",
+            "payload": {
+                "client_msg_id": "bad-target",
+                "body": "hello"
+            }
+        }))
+        .await;
+
+        assert!(keep_processing);
+        assert_eq!(response.id.as_deref(), Some("dm-1"));
+        assert_eq!(response.message_type, "error");
+        assert_eq!(
+            response.error.expect("error envelope").code,
+            ErrorCode::InvalidRequest.as_str()
+        );
+    }
+
+    #[tokio::test]
+    async fn close_error_response_waits_for_full_origin_queue() {
+        let (keep_processing, response) = run_command_with_full_origin_queue(json!({
+            "id": "bad-1",
+            "type": "unsupported.command",
+            "payload": {}
+        }))
+        .await;
+
+        assert!(!keep_processing);
+        assert_eq!(response.id.as_deref(), Some("bad-1"));
+        assert_eq!(response.message_type, "error");
+        assert_eq!(
+            response.error.expect("error envelope").code,
+            ErrorCode::InvalidWsEnvelope.as_str()
+        );
+    }
+
+    async fn run_command_with_full_origin_queue(
+        envelope: serde_json::Value,
+    ) -> (bool, ServerEnvelope) {
+        let state = test_state();
+        let current_user = test_current_user();
+        let (outbound_tx, mut outbound_rx) = mpsc::channel(1);
+        let registered = state
+            .registry
+            .register(
+                current_user.user_id,
+                current_user.client_id,
+                outbound_tx.clone(),
+            )
+            .expect("register websocket connection");
+        outbound_tx
+            .send(ServerEnvelope::event("preloaded", json!({})))
+            .await
+            .expect("preload full queue");
+
+        let text = envelope.to_string();
+        let mut command = Box::pin(handle_incoming_message(
+            Message::Text(text.into()),
+            &state,
+            &current_user,
+            registered.connection_id,
+            &outbound_tx,
+        ));
+
+        assert!(
+            command.as_mut().now_or_never().is_none(),
+            "command response should wait for origin queue capacity"
+        );
+
+        let preloaded = outbound_rx.recv().await.expect("preloaded envelope");
+        assert_eq!(preloaded.message_type, "preloaded");
+
+        let keep_processing = command.await;
+        let response = outbound_rx.recv().await.expect("command response envelope");
+
+        (keep_processing, response)
     }
 
     fn test_state() -> AppState {

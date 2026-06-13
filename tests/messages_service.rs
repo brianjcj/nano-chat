@@ -293,6 +293,35 @@ async fn visible_user_ids_for_message_uses_message_visibility_spans() {
 
 #[tokio::test]
 #[serial_test::serial]
+async fn visible_user_ids_for_message_works_after_group_is_dissolved() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+
+    let group = ctx.create_group(&alice, "project", &[bob.user_id]).await;
+    let sent = ctx
+        .send_message(&alice, group.conversation_id, "seq-1", "history survives")
+        .await;
+    assert_eq!(sent.message.message_seq, 1);
+
+    ctx.leave_group(&bob, group.conversation_id).await;
+    ctx.leave_group(&alice, group.conversation_id).await;
+
+    let visible_user_ids = conversations_service::visible_user_ids_for_message(
+        &ctx.pool,
+        group.conversation_id,
+        sent.message.message_seq,
+    )
+    .await
+    .expect("visible user ids should load for dissolved groups");
+
+    assert!(visible_user_ids.contains(&alice.user_id));
+    assert!(visible_user_ids.contains(&bob.user_id));
+    assert_eq!(visible_user_ids.len(), 2);
+}
+
+#[tokio::test]
+#[serial_test::serial]
 async fn http_history_endpoint_returns_current_sender_summary_and_paginates_by_seq() {
     let ctx = common::TestContext::new().await;
     let alice = ctx.register("alice").await;

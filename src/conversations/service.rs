@@ -375,8 +375,7 @@ pub async fn visible_user_ids_for_message(
     conversation_id: Uuid,
     message_seq: i64,
 ) -> AppResult<Vec<Uuid>> {
-    let conversation = get_conversation(pool, conversation_id).await?;
-    ensure_not_dissolved(&conversation)?;
+    get_conversation(pool, conversation_id).await?;
 
     sqlx::query_scalar::<_, Uuid>(
         "select distinct user_id

@@ -460,7 +460,7 @@ Recommended client heartbeat interval is the configured server interval, default
 
 ### Local event fan-out
 
-After a successful `message.send` or `direct_message.send`, other local WebSocket connections for active members of the conversation are eligible to receive:
+After a successful `message.send` or `direct_message.send`, other local WebSocket connections for users whose visibility spans include the created message sequence are eligible to receive:
 
 ```json
 {
