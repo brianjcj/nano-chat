@@ -1,0 +1,26 @@
+docs/adr/0002-serve-web-app-from-chat-service.md
+  s_712973d404db18::t_1c58e550660209 1-3
+CONTEXT.md
+  s_712973d404db18::t_1bc47615fb9f1e 11-14
+  s_712973d404db18::t_1213c92ecda739 15-18
+  s_712973d404db18::t_a3291ae3aebd31 55-57
+docs/superpowers/specs/2026-06-14-nano-chat-web-design.md
+  s_712973d404db18::t_33d41b8b611a74 1-335
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "4ccbb94967cb1e99e946c0cf031fc7bc25331b3e",
+  "prompts": {},
+  "logical_commit_id": "4ccbb94967cb1e99e946c0cf031fc7bc25331b3e",
+  "sessions": {
+    "s_712973d404db18": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019ebe83-4f68-7035-a257-78dde5d4f0cb",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
