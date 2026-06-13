@@ -13,7 +13,7 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env()?;
     init_tracing(&config.rust_log)?;
 
-    let pool = db::create_lazy_pool(&config.database_url).await?;
+    let pool = db::create_lazy_pool(&config.database_url)?;
     let bind_addr = config.bind_addr.clone();
     let app = build_router(AppState::new(config, pool)).layer(TraceLayer::new_for_http());
 
