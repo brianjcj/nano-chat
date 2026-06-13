@@ -11,7 +11,7 @@ import { useSession } from "./AppProviders";
 import { AuthLayout } from "@/features/auth/AuthLayout";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { RegisterPage } from "@/features/auth/RegisterPage";
-import { AppShellPlaceholder } from "@/features/shell/AppShellPlaceholder";
+import { AppShell } from "@/features/shell/AppShell";
 import { AuthenticatedAppLayout } from "@/features/shell/AuthenticatedAppLayout";
 
 type CreateAppMemoryRouterOptions = {
@@ -68,11 +68,11 @@ function createAppRoutes(): RouteObject[] {
         },
         {
           path: "im",
-          element: <AppShellPlaceholder />,
+          element: <AppShell />,
         },
         {
           path: "im/conversations/:conversationId",
-          element: <AppShellPlaceholder />,
+          element: <AppShell />,
         },
         {
           path: "*",

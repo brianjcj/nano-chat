@@ -62,8 +62,10 @@ describe("auth routes", () => {
       session: validSession,
     });
 
-    expect(await screen.findByText("Temporary IM shell")).toBeInTheDocument();
-    expect(screen.getByText("Nano Chat")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("main", { name: "Main workspace" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Feature rail")).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/app/im");
   });
 
@@ -73,7 +75,9 @@ describe("auth routes", () => {
       session: validSession,
     });
 
-    expect(await screen.findByText("Temporary IM shell")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Choose a conversation to start"),
+    ).toBeInTheDocument();
     expect(realtimeBridgeLifecycle.mountCount).toBe(1);
     expect(realtimeBridgeLifecycle.activeMounts).toBe(1);
 
@@ -81,7 +85,9 @@ describe("auth routes", () => {
       await router.navigate("/app/im/conversations/conversation-1");
     });
 
-    expect(await screen.findByText("Temporary IM shell")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Chat view is coming next"),
+    ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe(
       "/app/im/conversations/conversation-1",
     );
@@ -109,7 +115,9 @@ describe("auth routes", () => {
         password: "correct horse",
       });
     });
-    expect(await screen.findByText("Temporary IM shell")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Choose a conversation to start"),
+    ).toBeInTheDocument();
     expect(sessionStore.getValidSession()).toEqual(validSession);
     expect(router.state.location.pathname).toBe("/app/im");
   });
@@ -134,7 +142,9 @@ describe("auth routes", () => {
         password: "correct horse",
       });
     });
-    expect(await screen.findByText("Temporary IM shell")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Choose a conversation to start"),
+    ).toBeInTheDocument();
     expect(sessionStore.getValidSession()).toEqual(validSession);
     expect(router.state.location.pathname).toBe("/app/im");
   });

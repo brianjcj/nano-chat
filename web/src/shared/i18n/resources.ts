@@ -56,10 +56,21 @@ export const appResources = {
       shell: {
         im: "聊天",
         workspace: "工作区",
+        featureRail: "功能栏",
+        mobileFeatureBar: "移动端功能栏",
+        mainWorkspace: "主工作区",
         placeholder: {
           title: "临时 IM 外壳",
           description:
             "认证与路由已经就绪。会话列表、消息收发和实时连接会在后续任务中接入。",
+          emptyEyebrow: "IM 工作台",
+          emptyTitle: "选择一个会话开始聊天",
+          emptyDescription:
+            "左侧会话列表已经接入实时缓存。消息视图会在下一阶段替换这里的占位工作区。",
+          selectedEyebrow: "会话已选择",
+          selectedTitle: "聊天窗口即将接入",
+          selectedDescription:
+            "已选中会话 {{conversationId}}。Task 6 会在这里展示真实消息流。",
         },
         connection: {
           connected: "已连接",
@@ -70,6 +81,10 @@ export const appResources = {
         userMenu: {
           title: "用户菜单",
           editProfile: "编辑资料",
+          editProfileDescription: "更新你的显示名；留空即可恢复使用用户名展示。",
+          displayNamePlaceholder: "例如：小鹿",
+          clearDisplayNameHint: "留空保存会清除显示名。",
+          saveError: "保存失败，请稍后重试。",
           language: "切换语言",
           logout: "退出登录",
         },
@@ -77,8 +92,16 @@ export const appResources = {
       im: {
         conversationList: {
           title: "会话",
+          subtitle: "轻量的实时聊天入口",
+          region: "会话列表",
           emptyTitle: "还没有会话",
           emptyDescription: "查找用户发起单聊，或创建一个群聊。",
+          error: "会话加载失败，请稍后重试。",
+          activeEmptyGroup: "活跃群聊 · 暂无消息",
+          emptyLatest: "暂无消息",
+          unknownDirect: "未知用户",
+          untitledGroup: "未命名群聊",
+          memberCount: "{{count}} 位成员",
           newDirect: "新建单聊",
           createGroup: "创建群聊",
           unread: "{{count}} 条未读",
@@ -211,10 +234,21 @@ export const appResources = {
       shell: {
         im: "Chat",
         workspace: "Workspace",
+        featureRail: "Feature rail",
+        mobileFeatureBar: "Mobile feature bar",
+        mainWorkspace: "Main workspace",
         placeholder: {
           title: "Temporary IM shell",
           description:
             "Authentication and routing are ready. Conversation lists, messaging, and realtime connections will arrive in later tasks.",
+          emptyEyebrow: "IM workspace",
+          emptyTitle: "Choose a conversation to start",
+          emptyDescription:
+            "The conversation list is wired to the realtime cache. Task 6 will replace this calm placeholder with the message stream.",
+          selectedEyebrow: "Conversation selected",
+          selectedTitle: "Chat view is coming next",
+          selectedDescription:
+            "Conversation {{conversationId}} is selected. Task 6 will render the real message stream here.",
         },
         connection: {
           connected: "Connected",
@@ -225,6 +259,10 @@ export const appResources = {
         userMenu: {
           title: "User menu",
           editProfile: "Edit profile",
+          editProfileDescription: "Update your display name, or leave it blank to fall back to your username.",
+          displayNamePlaceholder: "For example: Ada",
+          clearDisplayNameHint: "Saving a blank value clears the display name.",
+          saveError: "Could not save your profile. Try again.",
           language: "Change language",
           logout: "Sign out",
         },
@@ -232,8 +270,16 @@ export const appResources = {
       im: {
         conversationList: {
           title: "Conversations",
+          subtitle: "Your lightweight realtime chat entrance",
+          region: "Conversation list",
           emptyTitle: "No conversations yet",
           emptyDescription: "Look up a user for a direct chat or create a group.",
+          error: "Could not load conversations. Try again soon.",
+          activeEmptyGroup: "Active group · no messages yet",
+          emptyLatest: "No messages yet",
+          unknownDirect: "Unknown user",
+          untitledGroup: "Untitled group",
+          memberCount: "{{count}} members",
           newDirect: "New direct chat",
           createGroup: "Create group",
           unread: "{{count}} unread",

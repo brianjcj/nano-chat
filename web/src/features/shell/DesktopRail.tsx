@@ -1,0 +1,47 @@
+import { MessageCircleHeart, Sparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { NavLink } from "react-router";
+
+import { useImStore } from "@/features/im/state/imStore";
+import { cn } from "@/shared/utils/cn";
+
+export function DesktopRail() {
+  const { t } = useTranslation();
+  const setCurrentFeatureArea = useImStore(
+    (state) => state.setCurrentFeatureArea,
+  );
+  const setMobilePanel = useImStore((state) => state.setMobilePanel);
+
+  return (
+    <aside
+      aria-label={t("shell.featureRail")}
+      className="hidden w-20 shrink-0 flex-col items-center border-r border-white/62 bg-[color-mix(in_oklab,var(--foreground)_94%,#3d2c32)] px-3 py-4 text-white shadow-[16px_0_45px_rgb(44_31_35_/12%)] md:flex"
+    >
+      <div className="mb-8 flex size-11 items-center justify-center rounded-[calc(var(--radius)*0.9)] bg-white/12 text-white shadow-inner ring-1 ring-white/16">
+        <Sparkles aria-hidden="true" className="size-5" />
+        <span className="sr-only">{t("common.appName")}</span>
+      </div>
+
+      <nav className="flex flex-1 flex-col items-center gap-3">
+        <NavLink
+          className={({ isActive }) =>
+            cn(
+              "flex size-12 items-center justify-center rounded-[calc(var(--radius)*0.9)] text-white/74 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/12 hover:text-white",
+              isActive &&
+                "bg-white text-[var(--foreground)] shadow-[0_18px_38px_rgb(0_0_0_/22%)] hover:bg-white hover:text-[var(--foreground)]",
+            )
+          }
+          onClick={() => {
+            setCurrentFeatureArea("im");
+            setMobilePanel("conversations");
+          }}
+          title={t("shell.im")}
+          to="/app/im"
+        >
+          <MessageCircleHeart aria-hidden="true" className="size-5" />
+          <span className="sr-only">{t("shell.im")}</span>
+        </NavLink>
+      </nav>
+    </aside>
+  );
+}
