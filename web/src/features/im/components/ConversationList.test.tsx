@@ -493,6 +493,82 @@ describe("ConversationList", () => {
     });
   });
 
+  it("recomputes unread_count when fetched latest fields meet a locally advanced read_seq", async () => {
+    const queryClient = createQueryClient();
+    const currentConversation = conversation({
+      conversation_id: "direct-1",
+      type: "direct",
+      name: null,
+      latest_message_seq: 5,
+      read_seq: 5,
+      unread_count: 0,
+      direct_user: directUser,
+      latest_message: {
+        message_id: "message-current-5",
+        message_seq: 5,
+        sender: directUser,
+        body: "Already read cached message",
+        created_at: "2026-06-14T00:05:00.000Z",
+      },
+    });
+    const fetchedConversation = conversation({
+      conversation_id: "direct-1",
+      type: "direct",
+      name: null,
+      latest_message_seq: 6,
+      read_seq: 4,
+      unread_count: 2,
+      direct_user: directUser,
+      latest_message: {
+        message_id: "message-fetched-6",
+        message_seq: 6,
+        sender: directUser,
+        body: "Backend has a newer message",
+        created_at: "2026-06-14T00:06:00.000Z",
+      },
+    });
+    const fetchedLatest = deferred<ConversationSummary[]>();
+    const listConversations = vi
+      .fn<ApiClient["listConversations"]>()
+      .mockReturnValue(fetchedLatest.promise);
+
+    queryClient.setQueryData(imQueryKeys.conversations(), [
+      currentConversation,
+    ]);
+    await renderConversationList({ listConversations, queryClient });
+    expect(await screen.findByText("Alice A.")).toBeInTheDocument();
+
+    const refetchPromise = queryClient.refetchQueries({
+      queryKey: imQueryKeys.conversations(),
+    });
+    await waitFor(() => {
+      expect(listConversations).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      fetchedLatest.resolve([fetchedConversation]);
+      await refetchPromise;
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Backend has a newer message")).toBeInTheDocument();
+      expect(screen.getByLabelText("1 unread")).toHaveTextContent("1");
+    });
+    expect(
+      queryClient.getQueryData<ConversationSummary[]>(
+        imQueryKeys.conversations(),
+      )?.[0],
+    ).toMatchObject({
+      latest_message_seq: 6,
+      read_seq: 5,
+      unread_count: 1,
+      latest_message: {
+        message_id: "message-fetched-6",
+        body: "Backend has a newer message",
+      },
+    });
+  });
+
   it("clears realtime unread correction when a later conversation fetch covers the realtime sequence", async () => {
     const queryClient = createQueryClient();
     const initialConversation = conversation({

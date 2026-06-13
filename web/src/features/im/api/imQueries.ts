@@ -105,9 +105,12 @@ function mergeConversationsMonotonically(
       const readSeq = shouldPreserveCurrentReadState
         ? currentConversation.read_seq
         : conversation.read_seq;
-      const unreadCount = shouldPreserveCurrentReadState
-        ? currentConversation.unread_count
-        : conversation.unread_count;
+      let unreadCount = conversation.unread_count;
+      if (currentHasNewerLatestMessage) {
+        unreadCount = currentConversation.unread_count;
+      } else if (shouldPreserveCurrentReadState) {
+        unreadCount = Math.max(0, latestMessageSeq - readSeq);
+      }
 
       if (
         latestMessageSeq === conversation.latest_message_seq &&
