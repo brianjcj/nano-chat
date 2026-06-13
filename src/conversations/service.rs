@@ -183,13 +183,31 @@ pub async fn list_conversations(
                when dcp.user_low = $1 then dcp.user_high
                when dcp.user_high = $1 then dcp.user_low
            end
-         left join messages latest_message on latest_message.message_id = c.last_message_id
+         left join lateral (
+             select m.message_id,
+                    m.message_seq,
+                    m.sender_user_id,
+                    m.body,
+                    m.created_at
+             from messages m
+             where m.conversation_id = c.conversation_id
+               and exists (
+                   select 1
+                   from conversation_member_spans cms
+                   where cms.conversation_id = m.conversation_id
+                     and cms.user_id = $1
+                     and cms.from_seq <= m.message_seq
+                     and (cms.to_seq is null or m.message_seq <= cms.to_seq)
+               )
+             order by m.message_seq desc
+             limit 1
+         ) latest_message on true
          left join users latest_sender on latest_sender.user_id = latest_message.sender_user_id
          where cm.user_id = $1
            and cm.state = 'active'
            and c.state = 'active'
            and (c.type = 'group' or c.last_message_seq > 0)
-         order by c.last_message_at desc nulls last,
+         order by latest_message.created_at desc nulls last,
                   c.created_at desc,
                   c.conversation_id desc",
     )
@@ -747,7 +765,25 @@ async fn conversation_summary_for_user_tx(
                when dcp.user_low = $1 then dcp.user_high
                when dcp.user_high = $1 then dcp.user_low
            end
-         left join messages latest_message on latest_message.message_id = c.last_message_id
+         left join lateral (
+             select m.message_id,
+                    m.message_seq,
+                    m.sender_user_id,
+                    m.body,
+                    m.created_at
+             from messages m
+             where m.conversation_id = c.conversation_id
+               and exists (
+                   select 1
+                   from conversation_member_spans cms
+                   where cms.conversation_id = m.conversation_id
+                     and cms.user_id = $1
+                     and cms.from_seq <= m.message_seq
+                     and (cms.to_seq is null or m.message_seq <= cms.to_seq)
+               )
+             order by m.message_seq desc
+             limit 1
+         ) latest_message on true
          left join users latest_sender on latest_sender.user_id = latest_message.sender_user_id
          where cm.user_id = $1
            and cm.conversation_id = $2

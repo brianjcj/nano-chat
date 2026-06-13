@@ -127,7 +127,7 @@ Conversation endpoints require authentication. Public HTTP supports conversation
 
 `GET /api/v1/conversations`
 
-Returns active conversations for the authenticated user. The default list includes active groups even when they have no messages, includes direct conversations only after their first message, excludes groups the user has left, and excludes dissolved groups.
+Returns active conversations for the authenticated user. The default list includes active groups even when they have no messages, includes direct conversations only after their first message, excludes groups the user has left, and excludes dissolved groups. Conversations with visible messages are ordered by the latest visible message timestamp.
 
 Success: `200 OK`
 
@@ -138,15 +138,53 @@ Success: `200 OK`
     "type": "group",
     "name": "project",
     "state": "active",
-    "latest_message_seq": 0,
-    "read_seq": 0,
+    "latest_message_seq": 12,
+    "read_seq": 10,
+    "unread_count": 2,
+    "active_member_count": 2,
+    "direct_user": null,
+    "latest_message": {
+      "message_id": "018f0000-0000-7000-8000-000000000020",
+      "message_seq": 12,
+      "sender": {
+        "user_id": "018f0000-0000-7000-8000-000000000001",
+        "username": "alice",
+        "display_name": "Alice"
+      },
+      "body": "hello",
+      "created_at": "2026-06-13T00:00:00.000Z"
+    }
+  },
+  {
+    "conversation_id": "018f0000-0000-7000-8000-000000000011",
+    "type": "direct",
+    "name": null,
+    "state": "active",
+    "latest_message_seq": 1,
+    "read_seq": 1,
     "unread_count": 0,
-    "active_member_count": 2
+    "active_member_count": 2,
+    "direct_user": {
+      "user_id": "018f0000-0000-7000-8000-000000000002",
+      "username": "bob",
+      "display_name": "Bob"
+    },
+    "latest_message": {
+      "message_id": "018f0000-0000-7000-8000-000000000021",
+      "message_seq": 1,
+      "sender": {
+        "user_id": "018f0000-0000-7000-8000-000000000002",
+        "username": "bob",
+        "display_name": "Bob"
+      },
+      "body": "hi alice",
+      "created_at": "2026-06-13T00:01:00.000Z"
+    }
   }
 ]
 ```
 
-`latest_message_seq` is `0` until the conversation has messages. `unread_count` is computed from `latest_message_seq - read_seq`.
+`direct_user` is the other participant for direct conversations and `null` for groups. `latest_message` is the latest message visible to the authenticated user according to visibility spans; it is `null` when no message is visible to that user. `latest_message_seq` is `0` until the conversation has messages. `unread_count` is computed from `latest_message_seq - read_seq`.
 
 ### Create group
 
@@ -421,7 +459,7 @@ Success type: `direct_message.send.ok`; payload shape is the same as `message.se
 }
 ```
 
-`read_seq` is monotonic and is capped at the conversation's current latest message sequence.
+`read_seq` is monotonic. Values outside the caller's visible message range are rejected with `invalid_request` instead of being capped.
 
 Success:
 

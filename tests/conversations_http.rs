@@ -79,6 +79,103 @@ async fn default_conversation_list_includes_active_empty_groups_for_active_membe
 
 #[tokio::test]
 #[serial_test::serial]
+async fn conversation_list_uses_latest_visible_message_for_summary_and_ordering() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+
+    let hidden_group = ctx.create_group(&alice, "hidden", &[bob.user_id]).await;
+    ctx.leave_group(&bob, hidden_group.conversation_id).await;
+
+    let visible_group = ctx.create_group(&alice, "visible", &[bob.user_id]).await;
+    let visible = ctx
+        .send_message(
+            &alice,
+            visible_group.conversation_id,
+            "visible-before-hidden",
+            "visible to bob",
+        )
+        .await;
+    sqlx::query("update messages set created_at = '2026-06-13T00:00:00Z' where message_id = $1")
+        .bind(visible.message.message_id)
+        .execute(&ctx.pool)
+        .await
+        .unwrap();
+    sqlx::query("update conversations set last_message_at = '2026-06-13T00:00:00Z' where conversation_id = $1")
+        .bind(visible_group.conversation_id)
+        .execute(&ctx.pool)
+        .await
+        .unwrap();
+
+    let hidden = ctx
+        .send_message(
+            &alice,
+            hidden_group.conversation_id,
+            "hidden-while-left",
+            "hidden from bob",
+        )
+        .await;
+    sqlx::query("update messages set created_at = '2026-06-13T00:01:00Z' where message_id = $1")
+        .bind(hidden.message.message_id)
+        .execute(&ctx.pool)
+        .await
+        .unwrap();
+    sqlx::query("update conversations set last_message_at = '2026-06-13T00:01:00Z' where conversation_id = $1")
+        .bind(hidden_group.conversation_id)
+        .execute(&ctx.pool)
+        .await
+        .unwrap();
+
+    ctx.add_member(&alice, hidden_group.conversation_id, bob.user_id)
+        .await;
+
+    let bob_conversations = ctx.conversations(&bob).await;
+    let hidden_listed = bob_conversations
+        .iter()
+        .find(|conversation| conversation.conversation_id == hidden_group.conversation_id)
+        .expect("rejoined group should be listed");
+    assert!(
+        hidden_listed.latest_message.is_none(),
+        "hidden message must not be exposed as Bob's latest_message"
+    );
+    assert!(
+        bob_conversations.iter().all(|conversation| {
+            conversation
+                .latest_message
+                .as_ref()
+                .is_none_or(|message| message.body != "hidden from bob")
+        }),
+        "conversation list must not include hidden message body"
+    );
+
+    let visible_listed = bob_conversations
+        .iter()
+        .find(|conversation| conversation.conversation_id == visible_group.conversation_id)
+        .expect("visible group should be listed");
+    assert_eq!(
+        visible_listed
+            .latest_message
+            .as_ref()
+            .map(|m| m.body.as_str()),
+        Some("visible to bob")
+    );
+
+    let visible_index = bob_conversations
+        .iter()
+        .position(|conversation| conversation.conversation_id == visible_group.conversation_id)
+        .expect("visible group should be listed");
+    let hidden_index = bob_conversations
+        .iter()
+        .position(|conversation| conversation.conversation_id == hidden_group.conversation_id)
+        .expect("rejoined group should be listed");
+    assert!(
+        visible_index < hidden_index,
+        "conversation ordering should prefer latest visible message timestamps"
+    );
+}
+
+#[tokio::test]
+#[serial_test::serial]
 async fn after_member_leaves_group_disappears_from_former_members_default_list() {
     let ctx = common::TestContext::new().await;
     let alice = ctx.register("alice").await;

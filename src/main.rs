@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn shutdown_signal(state: AppState) {
-    if let Err(error) = tokio::signal::ctrl_c().await {
+    if let Err(error) = wait_for_shutdown_signal().await {
         tracing::error!(%error, "failed to listen for shutdown signal");
         return;
     }
@@ -49,6 +49,22 @@ async fn shutdown_signal(state: AppState) {
         .registry
         .send_to_all(RealtimeEvent::ServerDraining.server_envelope(), None);
     tracing::info!(delivered, "shutdown signal received; app is draining");
+}
+
+#[cfg(unix)]
+async fn wait_for_shutdown_signal() -> std::io::Result<()> {
+    use tokio::signal::unix::{SignalKind, signal};
+
+    let mut terminate = signal(SignalKind::terminate())?;
+    tokio::select! {
+        result = tokio::signal::ctrl_c() => result,
+        _ = terminate.recv() => Ok(()),
+    }
+}
+
+#[cfg(not(unix))]
+async fn wait_for_shutdown_signal() -> std::io::Result<()> {
+    tokio::signal::ctrl_c().await
 }
 
 fn init_tracing(rust_log: &str) -> anyhow::Result<()> {
