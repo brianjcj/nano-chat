@@ -25,6 +25,7 @@ fn migration_requires_dissolved_timestamp_for_dissolved_conversations() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn migrations_create_core_tables() {
     let pool = common::test_pool().await;
     common::reset_database(&pool).await;

@@ -1,5 +1,7 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 static USERNAME_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-z0-9_]{3,32}$").unwrap());
 
@@ -15,6 +17,23 @@ pub fn validate_username(username: &str) -> Result<(), UsernameValidationError> 
     } else {
         Err(UsernameValidationError)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserSummary {
+    pub user_id: Uuid,
+    pub username: String,
+    pub display_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateMeRequest {
+    pub display_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UsernameLookupQuery {
+    pub username: String,
 }
 
 #[cfg(test)]

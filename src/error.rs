@@ -3,6 +3,7 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorCode {
+    InvalidRequest,
     InvalidCredentials,
     UsernameTaken,
     InvalidToken,
@@ -20,11 +21,14 @@ pub enum ErrorCode {
     TooManyConnections,
     UnsupportedWsVersion,
     InvalidWsEnvelope,
+    UserNotFound,
+    Internal,
 }
 
 impl ErrorCode {
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::InvalidRequest => "invalid_request",
             Self::InvalidCredentials => "invalid_credentials",
             Self::UsernameTaken => "username_taken",
             Self::InvalidToken => "invalid_token",
@@ -42,6 +46,8 @@ impl ErrorCode {
             Self::TooManyConnections => "too_many_connections",
             Self::UnsupportedWsVersion => "unsupported_ws_version",
             Self::InvalidWsEnvelope => "invalid_ws_envelope",
+            Self::UserNotFound => "user_not_found",
+            Self::Internal => "internal",
         }
     }
 }

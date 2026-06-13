@@ -1,7 +1,7 @@
 use axum::{Router, http::StatusCode, routing::get};
 use sqlx::PgPool;
 
-use crate::config::Config;
+use crate::{auth, config::Config, users};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -19,7 +19,14 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
+        .nest("/api/v1", api_router())
         .with_state(state)
+}
+
+fn api_router() -> Router<AppState> {
+    Router::new()
+        .merge(auth::http::router())
+        .merge(users::http::router())
 }
 
 async fn healthz() -> StatusCode {
