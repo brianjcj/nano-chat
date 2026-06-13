@@ -100,6 +100,14 @@ impl AppError {
         Self::new(StatusCode::BAD_REQUEST, ErrorCode::InvalidRequest, message)
     }
 
+    pub fn unprocessable_request(message: impl Into<String>) -> Self {
+        Self::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            ErrorCode::InvalidRequest,
+            message,
+        )
+    }
+
     pub fn from_json_rejection(rejection: JsonRejection) -> Self {
         Self::invalid_request(match rejection {
             JsonRejection::MissingJsonContentType(_) => "Request body must be JSON",
