@@ -1,0 +1,20 @@
+.env.example
+  ai_agent 1-7,9
+tests/e2e_chat.rs
+  ai_agent 1-29
+tests/common/mod.rs
+  ai_agent 15,27-28,31,283-288
+docker-compose.yml
+  ai_agent 3,5-7,9,11,15-37
+Dockerfile
+  ai_agent 1-17
+docs/api.md
+  ai_agent 68,175-178,233,287,299,313,465,542-545,547,589-636
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "092c4666e1e758b8f3d3fcc1fa11237a16767b7c",
+  "prompts": {},
+  "logical_commit_id": "092c4666e1e758b8f3d3fcc1fa11237a16767b7c"
+}
