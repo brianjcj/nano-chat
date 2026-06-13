@@ -1,9 +1,10 @@
-import { Info, UsersRound } from "lucide-react";
+import { UsersRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useSession } from "@/app/AppProviders";
 import { useConversationsQuery } from "@/features/im/api/imQueries";
+import { MemberPanel } from "@/features/im/components/MemberPanel";
 import { MessageInput } from "@/features/im/components/MessageInput";
 import { MessageList } from "@/features/im/components/MessageList";
 import { useConversationMessages } from "@/features/im/hooks/useConversationMessages";
@@ -47,6 +48,7 @@ function LoadedChatView({ conversation }: { conversation: ConversationSummary })
   const { t } = useTranslation();
   const { session } = useSession();
   const [isNearBottom, setIsNearBottom] = useState(true);
+  const [isMemberPanelOpen, setIsMemberPanelOpen] = useState(false);
   const messagesQuery = useConversationMessages(conversation);
   const sendMessage = useSendMessage(conversation);
   const title = getConversationTitle(conversation, t);
@@ -76,26 +78,28 @@ function LoadedChatView({ conversation }: { conversation: ConversationSummary })
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2 pr-14 md:pr-0">
-          <Button
-            aria-label={t("im.memberPanel.title")}
-            disabled
-            size="icon"
-            type="button"
-            variant="secondary"
-          >
-            <UsersRound aria-hidden="true" className="size-4" />
-          </Button>
-          <Button
-            aria-label={t("im.chat.details")}
-            disabled
-            size="icon"
-            type="button"
-            variant="secondary"
-          >
-            <Info aria-hidden="true" className="size-4" />
-          </Button>
+          {conversation.type === "group" ? (
+            <Button
+              aria-label={t("im.memberPanel.title")}
+              disabled={disabled}
+              onClick={() => setIsMemberPanelOpen(true)}
+              size="icon"
+              type="button"
+              variant="secondary"
+            >
+              <UsersRound aria-hidden="true" className="size-4" />
+            </Button>
+          ) : null}
         </div>
       </header>
+
+      {conversation.type === "group" ? (
+        <MemberPanel
+          conversation={conversation}
+          onOpenChange={setIsMemberPanelOpen}
+          open={isMemberPanelOpen}
+        />
+      ) : null}
 
       <MessageList
         currentUserId={session?.user.user_id ?? ""}

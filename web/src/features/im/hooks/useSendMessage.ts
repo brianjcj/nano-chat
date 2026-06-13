@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { useSession } from "@/app/AppProviders";
 import { imQueryKeys } from "@/features/im/api/imQueries";
+import type { DirectDraft } from "@/features/im/state/imStore";
 import type { ConversationSummary, Message } from "@/shared/api/types";
 import { useRealtimeClient } from "@/shared/realtime/RealtimeClientContext";
 import type { SendMessageResult } from "@/shared/realtime/protocol";
@@ -27,6 +28,17 @@ type UseSendMessageResult = {
     options?: SendMessageOptions,
   ) => Promise<SendMessageOutcome>;
   retryMessage: (message: ChatMessage) => Promise<SendMessageOutcome>;
+};
+
+type MessageValidationFailure = Extract<MessageValidationResult, { ok: false }>;
+
+export type DirectDraftSendOutcome =
+  | MessageValidationFailure
+  | { ok: false; code: "send_failed" }
+  | { ok: true; conversationId: string; message: Message };
+
+type UseSendDirectDraftMessageResult = {
+  sendMessage: (body: string) => Promise<DirectDraftSendOutcome>;
 };
 
 export function useSendMessage(
@@ -108,6 +120,65 @@ export function useSendMessage(
   );
 
   return { sendMessage, retryMessage };
+}
+
+export function useSendDirectDraftMessage(
+  draft: DirectDraft | null,
+): UseSendDirectDraftMessageResult {
+  const queryClient = useQueryClient();
+  const realtimeClient = useRealtimeClient();
+  const { getValidSession } = useSession();
+
+  const sendMessage = useCallback(
+    async (body: string) => {
+      const validation = validateMessageBody(body);
+
+      if (!validation.ok) {
+        return validation;
+      }
+
+      const session = getValidSession();
+
+      if (!session || !draft?.target_username) {
+        return { ok: false, code: "send_failed" } as const;
+      }
+
+      const clientMsgId = createClientMsgId();
+      const target = draft.target_user_id
+        ? { target_user_id: draft.target_user_id }
+        : { target_username: draft.target_username };
+
+      try {
+        const result = await realtimeClient.sendCommand<
+          "direct_message.send",
+          SendMessageResult
+        >("direct_message.send", {
+          ...target,
+          client_msg_id: clientMsgId,
+          body,
+        });
+
+        queryClient.setQueryData<ChatMessage[]>(
+          imQueryKeys.messages(result.conversation_id),
+          (messages = []) => mergeMessagesBySeq(messages, [result.message]),
+        );
+        void queryClient.invalidateQueries({
+          queryKey: imQueryKeys.conversations(),
+        });
+
+        return {
+          ok: true,
+          conversationId: result.conversation_id,
+          message: result.message,
+        } as const;
+      } catch {
+        return { ok: false, code: "send_failed" } as const;
+      }
+    },
+    [draft, getValidSession, queryClient, realtimeClient],
+  );
+
+  return { sendMessage };
 }
 
 function createOptimisticMessage({

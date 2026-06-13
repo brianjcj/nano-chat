@@ -3,9 +3,13 @@ import { create, type StoreApi, type UseBoundStore } from "zustand";
 import type { RealtimeStatus } from "@/shared/realtime/realtimeClient";
 
 export type DirectDraft = {
-  target_username?: string;
+  target_username: string;
   target_user_id?: string;
-  body: string;
+  target_display_name?: string | null;
+};
+
+export type WorkspaceNotice = {
+  type: "left_group";
 };
 
 export type HistorySyncMarker = {
@@ -19,6 +23,7 @@ type ImStoreData = {
   currentFeatureArea: FeatureArea;
   currentConversationId: string | null;
   directDraft: DirectDraft | null;
+  workspaceNotice: WorkspaceNotice | null;
   realtimeStatus: RealtimeStatus;
   unreadCorrections: Record<string, number>;
   unreadCorrectionMaxMessageSeqs: Record<string, number>;
@@ -30,6 +35,7 @@ type ImStoreActions = {
   setCurrentFeatureArea: (featureArea: FeatureArea) => void;
   setCurrentConversationId: (conversationId: string | null) => void;
   setDirectDraft: (draft: DirectDraft | null) => void;
+  setWorkspaceNotice: (notice: WorkspaceNotice | null) => void;
   setRealtimeStatus: (status: RealtimeStatus) => void;
   incrementUnreadCorrection: (
     conversationId: string,
@@ -56,6 +62,9 @@ export const useImStore = create<ImStoreState>((set) => ({
   },
   setDirectDraft(draft) {
     set({ directDraft: draft });
+  },
+  setWorkspaceNotice(notice) {
+    set({ workspaceNotice: notice });
   },
   setRealtimeStatus(status) {
     set({ realtimeStatus: status });
@@ -124,6 +133,7 @@ export function createInitialImStoreData(): ImStoreData {
     currentFeatureArea: "im",
     currentConversationId: null,
     directDraft: null,
+    workspaceNotice: null,
     realtimeStatus: "idle",
     unreadCorrections: {},
     unreadCorrectionMaxMessageSeqs: {},

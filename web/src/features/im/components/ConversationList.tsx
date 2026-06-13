@@ -1,9 +1,11 @@
-import { MessageCircleHeart, MessagesSquare } from "lucide-react";
-import { type ReactNode } from "react";
+import { MessageCircleHeart, MessagesSquare, UserPlus, UsersRound } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router";
 
 import { useConversationsQuery } from "@/features/im/api/imQueries";
+import { CreateGroupDialog } from "@/features/im/components/CreateGroupDialog";
+import { NewDirectDialog } from "@/features/im/components/NewDirectDialog";
 import { useImStore } from "@/features/im/state/imStore";
 import type { ConversationSummary, UserSummary } from "@/shared/api/types";
 import { getAvatarVisual } from "@/shared/utils/avatar";
@@ -16,13 +18,19 @@ export function ConversationList() {
     conversationId?: string;
   }>();
   const conversationsQuery = useConversationsQuery();
+  const [isNewDirectOpen, setIsNewDirectOpen] = useState(false);
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const unreadCorrections = useImStore((state) => state.unreadCorrections);
   const setCurrentConversationId = useImStore(
     (state) => state.setCurrentConversationId,
   );
+  const setDirectDraft = useImStore((state) => state.setDirectDraft);
   const setMobilePanel = useImStore((state) => state.setMobilePanel);
+  const setWorkspaceNotice = useImStore((state) => state.setWorkspaceNotice);
 
   function selectConversation(conversationId: string) {
+    setDirectDraft(null);
+    setWorkspaceNotice(null);
     setCurrentConversationId(conversationId);
     setMobilePanel("chat");
     navigate(`/app/im/conversations/${encodeURIComponent(conversationId)}`);
@@ -50,6 +58,32 @@ export function ConversationList() {
         <p className="text-sm leading-6 text-[var(--muted-foreground)]">
           {t("im.conversationList.subtitle")}
         </p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            className="inline-flex items-center justify-center gap-2 rounded-[calc(var(--radius)*0.85)] border border-[var(--border)] bg-white/72 px-3 py-2 text-sm font-black text-[var(--foreground)] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-white"
+            onClick={() => setIsNewDirectOpen(true)}
+            type="button"
+          >
+            <UserPlus aria-hidden="true" className="size-4" />
+            {t("im.conversationList.newDirect")}
+          </button>
+          <button
+            className="inline-flex items-center justify-center gap-2 rounded-[calc(var(--radius)*0.85)] border border-[var(--border)] bg-white/72 px-3 py-2 text-sm font-black text-[var(--foreground)] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-white"
+            onClick={() => setIsCreateGroupOpen(true)}
+            type="button"
+          >
+            <UsersRound aria-hidden="true" className="size-4" />
+            {t("im.conversationList.createGroup")}
+          </button>
+        </div>
+        <NewDirectDialog
+          onOpenChange={setIsNewDirectOpen}
+          open={isNewDirectOpen}
+        />
+        <CreateGroupDialog
+          onOpenChange={setIsCreateGroupOpen}
+          open={isCreateGroupOpen}
+        />
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 md:px-4">

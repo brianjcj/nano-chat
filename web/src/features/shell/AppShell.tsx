@@ -5,6 +5,7 @@ import { useNavigate, useParams } from "react-router";
 
 import { ChatView } from "@/features/im/components/ChatView";
 import { ConversationList } from "@/features/im/components/ConversationList";
+import { DirectDraftView } from "@/features/im/components/DirectDraftView";
 import { useImStore } from "@/features/im/state/imStore";
 import type { RealtimeStatus } from "@/shared/realtime/realtimeClient";
 import { cn } from "@/shared/utils/cn";
@@ -21,6 +22,7 @@ const BANNER_STATUSES = new Set<RealtimeStatus>([
 export function AppShell() {
   const { t } = useTranslation();
   const { conversationId } = useParams<{ conversationId?: string }>();
+  const directDraft = useImStore((state) => state.directDraft);
   const mobilePanel = useImStore((state) => state.mobilePanel);
   const realtimeStatus = useImStore((state) => state.realtimeStatus);
   const setCurrentConversationId = useImStore(
@@ -30,8 +32,8 @@ export function AppShell() {
 
   useEffect(() => {
     setCurrentConversationId(conversationId ?? null);
-    setMobilePanel(conversationId ? "chat" : "conversations");
-  }, [conversationId, setCurrentConversationId, setMobilePanel]);
+    setMobilePanel(conversationId || directDraft ? "chat" : "conversations");
+  }, [conversationId, directDraft, setCurrentConversationId, setMobilePanel]);
 
   return (
     <div className="relative h-dvh min-h-0 overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
@@ -71,12 +73,21 @@ export function AppShell() {
 
 function EmptyWorkspace() {
   const { t } = useTranslation();
+  const workspaceNotice = useImStore((state) => state.workspaceNotice);
 
   return (
     <div className="relative w-full max-w-3xl overflow-hidden rounded-[calc(var(--radius)*1.45)] border border-white/72 bg-white/64 p-8 shadow-[0_30px_90px_var(--shadow-color)] backdrop-blur md:p-12">
       <div className="absolute -right-20 -top-24 size-56 rounded-full bg-[color-mix(in_oklab,var(--primary)_18%,transparent)] blur-3xl" />
       <div className="absolute -bottom-24 -left-20 size-60 rounded-full bg-[color-mix(in_oklab,var(--accent)_16%,transparent)] blur-3xl" />
       <div className="relative">
+        {workspaceNotice ? (
+          <p
+            className="mb-5 rounded-[var(--radius)] border border-[color-mix(in_oklab,var(--primary)_26%,white)] bg-[color-mix(in_oklab,var(--primary)_10%,white)] px-4 py-3 text-sm font-bold text-[var(--foreground)]"
+            role="status"
+          >
+            {t(`im.notices.${workspaceNotice.type}`)}
+          </p>
+        ) : null}
         <span className="mb-7 inline-flex size-14 items-center justify-center rounded-[calc(var(--radius)*0.95)] bg-[var(--foreground)] text-white shadow-[0_18px_45px_var(--shadow-color)]">
           <MessageCircleHeart aria-hidden="true" className="size-7" />
         </span>
@@ -115,12 +126,15 @@ function ConnectionStatusBanner({ status }: { status: RealtimeStatus }) {
 function Workspace({ conversationId }: { conversationId: string | null }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const directDraft = useImStore((state) => state.directDraft);
   const setCurrentConversationId = useImStore(
     (state) => state.setCurrentConversationId,
   );
+  const setDirectDraft = useImStore((state) => state.setDirectDraft);
   const setMobilePanel = useImStore((state) => state.setMobilePanel);
 
   function returnToConversations() {
+    setDirectDraft(null);
     setCurrentConversationId(null);
     setMobilePanel("conversations");
     navigate("/app/im");
@@ -129,7 +143,7 @@ function Workspace({ conversationId }: { conversationId: string | null }) {
   return (
     <section className="flex h-full min-h-0 w-full flex-col px-5 py-5 md:px-8 md:py-8">
       <div className="mb-5 flex items-center justify-between md:hidden">
-        {conversationId ? (
+        {conversationId || directDraft ? (
           <button
             className="inline-flex items-center gap-2 rounded-full border border-white/72 bg-white/72 px-3 py-2 text-sm font-bold text-[var(--foreground)] shadow-sm"
             onClick={returnToConversations}
@@ -146,6 +160,8 @@ function Workspace({ conversationId }: { conversationId: string | null }) {
       <div className="flex min-h-0 flex-1 items-center justify-center">
         {conversationId ? (
           <ChatView conversationId={conversationId} />
+        ) : directDraft ? (
+          <DirectDraftView />
         ) : (
           <EmptyWorkspace />
         )}
