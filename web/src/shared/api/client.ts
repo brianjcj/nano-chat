@@ -61,6 +61,12 @@ type RequestOptions = {
   query?: Record<string, QueryValue>;
 };
 
+const AUTH_FAILURE_ERROR_CODES = new Set(["invalid_token"]);
+const NETWORK_ERROR_MESSAGE =
+  "Network request failed. Please check your connection and try again.";
+const INVALID_RESPONSE_MESSAGE =
+  "The server returned an invalid response. Please try again.";
+
 export function createApiClient(options: ApiClientOptions): ApiClient {
   const baseUrl = normalizeBaseUrl(options.baseUrl);
   const fetchImpl = options.fetchImpl ?? ((input, init) => fetch(input, init));
@@ -77,30 +83,46 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       headers.set("Content-Type", "application/json");
     }
 
-    const response = await fetchImpl(buildUrl(baseUrl, path, requestOptions.query), {
-      method: requestOptions.method ?? "GET",
-      headers,
-      body:
-        requestOptions.body === undefined
-          ? undefined
-          : JSON.stringify(requestOptions.body),
-    });
+    let response: Response;
 
-    if (response.status === 401) {
-      options.onUnauthorized();
+    try {
+      response = await fetchImpl(buildUrl(baseUrl, path, requestOptions.query), {
+        method: requestOptions.method ?? "GET",
+        headers,
+        body:
+          requestOptions.body === undefined
+            ? undefined
+            : JSON.stringify(requestOptions.body),
+      });
+    } catch {
+      throw new ApiError("network", NETWORK_ERROR_MESSAGE, 0);
     }
 
     if (!response.ok) {
-      throw await toApiError(response);
+      const apiError = await toApiError(response);
+
+      if (shouldHandleUnauthorized(response.status, apiError.code)) {
+        options.onUnauthorized();
+      }
+
+      throw apiError;
     }
 
     if (response.status === 204) {
       return undefined as T;
     }
 
-    const text = await response.text();
+    try {
+      const text = await response.text();
 
-    return (text ? JSON.parse(text) : undefined) as T;
+      return (text ? JSON.parse(text) : undefined) as T;
+    } catch {
+      throw new ApiError(
+        "invalid_response",
+        INVALID_RESPONSE_MESSAGE,
+        response.status,
+      );
+    }
   }
 
   return {
@@ -186,6 +208,13 @@ function buildUrl(
   const queryString = params.toString();
 
   return `${baseUrl}${path}${queryString ? `?${queryString}` : ""}`;
+}
+
+function shouldHandleUnauthorized(status: number, code: string) {
+  return (
+    status === 401 &&
+    (AUTH_FAILURE_ERROR_CODES.has(code) || code === "http_401")
+  );
 }
 
 async function toApiError(response: Response) {

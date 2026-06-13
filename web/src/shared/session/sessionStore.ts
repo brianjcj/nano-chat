@@ -28,7 +28,13 @@ export function createSessionStore(storage: StorageLike = getBrowserStorage()) {
   const resolvedStorage = storage;
 
   function load() {
-    const rawValue = resolvedStorage.getItem(SESSION_STORAGE_KEY);
+    let rawValue: string | null;
+
+    try {
+      rawValue = resolvedStorage.getItem(SESSION_STORAGE_KEY);
+    } catch {
+      return null;
+    }
 
     if (!rawValue) {
       return null;
@@ -49,12 +55,20 @@ export function createSessionStore(storage: StorageLike = getBrowserStorage()) {
 
   return {
     save(session) {
-      resolvedStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+      try {
+        resolvedStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+      } catch {
+        // Storage can be unavailable or full; dropping the session is safer than crashing.
+      }
     },
     load,
     getValidSession: load,
     clear() {
-      resolvedStorage.removeItem(SESSION_STORAGE_KEY);
+      try {
+        resolvedStorage.removeItem(SESSION_STORAGE_KEY);
+      } catch {
+        // Storage can be unavailable; clearing should remain best-effort.
+      }
     },
   } satisfies SessionStore;
 }
@@ -66,7 +80,11 @@ function getBrowserStorage(): StorageLike {
     return noopStorage;
   }
 
-  return window.localStorage;
+  try {
+    return window.localStorage;
+  } catch {
+    return noopStorage;
+  }
 }
 
 function isExpired(expiresAt: string) {

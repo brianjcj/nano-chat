@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   createSessionStore,
@@ -20,6 +20,20 @@ class MemoryStorage implements StorageLike {
 
   setItem(key: string, value: string) {
     this.values.set(key, value);
+  }
+}
+
+class ThrowingStorage implements StorageLike {
+  getItem(): string | null {
+    throw new Error("getItem failed");
+  }
+
+  removeItem() {
+    throw new Error("removeItem failed");
+  }
+
+  setItem() {
+    throw new Error("setItem failed");
   }
 }
 
@@ -70,5 +84,43 @@ describe("sessionStore", () => {
 
     expect(() => store.load()).not.toThrow();
     expect(store.load()).toBeNull();
+  });
+
+  it("falls back to noop storage when browser localStorage access throws during module initialization", async () => {
+    const originalLocalStorage = window.localStorage;
+
+    vi.resetModules();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("localStorage blocked");
+      },
+    });
+
+    try {
+      const module = await import("./sessionStore");
+
+      expect(() => module.sessionStore.load()).not.toThrow();
+      expect(module.sessionStore.load()).toBeNull();
+    } finally {
+      Object.defineProperty(window, "localStorage", {
+        configurable: true,
+        value: originalLocalStorage,
+      });
+      vi.resetModules();
+    }
+  });
+
+  it("load() returns null when storage getItem throws", () => {
+    const store = createSessionStore(new ThrowingStorage());
+
+    expect(store.load()).toBeNull();
+  });
+
+  it("save() and clear() do not throw when storage writes throw", () => {
+    const store = createSessionStore(new ThrowingStorage());
+
+    expect(() => store.save(session)).not.toThrow();
+    expect(() => store.clear()).not.toThrow();
   });
 });

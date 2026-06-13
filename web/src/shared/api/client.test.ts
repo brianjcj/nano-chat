@@ -15,11 +15,15 @@ const user: UserSummary = {
 };
 
 function createJsonFetch(body: unknown, status = 200) {
+  return createTextFetch(JSON.stringify(body), status);
+}
+
+function createTextFetch(body: string, status = 200) {
   const calls: FetchCall[] = [];
   const fetchImpl: typeof fetch = async (input, init) => {
     calls.push({ input, init });
 
-    return new Response(JSON.stringify(body), {
+    return new Response(body, {
       status,
       headers: { "Content-Type": "application/json" },
     });
@@ -28,11 +32,15 @@ function createJsonFetch(body: unknown, status = 200) {
   return { calls, fetchImpl };
 }
 
-function createClient(fetchImpl: typeof fetch, token: string | null = null) {
+function createClient(
+  fetchImpl: typeof fetch,
+  token: string | null = null,
+  onUnauthorized = () => undefined,
+) {
   return createApiClient({
     baseUrl: "https://chat.example/api/v1",
     getAccessToken: () => token,
-    onUnauthorized: () => undefined,
+    onUnauthorized,
     fetchImpl,
   });
 }
@@ -85,7 +93,31 @@ describe("createApiClient", () => {
     ).rejects.toBeInstanceOf(ApiError);
   });
 
-  it("calls injected onUnauthorized on HTTP 401", async () => {
+  it("does not call onUnauthorized when login receives invalid_credentials 401", async () => {
+    const { fetchImpl } = createJsonFetch(
+      {
+        error: {
+          code: "invalid_credentials",
+          message: "Username or password is invalid",
+        },
+      },
+      401,
+    );
+    const onUnauthorized = vi.fn();
+    const client = createClient(fetchImpl, null, onUnauthorized);
+
+    await expect(
+      client.login({ username: "alice", password: "bad-password" }),
+    ).rejects.toMatchObject({
+      code: "invalid_credentials",
+      message: "Username or password is invalid",
+      status: 401,
+    });
+
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("calls injected onUnauthorized when a 401 response reports invalid_token", async () => {
     const { fetchImpl } = createJsonFetch(
       {
         error: {
@@ -96,16 +128,38 @@ describe("createApiClient", () => {
       401,
     );
     const onUnauthorized = vi.fn();
-    const client = createApiClient({
-      baseUrl: "https://chat.example/api/v1",
-      getAccessToken: () => "expired-token",
-      onUnauthorized,
-      fetchImpl,
+    const client = createClient(fetchImpl, "expired-token", onUnauthorized);
+
+    await expect(client.getMe()).rejects.toMatchObject({
+      code: "invalid_token",
+      status: 401,
     });
 
-    await expect(client.getMe()).rejects.toBeInstanceOf(ApiError);
-
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("normalizes fetch rejections into a network ApiError", async () => {
+    const fetchImpl: typeof fetch = async () => {
+      throw new TypeError("Failed to fetch");
+    };
+    const client = createClient(fetchImpl);
+
+    await expect(client.getMe()).rejects.toMatchObject({
+      code: "network",
+      message: "Network request failed. Please check your connection and try again.",
+      status: 0,
+    });
+  });
+
+  it("normalizes malformed successful JSON into an invalid_response ApiError", async () => {
+    const { fetchImpl } = createTextFetch("{not-valid-json", 200);
+    const client = createClient(fetchImpl);
+
+    await expect(client.getMe()).rejects.toMatchObject({
+      code: "invalid_response",
+      message: "The server returned an invalid response. Please try again.",
+      status: 200,
+    });
   });
 
   it("serializes username lookup query parameters", async () => {
