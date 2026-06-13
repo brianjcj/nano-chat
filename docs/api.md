@@ -602,7 +602,7 @@ The Compose Postgres image defaults to `mirror.gcr.io/library/postgres:17` for e
 
 For an application deployment:
 
-1. Copy `.env.example` to `.env` and replace `JWT_SECRET` with a strong secret of at least 32 characters.
+1. Copy `.env.example` to `.env`, replace `JWT_SECRET` with a strong secret of at least 32 characters, and set `NANO_CHAT_IMAGE` if you want Compose to run a prebuilt image instead of `nano-chat:local`.
 2. Start Postgres: `docker compose up -d postgres`.
 3. Run migrations from the host or CI against the target database before starting the app, for example:
 
@@ -610,9 +610,11 @@ For an application deployment:
    DATABASE_URL=postgres://nano:nano@localhost:5432/nano_chat_test sqlx migrate run
    ```
 
+   If you changed `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, or `POSTGRES_PORT`, update this host-side URL to match.
+
 4. Start the optional app service: `docker compose --profile app up -d app`.
 
-The app container uses `DATABASE_URL=postgres://nano:nano@postgres:5432/nano_chat_test` by default so it can reach the Compose Postgres service by service name. Host-side tools generally use `localhost` and the published Postgres port instead.
+The app container derives its default `DATABASE_URL` from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` so it can reach the Compose Postgres service by service name. Leave `DATABASE_URL` unset/commented to use that derived default, or set it explicitly when connecting to a different database. If set explicitly, it must match the Postgres credentials and database name you intend the app to use. Host-side tools generally use `localhost` and the published Postgres port instead.
 
 Configuration variables:
 
@@ -624,7 +626,8 @@ Configuration variables:
 | `POSTGRES_DB` | `nano_chat_test` | Official Postgres image database name. |
 | `POSTGRES_PORT` | `5432` | Host port published by Compose Postgres. |
 | `APP_PORT` | `3000` | Host port published by the optional app service. |
-| `DATABASE_URL` | `postgres://nano:nano@postgres:5432/nano_chat_test` | Application database URL. |
+| `NANO_CHAT_IMAGE` | `nano-chat:local` | Compose image name for the optional app service. |
+| `DATABASE_URL` | Derived from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` | Application database URL; may be set explicitly and should match the Postgres settings. |
 | `JWT_SECRET` | `change-me-development-secret-at-least-32-bytes` | JWT signing secret; must be changed outside local development. |
 | `BIND_ADDR` | `0.0.0.0:3000` | Address the HTTP/WebSocket server binds to. |
 | `RUST_LOG` | `nano_chat=debug,tower_http=info` | Tracing filter. |

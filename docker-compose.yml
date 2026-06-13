@@ -23,7 +23,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://nano:nano@postgres:5432/nano_chat_test}
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-nano}:${POSTGRES_PASSWORD:-nano}@postgres:5432/${POSTGRES_DB:-nano_chat_test}}
       JWT_SECRET: ${JWT_SECRET:-change-me-development-secret-at-least-32-bytes}
       BIND_ADDR: ${BIND_ADDR:-0.0.0.0:3000}
       RUST_LOG: ${RUST_LOG:-nano_chat=debug,tower_http=info}
