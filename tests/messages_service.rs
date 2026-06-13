@@ -169,6 +169,56 @@ async fn group_message_can_be_sent_by_active_member_and_rejected_after_leaving_o
 
 #[tokio::test]
 #[serial_test::serial]
+async fn group_message_retry_after_sender_leaves_returns_original_message() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+
+    let group = ctx.create_group(&alice, "project", &[bob.user_id]).await;
+    let first = ctx
+        .send_message(&bob, group.conversation_id, "g-retry", "hello")
+        .await;
+
+    ctx.leave_group(&bob, group.conversation_id).await;
+    let response = ctx
+        .send_message_raw(&bob, group.conversation_id, "g-retry", "hello")
+        .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let retried: nano_chat::messages::types::SendMessageResult =
+        common::response_json_as(response).await;
+    assert_eq!(retried.conversation_id, first.conversation_id);
+    assert_eq!(
+        retried.message.conversation_id,
+        first.message.conversation_id
+    );
+    assert_eq!(retried.message.message_id, first.message.message_id);
+    assert_eq!(retried.message.message_seq, first.message.message_seq);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn group_message_retry_after_sender_leaves_with_different_body_is_idempotency_conflict() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+
+    let group = ctx.create_group(&alice, "project", &[bob.user_id]).await;
+    ctx.send_message(&bob, group.conversation_id, "g-retry", "hello")
+        .await;
+
+    ctx.leave_group(&bob, group.conversation_id).await;
+    let response = ctx
+        .send_message_raw(&bob, group.conversation_id, "g-retry", "goodbye")
+        .await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = common::response_json(response).await;
+    assert_eq!(body["error"]["code"], "idempotency_conflict");
+}
+
+#[tokio::test]
+#[serial_test::serial]
 async fn history_filters_group_messages_through_visibility_spans() {
     let ctx = common::TestContext::new().await;
     let alice = ctx.register("alice").await;

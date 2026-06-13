@@ -88,9 +88,28 @@ pub async fn send_message(
     let mut tx = pool.begin().await.map_err(internal_error)?;
 
     let conversation = lock_conversation(&mut tx, conversation_id).await?;
-    ensure_can_send(&mut tx, &conversation, sender.user_id).await?;
-    let result =
-        send_message_in_locked_conversation(&mut tx, &sender, &conversation, input).await?;
+    let request_fingerprint = request_fingerprint(conversation.conversation_id, &input.body_hash);
+
+    let result = if let Some(result) = existing_message_result_for_key(
+        &mut tx,
+        &sender,
+        &input.client_msg_id,
+        &request_fingerprint,
+    )
+    .await?
+    {
+        result
+    } else {
+        ensure_can_send(&mut tx, &conversation, sender.user_id).await?;
+        send_message_in_locked_conversation(
+            &mut tx,
+            &sender,
+            &conversation,
+            input,
+            request_fingerprint,
+        )
+        .await?
+    };
 
     tx.commit().await.map_err(internal_error)?;
     Ok(result)
@@ -120,10 +139,28 @@ pub async fn send_direct_message(
         Some(conversation) => conversation,
         None => create_direct_conversation(&mut tx, sender.user_id, target_user.user_id).await?,
     };
+    let request_fingerprint = request_fingerprint(conversation.conversation_id, &input.body_hash);
 
-    ensure_can_send(&mut tx, &conversation, sender.user_id).await?;
-    let result =
-        send_message_in_locked_conversation(&mut tx, &sender, &conversation, input).await?;
+    let result = if let Some(result) = existing_message_result_for_key(
+        &mut tx,
+        &sender,
+        &input.client_msg_id,
+        &request_fingerprint,
+    )
+    .await?
+    {
+        result
+    } else {
+        ensure_can_send(&mut tx, &conversation, sender.user_id).await?;
+        send_message_in_locked_conversation(
+            &mut tx,
+            &sender,
+            &conversation,
+            input,
+            request_fingerprint,
+        )
+        .await?
+    };
 
     tx.commit().await.map_err(internal_error)?;
     Ok(result)
@@ -192,11 +229,13 @@ async fn send_message_in_locked_conversation(
     sender: &CurrentUser,
     conversation: &ConversationRow,
     input: ValidatedMessageInput,
+    request_fingerprint: String,
 ) -> AppResult<SendMessageResult> {
-    let request_fingerprint = request_fingerprint(conversation.conversation_id, &input.body_hash);
-
-    if let Some(existing) = find_existing_message(tx, sender, &input.client_msg_id).await? {
-        return existing_message_result(tx, existing, &request_fingerprint).await;
+    if let Some(result) =
+        existing_message_result_for_key(tx, sender, &input.client_msg_id, &request_fingerprint)
+            .await?
+    {
+        return Ok(result);
     }
 
     let message_id = new_uuid_v7();
@@ -265,6 +304,21 @@ async fn send_message_in_locked_conversation(
         conversation_id: message.conversation_id,
         message,
     })
+}
+
+async fn existing_message_result_for_key(
+    tx: &mut Transaction<'_, Postgres>,
+    sender: &CurrentUser,
+    client_msg_id: &str,
+    request_fingerprint: &str,
+) -> AppResult<Option<SendMessageResult>> {
+    let Some(existing) = find_existing_message(tx, sender, client_msg_id).await? else {
+        return Ok(None);
+    };
+
+    existing_message_result(tx, existing, request_fingerprint)
+        .await
+        .map(Some)
 }
 
 async fn existing_message_result(
