@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { imQueryKeys } from "@/features/im/api/imQueries";
@@ -6,27 +6,22 @@ import { useImStore } from "@/features/im/state/imStore";
 import type { ConversationSummary } from "@/shared/api/types";
 import { useRealtimeClient } from "@/shared/realtime/RealtimeClientContext";
 import type { ConversationReadResult } from "@/shared/realtime/protocol";
-import { isServerSequenced, type ChatMessage } from "@/shared/utils/message";
 
 type UseMarkReadOptions = {
   conversation: ConversationSummary | null | undefined;
-  messages: ChatMessage[];
+  highestContiguousSeq: number;
   isNearBottom: boolean;
 };
 
 export function useMarkRead({
   conversation,
-  messages,
+  highestContiguousSeq,
   isNearBottom,
 }: UseMarkReadOptions) {
   const queryClient = useQueryClient();
   const realtimeClient = useRealtimeClient();
   const visibilityState = useDocumentVisibilityState();
   const lastRequestedReadSeqRef = useRef<Record<string, number>>({});
-  const highestContiguousSeq = useMemo(
-    () => getHighestContiguousSeqAfter(conversation?.read_seq ?? 0, messages),
-    [conversation?.read_seq, messages],
-  );
 
   useEffect(() => {
     if (!conversation || visibilityState !== "visible" || !isNearBottom) {
@@ -92,22 +87,6 @@ function useDocumentVisibilityState() {
   }, []);
 
   return visibilityState;
-}
-
-function getHighestContiguousSeqAfter(
-  readSeq: number,
-  messages: ChatMessage[],
-) {
-  const seqs = new Set(
-    messages.filter(isServerSequenced).map((message) => message.message_seq),
-  );
-  let highestContiguousSeq = readSeq;
-
-  while (seqs.has(highestContiguousSeq + 1)) {
-    highestContiguousSeq += 1;
-  }
-
-  return highestContiguousSeq;
 }
 
 function applyReadResult(

@@ -55,7 +55,7 @@ function LoadedChatView({ conversation }: { conversation: ConversationSummary })
 
   useMarkRead({
     conversation,
-    messages: messagesQuery.messages,
+    highestContiguousSeq: messagesQuery.highestContiguousSeq,
     isNearBottom,
   });
 

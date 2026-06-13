@@ -405,4 +405,38 @@ describe("ChatView", () => {
       ).toMatchObject({ read_seq: 3, unread_count: 2 });
     });
   });
+
+  it("marks the latest loaded contiguous window read when earlier history is unloaded", async () => {
+    const loadedWindow = Array.from({ length: 50 }, (_, index) =>
+      message(index + 51),
+    );
+    const listMessages = vi
+      .fn<ApiClient["listMessages"]>()
+      .mockResolvedValue(loadedWindow);
+    const sendCommand = vi.fn((type: string, payload: unknown) => {
+      if (type === "conversation.read") {
+        return Promise.resolve({
+          conversation_id: "conversation-1",
+          read_seq: (payload as { read_seq: number }).read_seq,
+        });
+      }
+
+      return Promise.resolve({});
+    });
+
+    await renderChatView({
+      conversations: [
+        conversation({ latest_message_seq: 100, read_seq: 0, unread_count: 100 }),
+      ],
+      listMessages,
+      sendCommand,
+    });
+
+    await waitFor(() => {
+      expect(sendCommand).toHaveBeenCalledWith("conversation.read", {
+        conversation_id: "conversation-1",
+        read_seq: 100,
+      });
+    });
+  });
 });
