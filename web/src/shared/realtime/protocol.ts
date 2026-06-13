@@ -8,14 +8,16 @@ export type ClientCommandType =
 
 export type MessageSendPayload = {
   conversation_id: string;
-  client_msg_id?: string;
+  client_msg_id: string;
   body: string;
 };
 
-export type DirectMessageSendPayload = {
-  target_username?: string;
-  target_user_id?: string;
-  client_msg_id?: string;
+type DirectMessageTarget =
+  | { target_username: string; target_user_id?: never }
+  | { target_username?: never; target_user_id: string };
+
+export type DirectMessageSendPayload = DirectMessageTarget & {
+  client_msg_id: string;
   body: string;
 };
 

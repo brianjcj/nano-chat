@@ -40,8 +40,14 @@ export function useRealtimeBridge(options: UseRealtimeBridgeOptions = {}) {
 
       previousStatus = status;
     });
+    const currentUserId = session.user.user_id;
     const unsubscribeEvents = client.subscribe((event) => {
-      applyRealtimeEvent({ queryClient, store: useImStore, event });
+      applyRealtimeEvent({
+        queryClient,
+        store: useImStore,
+        currentUserId,
+        event,
+      });
     });
 
     client.connect({ access_token: session.access_token });

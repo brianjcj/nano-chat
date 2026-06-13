@@ -15,12 +15,14 @@ import type {
 type ApplyRealtimeEventOptions = {
   queryClient: QueryClient;
   store?: ImStoreApi;
+  currentUserId?: string | null;
   event: RealtimeIncoming;
 };
 
 export function applyRealtimeEvent({
   queryClient,
   store = useImStore,
+  currentUserId,
   event,
 }: ApplyRealtimeEventOptions): void {
   switch (event.type) {
@@ -28,7 +30,7 @@ export function applyRealtimeEvent({
       applyMessageCreated(queryClient, store, event);
       return;
     case "conversation.read_updated":
-      applyConversationReadUpdated(queryClient, store, event);
+      applyConversationReadUpdated(queryClient, store, currentUserId, event);
       return;
     case "conversation.member_added":
       invalidateMembershipQueries(queryClient, event);
@@ -74,9 +76,18 @@ function applyMessageCreated(
 function applyConversationReadUpdated(
   queryClient: QueryClient,
   store: ImStoreApi,
+  currentUserId: string | null | undefined,
   event: ConversationReadUpdatedEvent,
 ): void {
-  const { conversation_id: conversationId, read_seq: readSeq } = event.payload;
+  const {
+    conversation_id: conversationId,
+    read_seq: readSeq,
+    user_id: userId,
+  } = event.payload;
+
+  if (userId !== currentUserId) {
+    return;
+  }
 
   queryClient.setQueryData<ConversationSummary[]>(
     imQueryKeys.conversations(),

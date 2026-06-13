@@ -61,6 +61,21 @@ function messageCreated(message: Message) {
   } as const;
 }
 
+function readUpdated(
+  conversation_id: string,
+  user_id: string,
+  read_seq: number,
+) {
+  return {
+    type: "conversation.read_updated",
+    payload: {
+      conversation_id,
+      user_id,
+      read_seq,
+    },
+  } as const;
+}
+
 describe("IM realtime cache updates", () => {
   beforeEach(() => {
     useImStore.getState().reset();
@@ -143,6 +158,70 @@ describe("IM realtime cache updates", () => {
 
     expect(useImStore.getState().historySyncMarkers).toMatchObject({
       "conversation-1": { after_seq: 1 },
+    });
+  });
+
+  it("updates local read state when conversation.read_updated belongs to the current user", () => {
+    const queryClient = createQueryClient();
+    const latest = makeMessage(5);
+    queryClient.setQueryData(imQueryKeys.conversations(), [
+      {
+        ...makeConversation("conversation-1", latest),
+        read_seq: 2,
+        unread_count: 3,
+      },
+    ]);
+    useImStore.getState().setCurrentConversationId("conversation-1");
+    useImStore.getState().incrementUnreadCorrection("conversation-1", 2);
+
+    applyRealtimeEvent({
+      queryClient,
+      store: useImStore,
+      currentUserId: "user-local",
+      event: readUpdated("conversation-1", "user-local", 4),
+    });
+
+    const conversations = queryClient.getQueryData<ConversationSummary[]>(
+      imQueryKeys.conversations(),
+    );
+    expect(conversations?.[0]).toMatchObject({
+      read_seq: 4,
+      unread_count: 1,
+    });
+    expect(useImStore.getState().unreadCorrections).not.toHaveProperty(
+      "conversation-1",
+    );
+  });
+
+  it("ignores another user's conversation.read_updated for local read state", () => {
+    const queryClient = createQueryClient();
+    const latest = makeMessage(5);
+    queryClient.setQueryData(imQueryKeys.conversations(), [
+      {
+        ...makeConversation("conversation-1", latest),
+        read_seq: 2,
+        unread_count: 3,
+      },
+    ]);
+    useImStore.getState().setCurrentConversationId("conversation-1");
+    useImStore.getState().incrementUnreadCorrection("conversation-1", 2);
+
+    applyRealtimeEvent({
+      queryClient,
+      store: useImStore,
+      currentUserId: "user-local",
+      event: readUpdated("conversation-1", "user-other", 5),
+    });
+
+    const conversations = queryClient.getQueryData<ConversationSummary[]>(
+      imQueryKeys.conversations(),
+    );
+    expect(conversations?.[0]).toMatchObject({
+      read_seq: 2,
+      unread_count: 3,
+    });
+    expect(useImStore.getState().unreadCorrections).toMatchObject({
+      "conversation-1": 2,
     });
   });
 });
