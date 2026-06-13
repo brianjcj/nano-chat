@@ -3,6 +3,11 @@ import type { QueryClient } from "@tanstack/react-query";
 import { imQueryKeys } from "../api/imQueries";
 import { useImStore, type ImStoreApi } from "./imStore";
 import type { ConversationSummary, Message } from "@/shared/api/types";
+import {
+  isServerSequenced,
+  mergeMessagesBySeq,
+  type ChatMessage,
+} from "@/shared/utils/message";
 import type {
   ConversationDissolvedEvent,
   ConversationMemberAddedEvent,
@@ -198,7 +203,7 @@ function upsertMessageInCanonicalCache(
   message: Message,
 ): void {
   const canonicalMessagesKey = imQueryKeys.messages(conversationId);
-  const existingMessages = queryClient.getQueryData<Message[]>(
+  const existingMessages = queryClient.getQueryData<ChatMessage[]>(
     canonicalMessagesKey,
   );
 
@@ -209,24 +214,10 @@ function upsertMessageInCanonicalCache(
     return;
   }
 
-  queryClient.setQueryData<Message[]>(
+  queryClient.setQueryData<ChatMessage[]>(
     canonicalMessagesKey,
-    insertMessage(existingMessages, message),
+    mergeMessagesBySeq(existingMessages, [message]),
   );
-}
-
-function insertMessage(messages: Message[], message: Message) {
-  if (
-    messages.some(
-      (existingMessage) =>
-        existingMessage.message_id === message.message_id ||
-        existingMessage.message_seq === message.message_seq,
-    )
-  ) {
-    return [...messages].sort(compareMessageSeq);
-  }
-
-  return [...messages, message].sort(compareMessageSeq);
 }
 
 function isMessageAlreadyKnown(
@@ -245,7 +236,7 @@ function isMessageInCanonicalCache(
   conversationId: string,
   message: Message,
 ) {
-  const messages = queryClient.getQueryData<Message[]>(
+  const messages = queryClient.getQueryData<ChatMessage[]>(
     imQueryKeys.messages(conversationId),
   );
 
@@ -281,7 +272,7 @@ function getHighestContiguousMessageSeq(
   queryClient: QueryClient,
   conversationId: string,
 ): number {
-  const messages = queryClient.getQueryData<Message[]>(
+  const messages = queryClient.getQueryData<ChatMessage[]>(
     imQueryKeys.messages(conversationId),
   );
 
@@ -289,7 +280,13 @@ function getHighestContiguousMessageSeq(
     return 0;
   }
 
-  const messageSeqs = [...new Set(messages.map((message) => message.message_seq))]
+  const messageSeqs = [
+    ...new Set(
+      messages
+        .filter(isServerSequenced)
+        .map((message) => message.message_seq),
+    ),
+  ]
     .filter((messageSeq) => messageSeq > 0)
     .sort((left, right) => left - right);
   let highestContiguousSeq = 0;
@@ -363,8 +360,4 @@ function parseLatestMessageCreatedAt(conversation: ConversationSummary) {
   const timestamp = Date.parse(createdAt);
 
   return Number.isFinite(timestamp) ? timestamp : null;
-}
-
-function compareMessageSeq(left: Message, right: Message) {
-  return left.message_seq - right.message_seq;
 }

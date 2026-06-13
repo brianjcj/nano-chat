@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router";
 
+import { ChatView } from "@/features/im/components/ChatView";
 import { ConversationList } from "@/features/im/components/ConversationList";
 import { useImStore } from "@/features/im/state/imStore";
 import type { RealtimeStatus } from "@/shared/realtime/realtimeClient";
@@ -68,6 +69,31 @@ export function AppShell() {
   );
 }
 
+function EmptyWorkspace() {
+  const { t } = useTranslation();
+
+  return (
+    <div className="relative w-full max-w-3xl overflow-hidden rounded-[calc(var(--radius)*1.45)] border border-white/72 bg-white/64 p-8 shadow-[0_30px_90px_var(--shadow-color)] backdrop-blur md:p-12">
+      <div className="absolute -right-20 -top-24 size-56 rounded-full bg-[color-mix(in_oklab,var(--primary)_18%,transparent)] blur-3xl" />
+      <div className="absolute -bottom-24 -left-20 size-60 rounded-full bg-[color-mix(in_oklab,var(--accent)_16%,transparent)] blur-3xl" />
+      <div className="relative">
+        <span className="mb-7 inline-flex size-14 items-center justify-center rounded-[calc(var(--radius)*0.95)] bg-[var(--foreground)] text-white shadow-[0_18px_45px_var(--shadow-color)]">
+          <MessageCircleHeart aria-hidden="true" className="size-7" />
+        </span>
+        <p className="mb-3 text-xs font-black uppercase tracking-[0.28em] text-[var(--accent)]">
+          {t("shell.placeholder.emptyEyebrow")}
+        </p>
+        <h2 className="max-w-2xl text-4xl font-black tracking-tight text-balance md:text-6xl">
+          {t("shell.placeholder.emptyTitle")}
+        </h2>
+        <p className="mt-5 max-w-2xl text-base leading-8 text-[var(--muted-foreground)] md:text-lg">
+          {t("shell.placeholder.emptyDescription")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ConnectionStatusBanner({ status }: { status: RealtimeStatus }) {
   const { t } = useTranslation();
 
@@ -118,32 +144,11 @@ function Workspace({ conversationId }: { conversationId: string | null }) {
       </div>
 
       <div className="flex min-h-0 flex-1 items-center justify-center">
-        <div className="relative w-full max-w-3xl overflow-hidden rounded-[calc(var(--radius)*1.45)] border border-white/72 bg-white/64 p-8 shadow-[0_30px_90px_var(--shadow-color)] backdrop-blur md:p-12">
-          <div className="absolute -right-20 -top-24 size-56 rounded-full bg-[color-mix(in_oklab,var(--primary)_18%,transparent)] blur-3xl" />
-          <div className="absolute -bottom-24 -left-20 size-60 rounded-full bg-[color-mix(in_oklab,var(--accent)_16%,transparent)] blur-3xl" />
-          <div className="relative">
-            <span className="mb-7 inline-flex size-14 items-center justify-center rounded-[calc(var(--radius)*0.95)] bg-[var(--foreground)] text-white shadow-[0_18px_45px_var(--shadow-color)]">
-              <MessageCircleHeart aria-hidden="true" className="size-7" />
-            </span>
-            <p className="mb-3 text-xs font-black uppercase tracking-[0.28em] text-[var(--accent)]">
-              {conversationId
-                ? t("shell.placeholder.selectedEyebrow")
-                : t("shell.placeholder.emptyEyebrow")}
-            </p>
-            <h2 className="max-w-2xl text-4xl font-black tracking-tight text-balance md:text-6xl">
-              {conversationId
-                ? t("shell.placeholder.selectedTitle")
-                : t("shell.placeholder.emptyTitle")}
-            </h2>
-            <p className="mt-5 max-w-2xl text-base leading-8 text-[var(--muted-foreground)] md:text-lg">
-              {conversationId
-                ? t("shell.placeholder.selectedDescription", {
-                    conversationId,
-                  })
-                : t("shell.placeholder.emptyDescription")}
-            </p>
-          </div>
-        </div>
+        {conversationId ? (
+          <ChatView conversationId={conversationId} />
+        ) : (
+          <EmptyWorkspace />
+        )}
       </div>
     </section>
   );

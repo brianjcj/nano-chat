@@ -86,7 +86,7 @@ describe("auth routes", () => {
     });
 
     expect(
-      await screen.findByText("Chat view is coming next"),
+      await screen.findByText("Conversation not found"),
     ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe(
       "/app/im/conversations/conversation-1",
