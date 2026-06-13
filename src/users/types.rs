@@ -16,3 +16,19 @@ pub fn validate_username(username: &str) -> Result<(), UsernameValidationError> 
         Err(UsernameValidationError)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::validate_username;
+
+    #[test]
+    fn username_accepts_lowercase_digits_and_underscore() {
+        assert!(validate_username("alice_123").is_ok());
+    }
+
+    #[test]
+    fn username_rejects_uppercase_and_short_values() {
+        assert!(validate_username("Al").is_err());
+        assert!(validate_username("Alice").is_err());
+    }
+}

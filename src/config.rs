@@ -246,15 +246,4 @@ mod tests {
         assert!(!debug.contains("postgres://user:pass"));
         assert!(!debug.contains("0123456789abcdef0123456789abcdef"));
     }
-
-    #[test]
-    fn username_accepts_lowercase_digits_and_underscore() {
-        assert!(crate::users::types::validate_username("alice_123").is_ok());
-    }
-
-    #[test]
-    fn username_rejects_uppercase_and_short_values() {
-        assert!(crate::users::types::validate_username("Al").is_err());
-        assert!(crate::users::types::validate_username("Alice").is_err());
-    }
 }
