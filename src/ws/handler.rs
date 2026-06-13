@@ -294,21 +294,18 @@ async fn handle_message_send(
     {
         Ok(result) => {
             let newly_created = result.newly_created;
-            if !send_ok(outbound_tx, id, "message.send.ok", json!(result)).await {
-                return false;
-            }
             if newly_created {
                 publish_realtime_event(
                     state,
                     Some(connection_id),
                     RealtimeEvent::MessageCreated {
                         conversation_id: result.conversation_id,
-                        message: result.message,
+                        message: result.message.clone(),
                     },
                 )
                 .await;
             }
-            true
+            send_ok(outbound_tx, id, "message.send.ok", json!(result)).await
         }
         Err(error) => send_app_error(outbound_tx, id, error).await,
     }
@@ -347,21 +344,18 @@ async fn handle_direct_message_send(
     {
         Ok(result) => {
             let newly_created = result.newly_created;
-            if !send_ok(outbound_tx, id, "direct_message.send.ok", json!(result)).await {
-                return false;
-            }
             if newly_created {
                 publish_realtime_event(
                     state,
                     Some(connection_id),
                     RealtimeEvent::MessageCreated {
                         conversation_id: result.conversation_id,
-                        message: result.message,
+                        message: result.message.clone(),
                     },
                 )
                 .await;
             }
-            true
+            send_ok(outbound_tx, id, "direct_message.send.ok", json!(result)).await
         }
         Err(error) => send_app_error(outbound_tx, id, error).await,
     }
@@ -391,16 +385,6 @@ async fn handle_conversation_read(
     .await
     {
         Ok(result) => {
-            if !send_ok(
-                outbound_tx,
-                id,
-                "conversation.read.ok",
-                json!({"conversation_id": payload.conversation_id, "read_seq": result.read_seq}),
-            )
-            .await
-            {
-                return false;
-            }
             if result.changed {
                 publish_realtime_event(
                     state,
@@ -413,7 +397,13 @@ async fn handle_conversation_read(
                 )
                 .await;
             }
-            true
+            send_ok(
+                outbound_tx,
+                id,
+                "conversation.read.ok",
+                json!({"conversation_id": payload.conversation_id, "read_seq": result.read_seq}),
+            )
+            .await
         }
         Err(error) => send_app_error(outbound_tx, id, error).await,
     }

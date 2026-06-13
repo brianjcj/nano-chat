@@ -3,12 +3,13 @@ mod common;
 use std::time::Duration;
 
 use nano_chat::{
+    app::AppState,
     config::Config,
     db,
     messages::types::MessageDto,
     realtime::{
         connection_registry::ConnectionRegistry,
-        notify::{NotifyListener, NotifyPublisher, fanout_notify_payload},
+        notify::{NotifyListener, fanout_notify_payload},
         types::{RealtimeEvent, RealtimeNotifyPayload},
     },
     users::types::UserSummary,
@@ -131,28 +132,43 @@ async fn postgres_notify_listener_fans_out_to_another_instance_registry() {
     let channel = unique_notify_channel();
     let instance_a_id = "instance-a".to_string();
     let instance_b_id = "instance-b".to_string();
+    let mut config = ctx.config.clone();
+    config.notify_channel = channel;
 
-    let registry_b = ConnectionRegistry::new(10);
+    let state_a = AppState::with_registry_and_instance_id(
+        config.clone(),
+        ctx.pool.clone(),
+        ConnectionRegistry::new(config.max_connections_per_user),
+        instance_a_id,
+    );
+    let state_b = AppState::with_registry_and_instance_id(
+        config.clone(),
+        ctx.pool.clone(),
+        ConnectionRegistry::new(config.max_connections_per_user),
+        instance_b_id,
+    );
+
     let (bob_tx, mut bob_rx) = mpsc::channel(10);
-    registry_b
+    state_b
+        .registry
         .register(bob.user_id, bob.client_id, bob_tx)
         .unwrap();
 
     let listener = NotifyListener::connect(
-        &ctx.config.database_url,
-        channel.clone(),
-        instance_b_id,
-        ctx.pool.clone(),
-        registry_b,
+        &state_b.config.database_url,
+        state_b.config.notify_channel.clone(),
+        state_b.instance_id.clone(),
+        state_b.pool.clone(),
+        state_b.registry.clone(),
     )
     .await
     .expect("listener should connect and LISTEN before publishing");
     let listener_task = listener.spawn();
 
-    let publisher = NotifyPublisher::new(ctx.pool.clone(), channel);
-    publisher
+    state_a
+        .notify_publisher
         .publish(&RealtimeNotifyPayload {
-            origin_instance_id: instance_a_id,
+            origin_instance_id: state_a.instance_id.clone(),
             origin_connection_id: Some(Uuid::now_v7()),
             event: RealtimeEvent::MessageCreated {
                 conversation_id: sent.conversation_id,
