@@ -1,0 +1,25 @@
+tests/schema.rs
+  s_712973d404db18::t_e6e9911c31bc1c 5-26
+tests/common/mod.rs
+  s_712973d404db18::t_4e8dce432de1bd 11-26,31-48
+  s_712973d404db18::t_0ef42cd66409bf 5-7
+migrations/0001_init.sql
+  s_712973d404db18::t_fa399f373278a0 36,73,116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "5d824033cecfe9c5efeaa09353775c366ec33468",
+  "prompts": {},
+  "logical_commit_id": "5d824033cecfe9c5efeaa09353775c366ec33468",
+  "sessions": {
+    "s_712973d404db18": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019ebe83-4f68-7035-a257-78dde5d4f0cb",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
