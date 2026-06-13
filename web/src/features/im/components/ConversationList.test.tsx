@@ -268,6 +268,231 @@ describe("ConversationList", () => {
     });
   });
 
+  it("keeps a realtime-updated conversation above older threads when a stale refetch resolves", async () => {
+    const queryClient = createQueryClient();
+    const olderConversation = conversation({
+      conversation_id: "group-older",
+      type: "group",
+      name: "Roadmap",
+      latest_message_seq: 3,
+      read_seq: 3,
+      unread_count: 0,
+      latest_message: {
+        message_id: "message-older-3",
+        message_seq: 3,
+        sender: localUser,
+        body: "Older thread",
+        created_at: "2026-06-14T00:03:00.000Z",
+      },
+    });
+    const staleRealtimeConversation = conversation({
+      conversation_id: "direct-1",
+      type: "direct",
+      name: null,
+      latest_message_seq: 1,
+      read_seq: 1,
+      unread_count: 0,
+      direct_user: directUser,
+      latest_message: {
+        message_id: "message-stale-1",
+        message_seq: 1,
+        sender: localUser,
+        body: "Stale REST message",
+        created_at: "2026-06-14T00:01:00.000Z",
+      },
+    });
+    const emptyGroupA = conversation({
+      conversation_id: "empty-group-a",
+      type: "group",
+      name: "Quiet Launch",
+      latest_message_seq: 0,
+      read_seq: 0,
+      unread_count: 0,
+      latest_message: null,
+      active_member_count: 4,
+    });
+    const emptyGroupB = conversation({
+      conversation_id: "empty-group-b",
+      type: "group",
+      name: "Silent Ops",
+      latest_message_seq: 0,
+      read_seq: 0,
+      unread_count: 0,
+      latest_message: null,
+      active_member_count: 3,
+    });
+    const realtimeMessage: Message = {
+      message_id: "message-realtime-4",
+      conversation_id: "direct-1",
+      message_seq: 4,
+      sender: directUser,
+      body: "Realtime top message",
+      created_at: "2026-06-14T00:04:00.000Z",
+    };
+    const staleFetch = deferred<ConversationSummary[]>();
+    const listConversations = vi
+      .fn<ApiClient["listConversations"]>()
+      .mockReturnValue(staleFetch.promise);
+
+    queryClient.setQueryData(imQueryKeys.conversations(), [
+      olderConversation,
+      emptyGroupA,
+      staleRealtimeConversation,
+      emptyGroupB,
+    ]);
+    await renderConversationList({ listConversations, queryClient });
+    expect(await screen.findByText("Alice A.")).toBeInTheDocument();
+
+    const refetchPromise = queryClient.refetchQueries({
+      queryKey: imQueryKeys.conversations(),
+    });
+    await waitFor(() => {
+      expect(listConversations).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      useImStore.getState().setCurrentConversationId("current-conversation");
+      applyRealtimeEvent({
+        queryClient,
+        store: useImStore,
+        currentUserId: "user-local",
+        event: {
+          type: "message.created",
+          payload: {
+            conversation_id: "direct-1",
+            message: realtimeMessage,
+          },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        queryClient
+          .getQueryData<ConversationSummary[]>(imQueryKeys.conversations())
+          ?.map((candidate) => candidate.conversation_id),
+      ).toEqual([
+        "direct-1",
+        "group-older",
+        "empty-group-a",
+        "empty-group-b",
+      ]);
+    });
+
+    await act(async () => {
+      staleFetch.resolve([
+        olderConversation,
+        emptyGroupA,
+        staleRealtimeConversation,
+        emptyGroupB,
+      ]);
+      await refetchPromise;
+    });
+
+    await waitFor(() => {
+      expect(
+        queryClient
+          .getQueryData<ConversationSummary[]>(imQueryKeys.conversations())
+          ?.map((candidate) => candidate.conversation_id),
+      ).toEqual([
+        "direct-1",
+        "group-older",
+        "empty-group-a",
+        "empty-group-b",
+      ]);
+    });
+    expect(
+      queryClient.getQueryData<ConversationSummary[]>(
+        imQueryKeys.conversations(),
+      )?.[0],
+    ).toMatchObject({
+      conversation_id: "direct-1",
+      latest_message_seq: 4,
+      latest_message: {
+        message_id: "message-realtime-4",
+        body: "Realtime top message",
+      },
+    });
+  });
+
+  it("keeps a locally advanced read_seq and unread_count when a stale refetch resolves", async () => {
+    const queryClient = createQueryClient();
+    const staleUnreadConversation = conversation({
+      conversation_id: "direct-1",
+      type: "direct",
+      name: null,
+      latest_message_seq: 5,
+      read_seq: 2,
+      unread_count: 3,
+      direct_user: directUser,
+      latest_message: {
+        message_id: "message-latest-5",
+        message_seq: 5,
+        sender: directUser,
+        body: "Needs reading",
+        created_at: "2026-06-14T00:05:00.000Z",
+      },
+    });
+    const staleFetch = deferred<ConversationSummary[]>();
+    const listConversations = vi
+      .fn<ApiClient["listConversations"]>()
+      .mockReturnValue(staleFetch.promise);
+
+    queryClient.setQueryData(imQueryKeys.conversations(), [
+      staleUnreadConversation,
+    ]);
+    await renderConversationList({ listConversations, queryClient });
+    expect(await screen.findByText("Alice A.")).toBeInTheDocument();
+
+    const refetchPromise = queryClient.refetchQueries({
+      queryKey: imQueryKeys.conversations(),
+    });
+    await waitFor(() => {
+      expect(listConversations).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      applyRealtimeEvent({
+        queryClient,
+        store: useImStore,
+        currentUserId: "user-local",
+        event: {
+          type: "conversation.read_updated",
+          payload: {
+            conversation_id: "direct-1",
+            user_id: "user-local",
+            read_seq: 5,
+          },
+        },
+      });
+    });
+
+    expect(
+      queryClient.getQueryData<ConversationSummary[]>(
+        imQueryKeys.conversations(),
+      )?.[0],
+    ).toMatchObject({
+      read_seq: 5,
+      unread_count: 0,
+    });
+
+    await act(async () => {
+      staleFetch.resolve([staleUnreadConversation]);
+      await refetchPromise;
+    });
+
+    await waitFor(() => {
+      expect(
+        queryClient.getQueryData<ConversationSummary[]>(
+          imQueryKeys.conversations(),
+        )?.[0],
+      ).toMatchObject({
+        read_seq: 5,
+        unread_count: 0,
+      });
+    });
+  });
+
   it("clears realtime unread correction when a later conversation fetch covers the realtime sequence", async () => {
     const queryClient = createQueryClient();
     const initialConversation = conversation({
