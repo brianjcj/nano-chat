@@ -43,10 +43,24 @@ export const appResources = {
         },
         logout: "退出登录",
         expired: "登录已过期，请重新登录。",
+        layout: {
+          eyebrow: "柔和社交 IM 工作台",
+          description:
+            "为实时对话准备的安全入口。登录后即可进入临时 IM 外壳，后续任务会补齐会话与消息体验。",
+        },
+        validation: {
+          usernameRequired: "请输入用户名。",
+          passwordRequired: "请输入密码。",
+        },
       },
       shell: {
         im: "聊天",
         workspace: "工作区",
+        placeholder: {
+          title: "临时 IM 外壳",
+          description:
+            "认证与路由已经就绪。会话列表、消息收发和实时连接会在后续任务中接入。",
+        },
         connection: {
           connected: "已连接",
           reconnecting: "正在重新连接…",
@@ -184,10 +198,24 @@ export const appResources = {
         },
         logout: "Sign out",
         expired: "Your session expired. Please sign in again.",
+        layout: {
+          eyebrow: "Soft-social IM workspace",
+          description:
+            "A secure entry point for realtime conversations. After authentication, this task opens the temporary IM shell while future tasks add messaging flows.",
+        },
+        validation: {
+          usernameRequired: "Enter a username.",
+          passwordRequired: "Enter a password.",
+        },
       },
       shell: {
         im: "Chat",
         workspace: "Workspace",
+        placeholder: {
+          title: "Temporary IM shell",
+          description:
+            "Authentication and routing are ready. Conversation lists, messaging, and realtime connections will arrive in later tasks.",
+        },
         connection: {
           connected: "Connected",
           reconnecting: "Reconnecting…",

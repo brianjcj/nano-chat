@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { AppProviders } from "./AppProviders";
 import { createQueryClient } from "./queryClient";
+import { createAppI18n } from "@/shared/i18n/i18n";
 
 function QueryClientProbe({ expectedClient }: { expectedClient: unknown }) {
   const queryClient = useQueryClient();
@@ -16,11 +17,15 @@ function QueryClientProbe({ expectedClient }: { expectedClient: unknown }) {
 }
 
 describe("AppProviders", () => {
-  it("makes a QueryClient available to app children", () => {
+  it("makes a QueryClient available to app children", async () => {
     const queryClient = createQueryClient();
+    const i18nInstance = await createAppI18n({
+      language: "en-US",
+      useLanguageDetector: false,
+    });
 
     render(
-      <AppProviders queryClient={queryClient}>
+      <AppProviders i18nInstance={i18nInstance} queryClient={queryClient}>
         <QueryClientProbe expectedClient={queryClient} />
       </AppProviders>,
     );
