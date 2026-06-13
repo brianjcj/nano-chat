@@ -8,6 +8,14 @@ Nano Chat is a small chat service focused on realtime messaging and keeping a us
 The product capability where users exchange chat messages and see those messages reflected across their active clients.
 _Avoid_: 聊天后台, 消息系统
 
+**Web 应用**:
+The user-facing Nano Chat product surface that people use in a browser.
+_Avoid_: 客户端, 前端页面, 管理端
+
+**功能区**:
+A top-level product area in the Web application, such as IM, that owns a navigation entry and a primary workspace.
+_Avoid_: 模块, 菜单项, 页面分组
+
 **会话**:
 The place where chat messages are exchanged and preserved as history; direct chat and group chat are both conversations.
 _Avoid_: 房间, 频道
@@ -43,6 +51,10 @@ _Avoid_: 富媒体消息, 文件消息
 **单聊会话**:
 A conversation with exactly two users; each pair of users has at most one direct conversation.
 _Avoid_: 私聊房间, direct room
+
+**单聊草稿**:
+A Web application state for composing the first message to another user before a direct conversation exists.
+_Avoid_: 空单聊会话, 临时会话
 
 **群聊会话**:
 A named conversation whose membership is managed as a group rather than as the unique direct conversation between two users.
