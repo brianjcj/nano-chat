@@ -33,7 +33,7 @@ create table conversations (
     constraint conversations_last_message_seq_check check (last_message_seq >= 0),
     constraint conversations_dissolved_at_check check (
         (state = 'active' and dissolved_at is null)
-        or state = 'dissolved'
+        or (state = 'dissolved' and dissolved_at is not null)
     )
 );
 
@@ -70,7 +70,7 @@ create table conversation_member_spans (
     created_at timestamptz not null,
     closed_at timestamptz,
     constraint conversation_member_spans_from_seq_check check (from_seq > 0),
-    constraint conversation_member_spans_range_check check (to_seq is null or to_seq >= from_seq),
+    constraint conversation_member_spans_range_check check (to_seq is null or to_seq >= from_seq - 1),
     constraint conversation_member_spans_closed_check check (
         (to_seq is null and closed_at is null)
         or (to_seq is not null and closed_at is not null and closed_at >= created_at)
@@ -113,7 +113,7 @@ create index conversation_members_active_by_conversation_idx
 create index conversation_member_spans_visibility_idx
     on conversation_member_spans (conversation_id, user_id, from_seq, to_seq);
 
-create index conversation_member_spans_open_idx
+create unique index conversation_member_spans_one_open_idx
     on conversation_member_spans (conversation_id, user_id)
     where to_seq is null;
 

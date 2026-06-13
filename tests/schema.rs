@@ -2,6 +2,28 @@ mod common;
 
 use sqlx::Row;
 
+#[test]
+fn migration_allows_empty_closed_visibility_spans() {
+    let migration = include_str!("../migrations/0001_init.sql");
+    assert!(
+        migration.contains("to_seq >= from_seq - 1"),
+        "span range check should allow empty closed spans"
+    );
+}
+
+#[test]
+fn migration_enforces_one_open_visibility_span() {
+    let migration = include_str!("../migrations/0001_init.sql");
+    assert!(migration.contains("create unique index conversation_member_spans_one_open_idx"));
+    assert!(migration.contains("where to_seq is null"));
+}
+
+#[test]
+fn migration_requires_dissolved_timestamp_for_dissolved_conversations() {
+    let migration = include_str!("../migrations/0001_init.sql");
+    assert!(migration.contains("state = 'dissolved' and dissolved_at is not null"));
+}
+
 #[tokio::test]
 async fn migrations_create_core_tables() {
     let pool = common::test_pool().await;
