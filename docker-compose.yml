@@ -1,14 +1,37 @@
 services:
   postgres:
-    image: postgres:17
+    image: ${POSTGRES_IMAGE:-mirror.gcr.io/library/postgres:17}
     environment:
-      POSTGRES_USER: nano
-      POSTGRES_PASSWORD: nano
-      POSTGRES_DB: nano_chat_test
+      POSTGRES_USER: ${POSTGRES_USER:-nano}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nano}
+      POSTGRES_DB: ${POSTGRES_DB:-nano_chat_test}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nano -d nano_chat_test"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 20
+
+  app:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${NANO_CHAT_IMAGE:-nano-chat:local}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://nano:nano@postgres:5432/nano_chat_test}
+      JWT_SECRET: ${JWT_SECRET:-change-me-development-secret-at-least-32-bytes}
+      BIND_ADDR: ${BIND_ADDR:-0.0.0.0:3000}
+      RUST_LOG: ${RUST_LOG:-nano_chat=debug,tower_http=info}
+      NANO_CHAT_NOTIFY_CHANNEL: ${NANO_CHAT_NOTIFY_CHANNEL:-nano_chat_events}
+      NANO_CHAT_MAX_CONNECTIONS_PER_USER: ${NANO_CHAT_MAX_CONNECTIONS_PER_USER:-10}
+      NANO_CHAT_HEARTBEAT_INTERVAL_SECS: ${NANO_CHAT_HEARTBEAT_INTERVAL_SECS:-30}
+      NANO_CHAT_HEARTBEAT_IDLE_TIMEOUT_SECS: ${NANO_CHAT_HEARTBEAT_IDLE_TIMEOUT_SECS:-90}
+      NANO_CHAT_MAX_WS_PAYLOAD_BYTES: ${NANO_CHAT_MAX_WS_PAYLOAD_BYTES:-65536}
+      NANO_CHAT_MAX_MESSAGE_BYTES: ${NANO_CHAT_MAX_MESSAGE_BYTES:-4096}
+    ports:
+      - "${APP_PORT:-3000}:3000"

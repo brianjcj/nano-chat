@@ -65,7 +65,7 @@ Request:
 
 Success: `200 OK`, with the same response shape as register.
 
-## Current User
+## Users and `/me`
 
 ### Get current user
 
@@ -172,6 +172,10 @@ Rules:
 
 Success: `201 Created`, returning the conversation summary shape from the list endpoint.
 
+## Group Members
+
+Group membership endpoints require authentication and apply to group conversations only.
+
 ### List active group members
 
 `GET /api/v1/conversations/{conversation_id}/members`
@@ -226,7 +230,7 @@ Rules:
 
 Success: `204 No Content`.
 
-## Messages
+## Message History
 
 ### List message history
 
@@ -280,7 +284,7 @@ Rules:
 
 Direct sends target a user by username or user id. The first direct message creates the direct conversation, inserts both direct members, creates visibility spans from sequence `1`, allocates message sequence `1`, and commits all of that atomically. Later direct sends reuse the same direct conversation. Empty direct conversations are not exposed in conversation lists.
 
-## WebSocket
+## WebSocket Envelope
 
 Connect to `GET /ws?version=1`.
 
@@ -292,7 +296,7 @@ Authorization: Bearer <access_token>
 
 Unsupported or missing `version=1`, missing/invalid auth, and per-user connection-limit rejections return the normal HTTP error envelope before upgrade when practical.
 
-### Client envelope
+### Client command envelope
 
 All client commands use a common snake_case JSON envelope. `id` is optional for heartbeat and recommended for commands where the client wants request/response correlation.
 
@@ -306,7 +310,7 @@ All client commands use a common snake_case JSON envelope. `id` is optional for 
 
 Invalid JSON, non-text frames, unknown command types, invalid command payloads, and oversized WebSocket payloads are returned as a WebSocket `error` envelope and the connection is closed.
 
-### Server envelopes
+### Server response and event envelopes
 
 Success response:
 
@@ -458,11 +462,9 @@ Success type: `heartbeat.pong`.
 
 Recommended client heartbeat interval is the configured server interval, default `30` seconds. Connections that do not send any valid envelope for the idle timeout, default `90` seconds, are removed from the local registry and closed.
 
-### Realtime event fan-out
+### Events and realtime fan-out
 
 After successful state changes, the server fans out WebSocket events locally and publishes a small JSON payload on Postgres `LISTEN/NOTIFY` so other Nano Chat instances can fan out to their own local registries. The channel is configured by `NANO_CHAT_NOTIFY_CHANNEL` and defaults to `nano_chat_events`.
-
-Realtime notifications are best-effort and at-most-once. They are not the source of truth: message history and conversation sync APIs remain authoritative. Clients should track the highest contiguous `message_seq` seen per conversation. If a `message.created` event reveals a sequence gap, reconnects occur, or the client suspects missed events, recover by calling `GET /api/v1/conversations/{conversation_id}/messages?after_seq=<last_contiguous_seq>`.
 
 `message.created` is emitted only for newly inserted messages. Idempotent retries that return an existing message do not emit another event. Recipients are users whose visibility spans include the created `message_seq`, so former group members do not receive messages sent after they left.
 
@@ -538,7 +540,11 @@ The origin WebSocket connection receives only its command response, such as `mes
 
 Postgres NOTIFY payloads include `origin_instance_id`, optional `origin_connection_id`, and the event, and are rejected by the server if the serialized payload is 8000 bytes or larger. The receiving instance uses the same visibility rules as local delivery and ignores notifications published by its own `origin_instance_id` to avoid duplicates. Cross-instance fan-out does not require sticky sessions.
 
-## Error Format
+### Sync and reconnect behavior
+
+Realtime notifications are best-effort and at-most-once. They are not the source of truth: message history and conversation sync APIs remain authoritative. Clients should track the highest contiguous `message_seq` seen per conversation. If a `message.created` event reveals a sequence gap, reconnects occur, or the client suspects missed events, recover by calling `GET /api/v1/conversations/{conversation_id}/messages?after_seq=<last_contiguous_seq>`.
+
+## Errors
 
 Errors use stable machine-readable codes. Request parsing errors (for example malformed JSON, non-JSON request content, invalid query parameters, or invalid path IDs such as malformed `conversation_id` UUIDs) use this same envelope.
 
@@ -580,3 +586,51 @@ WebSocket error codes introduced here:
 - `invalid_ws_envelope`: WebSocket JSON envelope or command payload is invalid.
 - `ws_payload_too_large`: WebSocket frame exceeds the configured maximum payload size.
 - `heartbeat_timeout`: connection exceeded the heartbeat idle timeout.
+
+## Deployment and Configuration Notes
+
+Nano Chat expects schema migrations to be run explicitly before the application starts. Application startup does not run migrations automatically.
+
+For local Compose Postgres used by integration tests:
+
+```bash
+docker compose up -d postgres
+TEST_DATABASE_URL=postgres://nano:nano@localhost:5432/nano_chat_test cargo test --tests -- --nocapture
+```
+
+The Compose Postgres image defaults to `mirror.gcr.io/library/postgres:17` for environments where Docker Hub pulls are unreliable. Operators can use the official Docker Hub image by setting `POSTGRES_IMAGE=postgres:17`.
+
+For an application deployment:
+
+1. Copy `.env.example` to `.env` and replace `JWT_SECRET` with a strong secret of at least 32 characters.
+2. Start Postgres: `docker compose up -d postgres`.
+3. Run migrations from the host or CI against the target database before starting the app, for example:
+
+   ```bash
+   DATABASE_URL=postgres://nano:nano@localhost:5432/nano_chat_test sqlx migrate run
+   ```
+
+4. Start the optional app service: `docker compose --profile app up -d app`.
+
+The app container uses `DATABASE_URL=postgres://nano:nano@postgres:5432/nano_chat_test` by default so it can reach the Compose Postgres service by service name. Host-side tools generally use `localhost` and the published Postgres port instead.
+
+Configuration variables:
+
+| Variable | Default/example | Purpose |
+| --- | --- | --- |
+| `POSTGRES_IMAGE` | `mirror.gcr.io/library/postgres:17` | Compose Postgres image. Set to `postgres:17` to pull from Docker Hub. |
+| `POSTGRES_USER` | `nano` | Official Postgres image user. |
+| `POSTGRES_PASSWORD` | `nano` | Official Postgres image password. |
+| `POSTGRES_DB` | `nano_chat_test` | Official Postgres image database name. |
+| `POSTGRES_PORT` | `5432` | Host port published by Compose Postgres. |
+| `APP_PORT` | `3000` | Host port published by the optional app service. |
+| `DATABASE_URL` | `postgres://nano:nano@postgres:5432/nano_chat_test` | Application database URL. |
+| `JWT_SECRET` | `change-me-development-secret-at-least-32-bytes` | JWT signing secret; must be changed outside local development. |
+| `BIND_ADDR` | `0.0.0.0:3000` | Address the HTTP/WebSocket server binds to. |
+| `RUST_LOG` | `nano_chat=debug,tower_http=info` | Tracing filter. |
+| `NANO_CHAT_NOTIFY_CHANNEL` | `nano_chat_events` | Postgres `LISTEN/NOTIFY` channel for cross-instance fan-out. |
+| `NANO_CHAT_MAX_CONNECTIONS_PER_USER` | `10` | Per-instance WebSocket connection limit per user. |
+| `NANO_CHAT_HEARTBEAT_INTERVAL_SECS` | `30` | Recommended heartbeat interval for clients. |
+| `NANO_CHAT_HEARTBEAT_IDLE_TIMEOUT_SECS` | `90` | Idle timeout before a WebSocket is closed. |
+| `NANO_CHAT_MAX_WS_PAYLOAD_BYTES` | `65536` | Maximum inbound WebSocket frame payload size. |
+| `NANO_CHAT_MAX_MESSAGE_BYTES` | `4096` | Maximum message body size in UTF-8 bytes. |

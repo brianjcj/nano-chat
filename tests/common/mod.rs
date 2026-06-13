@@ -12,6 +12,7 @@ use nano_chat::{
     app::{AppState, build_router},
     auth::types::CurrentUser,
     config::Config,
+    conversations::service as conversations_service,
     messages::{
         service as messages_service,
         types::{DirectTarget, SendMessageResult},
@@ -23,9 +24,11 @@ use sqlx::{Executor, PgPool};
 use tower::ServiceExt;
 use uuid::Uuid;
 
+const DEFAULT_TEST_DATABASE_URL: &str = "postgres://nano:nano@localhost:5432/nano_chat_test";
+
 pub async fn test_pool() -> PgPool {
     let url = std::env::var("TEST_DATABASE_URL")
-        .expect("set TEST_DATABASE_URL for destructive database tests");
+        .unwrap_or_else(|_| DEFAULT_TEST_DATABASE_URL.to_string());
     let url =
         validate_test_database_url(&url).expect("TEST_DATABASE_URL must point to a test database");
     PgPool::connect(&url).await.expect("connect test database")
@@ -277,6 +280,12 @@ impl TestContext {
             Ok(result) => (StatusCode::OK, Json(result)).into_response(),
             Err(error) => error.into_response(),
         }
+    }
+
+    pub async fn mark_read(&self, user: &TestUser, conversation_id: Uuid, read_seq: i64) -> i64 {
+        conversations_service::mark_read(&self.pool, user.user_id, conversation_id, read_seq)
+            .await
+            .expect("conversation read position should update")
     }
 
     pub async fn messages(
