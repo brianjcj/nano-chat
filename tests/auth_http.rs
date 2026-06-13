@@ -199,7 +199,7 @@ async fn assert_invalid_request(response: axum::response::Response) {
 
     let body = response_json(response).await;
     assert_eq!(body["error"]["code"], "invalid_request");
-    assert!(body["error"]["message"].as_str().unwrap().len() > 0);
+    assert!(!body["error"]["message"].as_str().unwrap().is_empty());
 }
 
 async fn response_json(response: axum::response::Response) -> Value {

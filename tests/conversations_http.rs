@@ -2,6 +2,7 @@ mod common;
 
 use axum::http::StatusCode;
 use sqlx::Row;
+use tower::ServiceExt;
 
 #[tokio::test]
 #[serial_test::serial]
@@ -33,6 +34,21 @@ async fn group_creation_requires_creator_plus_one_member() {
     let alice = ctx.register("alice").await;
     let response = ctx.create_group_raw(&alice, "solo", &[]).await;
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn malformed_conversation_id_path_uses_invalid_request_error_envelope() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let request =
+        common::authed_empty_request("GET", "/api/v1/conversations/not-a-uuid/members", &alice);
+
+    let response = ctx.app.clone().oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = common::response_json(response).await;
+    assert_eq!(body["error"]["code"], "invalid_request");
 }
 
 #[tokio::test]

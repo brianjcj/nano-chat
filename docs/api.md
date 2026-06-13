@@ -228,7 +228,7 @@ Success: `204 No Content`.
 
 ## Error Format
 
-Errors use stable machine-readable codes. Request parsing errors (for example malformed JSON, non-JSON request content, or invalid query parameters) use this same envelope.
+Errors use stable machine-readable codes. Request parsing errors (for example malformed JSON, non-JSON request content, invalid query parameters, or invalid path IDs such as malformed `conversation_id` UUIDs) use this same envelope.
 
 ```json
 {

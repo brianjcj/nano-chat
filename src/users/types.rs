@@ -32,16 +32,11 @@ pub struct UpdateMeRequest {
     pub(crate) display_name: PatchField<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) enum PatchField<T> {
+    #[default]
     Missing,
     Present(Option<T>),
-}
-
-impl<T> Default for PatchField<T> {
-    fn default() -> Self {
-        Self::Missing
-    }
 }
 
 fn deserialize_patch_field<'de, D, T>(deserializer: D) -> Result<PatchField<T>, D::Error>

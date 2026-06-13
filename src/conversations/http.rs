@@ -1,6 +1,9 @@
 use axum::{
     Json, Router,
-    extract::{Path, State, rejection::JsonRejection},
+    extract::{
+        Path, State,
+        rejection::{JsonRejection, PathRejection},
+    },
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post},
@@ -52,8 +55,9 @@ async fn create_group(
 async fn list_members(
     current_user: CurrentUser,
     State(state): State<AppState>,
-    Path(conversation_id): Path<Uuid>,
+    conversation_id: Result<Path<Uuid>, PathRejection>,
 ) -> AppResult<impl IntoResponse> {
+    let Path(conversation_id) = conversation_id.map_err(AppError::from_path_rejection)?;
     let members = service::list_members(&state.pool, current_user.user_id, conversation_id).await?;
     Ok(Json(members))
 }
@@ -61,9 +65,10 @@ async fn list_members(
 async fn add_member(
     current_user: CurrentUser,
     State(state): State<AppState>,
-    Path(conversation_id): Path<Uuid>,
+    conversation_id: Result<Path<Uuid>, PathRejection>,
     request: Result<Json<AddMemberRequest>, JsonRejection>,
 ) -> AppResult<impl IntoResponse> {
+    let Path(conversation_id) = conversation_id.map_err(AppError::from_path_rejection)?;
     let Json(request) = request.map_err(AppError::from_json_rejection)?;
     let member = service::add_member(
         &state.pool,
@@ -78,8 +83,9 @@ async fn add_member(
 async fn leave_group(
     current_user: CurrentUser,
     State(state): State<AppState>,
-    Path(conversation_id): Path<Uuid>,
+    conversation_id: Result<Path<Uuid>, PathRejection>,
 ) -> AppResult<StatusCode> {
+    let Path(conversation_id) = conversation_id.map_err(AppError::from_path_rejection)?;
     service::leave_group(&state.pool, current_user.user_id, conversation_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

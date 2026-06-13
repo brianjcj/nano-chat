@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::rejection::{JsonRejection, QueryRejection},
+    extract::rejection::{JsonRejection, PathRejection, QueryRejection},
     http::StatusCode,
     response::IntoResponse,
 };
@@ -120,6 +120,10 @@ impl AppError {
 
     pub fn from_query_rejection(_rejection: QueryRejection) -> Self {
         Self::invalid_request("Invalid query parameters")
+    }
+
+    pub fn from_path_rejection(_rejection: PathRejection) -> Self {
+        Self::invalid_request("Invalid path parameters")
     }
 }
 
