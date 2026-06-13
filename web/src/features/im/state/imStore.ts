@@ -21,6 +21,7 @@ type ImStoreData = {
   directDraft: DirectDraft | null;
   realtimeStatus: RealtimeStatus;
   unreadCorrections: Record<string, number>;
+  unreadCorrectionMaxMessageSeqs: Record<string, number>;
   historySyncMarkers: Record<string, HistorySyncMarker>;
   mobilePanel: MobilePanelState;
 };
@@ -30,7 +31,11 @@ type ImStoreActions = {
   setCurrentConversationId: (conversationId: string | null) => void;
   setDirectDraft: (draft: DirectDraft | null) => void;
   setRealtimeStatus: (status: RealtimeStatus) => void;
-  incrementUnreadCorrection: (conversationId: string, amount?: number) => void;
+  incrementUnreadCorrection: (
+    conversationId: string,
+    amount?: number,
+    maxMessageSeq?: number,
+  ) => void;
   clearUnreadCorrection: (conversationId: string) => void;
   markHistorySyncNeeded: (conversationId: string, afterSeq: number) => void;
   clearHistorySyncMarker: (conversationId: string) => void;
@@ -55,21 +60,39 @@ export const useImStore = create<ImStoreState>((set) => ({
   setRealtimeStatus(status) {
     set({ realtimeStatus: status });
   },
-  incrementUnreadCorrection(conversationId, amount = 1) {
-    set((state) => ({
-      unreadCorrections: {
-        ...state.unreadCorrections,
-        [conversationId]:
-          (state.unreadCorrections[conversationId] ?? 0) + amount,
-      },
-    }));
+  incrementUnreadCorrection(conversationId, amount = 1, maxMessageSeq) {
+    set((state) => {
+      const unreadCorrectionMaxMessageSeqs = {
+        ...state.unreadCorrectionMaxMessageSeqs,
+      };
+
+      if (maxMessageSeq !== undefined) {
+        unreadCorrectionMaxMessageSeqs[conversationId] = Math.max(
+          state.unreadCorrectionMaxMessageSeqs[conversationId] ?? 0,
+          maxMessageSeq,
+        );
+      }
+
+      return {
+        unreadCorrections: {
+          ...state.unreadCorrections,
+          [conversationId]:
+            (state.unreadCorrections[conversationId] ?? 0) + amount,
+        },
+        unreadCorrectionMaxMessageSeqs,
+      };
+    });
   },
   clearUnreadCorrection(conversationId) {
     set((state) => {
       const unreadCorrections = { ...state.unreadCorrections };
+      const unreadCorrectionMaxMessageSeqs = {
+        ...state.unreadCorrectionMaxMessageSeqs,
+      };
       delete unreadCorrections[conversationId];
+      delete unreadCorrectionMaxMessageSeqs[conversationId];
 
-      return { unreadCorrections };
+      return { unreadCorrections, unreadCorrectionMaxMessageSeqs };
     });
   },
   markHistorySyncNeeded(conversationId, afterSeq) {
@@ -103,6 +126,7 @@ export function createInitialImStoreData(): ImStoreData {
     directDraft: null,
     realtimeStatus: "idle",
     unreadCorrections: {},
+    unreadCorrectionMaxMessageSeqs: {},
     historySyncMarkers: {},
     mobilePanel: "conversations",
   };

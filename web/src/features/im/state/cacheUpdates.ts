@@ -83,7 +83,9 @@ function applyMessageCreated(
     return;
   }
 
-  store.getState().incrementUnreadCorrection(conversationId);
+  store
+    .getState()
+    .incrementUnreadCorrection(conversationId, 1, message.message_seq);
 }
 
 function applyConversationReadUpdated(

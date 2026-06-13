@@ -55,6 +55,17 @@ function conversation(
   };
 }
 
+function deferred<T>() {
+  let resolve: (value: T | PromiseLike<T>) => void = () => {};
+  let reject: (reason?: unknown) => void = () => {};
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, resolve, reject };
+}
+
 async function renderConversationList({
   conversations = [],
   initialEntries = ["/app/im"],
@@ -167,6 +178,199 @@ describe("ConversationList", () => {
     expect(
       screen.getByText("Look up a user for a direct chat or create a group."),
     ).toBeInTheDocument();
+  });
+
+  it("keeps realtime unread correction and latest message when a stale conversation fetch resolves after realtime", async () => {
+    const queryClient = createQueryClient();
+    const staleConversation = conversation({
+      conversation_id: "direct-1",
+      type: "direct",
+      name: null,
+      latest_message_seq: 1,
+      unread_count: 0,
+      direct_user: directUser,
+      latest_message: {
+        message_id: "message-rest-1",
+        message_seq: 1,
+        sender: localUser,
+        body: "Cached REST message",
+        created_at: "2026-06-14T00:01:00.000Z",
+      },
+    });
+    const realtimeMessage: Message = {
+      message_id: "message-realtime-1",
+      conversation_id: "direct-1",
+      message_seq: 2,
+      sender: directUser,
+      body: "Realtime ping",
+      created_at: "2026-06-14T00:03:00.000Z",
+    };
+    const staleFetch = deferred<ConversationSummary[]>();
+    const listConversations = vi
+      .fn<ApiClient["listConversations"]>()
+      .mockReturnValue(staleFetch.promise);
+
+    queryClient.setQueryData(imQueryKeys.conversations(), [staleConversation]);
+    await renderConversationList({ listConversations, queryClient });
+    expect(await screen.findByText("Alice A.")).toBeInTheDocument();
+    expect(screen.getByText("Cached REST message")).toBeInTheDocument();
+
+    const refetchPromise = queryClient.refetchQueries({
+      queryKey: imQueryKeys.conversations(),
+    });
+    await waitFor(() => {
+      expect(listConversations).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      useImStore.getState().setCurrentConversationId("current-conversation");
+      applyRealtimeEvent({
+        queryClient,
+        store: useImStore,
+        currentUserId: "user-local",
+        event: {
+          type: "message.created",
+          payload: {
+            conversation_id: "direct-1",
+            message: realtimeMessage,
+          },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Realtime ping")).toBeInTheDocument();
+      expect(screen.getByLabelText("1 unread")).toHaveTextContent("1");
+    });
+
+    await act(async () => {
+      staleFetch.resolve([staleConversation]);
+      await refetchPromise;
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Realtime ping")).toBeInTheDocument();
+      expect(screen.getByLabelText("1 unread")).toHaveTextContent("1");
+    });
+    expect(useImStore.getState().unreadCorrections).toMatchObject({
+      "direct-1": 1,
+    });
+    expect(
+      queryClient.getQueryData<ConversationSummary[]>(
+        imQueryKeys.conversations(),
+      )?.[0],
+    ).toMatchObject({
+      latest_message_seq: 2,
+      latest_message: {
+        message_id: "message-realtime-1",
+        body: "Realtime ping",
+      },
+    });
+  });
+
+  it("clears realtime unread correction when a later conversation fetch covers the realtime sequence", async () => {
+    const queryClient = createQueryClient();
+    const initialConversation = conversation({
+      conversation_id: "direct-1",
+      type: "direct",
+      name: null,
+      latest_message_seq: 1,
+      unread_count: 0,
+      direct_user: directUser,
+      latest_message: {
+        message_id: "message-rest-1",
+        message_seq: 1,
+        sender: localUser,
+        body: "Cached REST message",
+        created_at: "2026-06-14T00:01:00.000Z",
+      },
+    });
+    const realtimeMessage: Message = {
+      message_id: "message-realtime-1",
+      conversation_id: "direct-1",
+      message_seq: 2,
+      sender: directUser,
+      body: "Realtime ping",
+      created_at: "2026-06-14T00:03:00.000Z",
+    };
+    const authoritativeFetch = deferred<ConversationSummary[]>();
+    const listConversations = vi
+      .fn<ApiClient["listConversations"]>()
+      .mockReturnValue(authoritativeFetch.promise);
+
+    queryClient.setQueryData(imQueryKeys.conversations(), [initialConversation]);
+    await renderConversationList({ listConversations, queryClient });
+    expect(await screen.findByText("Alice A.")).toBeInTheDocument();
+
+    const refetchPromise = queryClient.refetchQueries({
+      queryKey: imQueryKeys.conversations(),
+    });
+    await waitFor(() => {
+      expect(listConversations).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      useImStore.getState().setCurrentConversationId("current-conversation");
+      applyRealtimeEvent({
+        queryClient,
+        store: useImStore,
+        currentUserId: "user-local",
+        event: {
+          type: "message.created",
+          payload: {
+            conversation_id: "direct-1",
+            message: realtimeMessage,
+          },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Realtime ping")).toBeInTheDocument();
+      expect(screen.getByLabelText("1 unread")).toHaveTextContent("1");
+    });
+    expect(useImStore.getState().unreadCorrections).toMatchObject({
+      "direct-1": 1,
+    });
+
+    await act(async () => {
+      authoritativeFetch.resolve([
+        conversation({
+          conversation_id: "direct-1",
+          type: "direct",
+          name: null,
+          latest_message_seq: 2,
+          unread_count: 1,
+          direct_user: directUser,
+          latest_message: {
+            message_id: realtimeMessage.message_id,
+            message_seq: realtimeMessage.message_seq,
+            sender: realtimeMessage.sender,
+            body: realtimeMessage.body,
+            created_at: realtimeMessage.created_at,
+          },
+        }),
+      ]);
+      await refetchPromise;
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("1 unread")).toHaveTextContent("1");
+    });
+    expect(useImStore.getState().unreadCorrections).not.toHaveProperty(
+      "direct-1",
+    );
+    expect(
+      queryClient.getQueryData<ConversationSummary[]>(
+        imQueryKeys.conversations(),
+      )?.[0],
+    ).toMatchObject({
+      latest_message_seq: 2,
+      latest_message: {
+        message_id: "message-realtime-1",
+        body: "Realtime ping",
+      },
+    });
   });
 
   it("preserves realtime unread corrections until a conversation refetch returns authoritative unread", async () => {

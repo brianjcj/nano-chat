@@ -23,4 +23,25 @@ describe("IM store feature area", () => {
     expect(useImStore.getState().currentFeatureArea).toBe("im");
     expect(useImStore.getState().currentConversationId).toBeNull();
   });
+
+  it("tracks the highest realtime message sequence for unread corrections", () => {
+    useImStore.getState().incrementUnreadCorrection("conversation-1", 1, 4);
+    useImStore.getState().incrementUnreadCorrection("conversation-1", 2, 3);
+
+    expect(useImStore.getState().unreadCorrections).toMatchObject({
+      "conversation-1": 3,
+    });
+    expect(useImStore.getState().unreadCorrectionMaxMessageSeqs).toMatchObject({
+      "conversation-1": 4,
+    });
+
+    useImStore.getState().clearUnreadCorrection("conversation-1");
+
+    expect(useImStore.getState().unreadCorrections).not.toHaveProperty(
+      "conversation-1",
+    );
+    expect(
+      useImStore.getState().unreadCorrectionMaxMessageSeqs,
+    ).not.toHaveProperty("conversation-1");
+  });
 });
