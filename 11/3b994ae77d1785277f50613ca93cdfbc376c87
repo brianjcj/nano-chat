@@ -1,0 +1,20 @@
+tests/auth_http.rs
+  ai_agent 202
+src/conversations/http.rs
+  ai_agent 3-6,58,60,68,71,86,88
+tests/conversations_http.rs
+  ai_agent 5,37-51
+src/error.rs
+  ai_agent 3,123-126
+src/users/types.rs
+  ai_agent 35,37
+docs/api.md
+  ai_agent 231
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "113b994ae77d1785277f50613ca93cdfbc376c87",
+  "prompts": {},
+  "logical_commit_id": "113b994ae77d1785277f50613ca93cdfbc376c87"
+}
