@@ -1,5 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryRouter, RouterProvider } from "react-router";
@@ -12,6 +12,7 @@ import {
   render,
 } from "@/app/test-utils";
 import { ConversationList } from "./ConversationList";
+import { imQueryKeys } from "@/features/im/api/imQueries";
 import { useImStore } from "@/features/im/state/imStore";
 import type { ApiClient } from "@/shared/api/client";
 import type { ConversationSummary, UserSummary } from "@/shared/api/types";
@@ -54,16 +55,19 @@ function conversation(
 }
 
 async function renderConversationList({
-  conversations,
+  conversations = [],
   initialEntries = ["/app/im"],
+  listConversations,
   queryClient = createQueryClient(),
 }: {
-  conversations: ConversationSummary[];
+  conversations?: ConversationSummary[];
   initialEntries?: string[];
+  listConversations?: ApiClient["listConversations"];
   queryClient?: QueryClient;
 }) {
   const apiClient = createFakeApiClient({
-    listConversations: vi.fn().mockResolvedValue(conversations),
+    listConversations:
+      listConversations ?? vi.fn().mockResolvedValue(conversations),
   } satisfies Partial<ApiClient>);
   const i18nInstance = await createAppI18n({
     language: "en-US",
@@ -105,15 +109,13 @@ describe("ConversationList", () => {
   });
 
   it("renders direct and group conversations with latest body, unread totals, and an active empty group", async () => {
-    useImStore.getState().incrementUnreadCorrection("direct-1", 3);
-
     await renderConversationList({
       conversations: [
         conversation({
           conversation_id: "direct-1",
           type: "direct",
           name: null,
-          unread_count: 2,
+          unread_count: 5,
           direct_user: directUser,
           latest_message: {
             message_id: "message-direct-1",
@@ -166,9 +168,55 @@ describe("ConversationList", () => {
     ).toBeInTheDocument();
   });
 
-  it("selects a conversation by navigating, setting current conversation, clearing local unread correction, and opening mobile chat", async () => {
+  it("clears local unread corrections when fresh conversation query data arrives", async () => {
+    const queryClient = createQueryClient();
+    const listConversations = vi
+      .fn<ApiClient["listConversations"]>()
+      .mockResolvedValueOnce([
+        conversation({
+          conversation_id: "direct-1",
+          type: "direct",
+          name: null,
+          unread_count: 2,
+          direct_user: directUser,
+        }),
+      ])
+      .mockResolvedValueOnce([
+        conversation({
+          conversation_id: "direct-1",
+          type: "direct",
+          name: null,
+          unread_count: 4,
+          direct_user: directUser,
+        }),
+      ]);
+
+    await renderConversationList({ listConversations, queryClient });
+
+    expect(await screen.findByText("Alice A.")).toBeInTheDocument();
+
+    act(() => {
+      useImStore.getState().incrementUnreadCorrection("direct-1", 3);
+    });
+    expect(await screen.findByLabelText("5 unread")).toHaveTextContent("5");
+
+    await act(async () => {
+      await queryClient.refetchQueries({
+        queryKey: imQueryKeys.conversations(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(listConversations).toHaveBeenCalledTimes(2);
+      expect(screen.getByLabelText("4 unread")).toHaveTextContent("4");
+    });
+    expect(useImStore.getState().unreadCorrections).not.toHaveProperty(
+      "direct-1",
+    );
+  });
+
+  it("selects a conversation by navigating, setting current conversation, preserving local unread correction, and opening mobile chat", async () => {
     const user = userEvent.setup();
-    useImStore.getState().incrementUnreadCorrection("direct-1", 3);
     const { router } = await renderConversationList({
       conversations: [
         conversation({
@@ -181,6 +229,13 @@ describe("ConversationList", () => {
       ],
     });
 
+    expect(await screen.findByText("Alice A.")).toBeInTheDocument();
+
+    act(() => {
+      useImStore.getState().incrementUnreadCorrection("direct-1", 3);
+    });
+    expect(await screen.findByLabelText("5 unread")).toHaveTextContent("5");
+
     await user.click(await screen.findByRole("button", { name: /Alice A\./ }));
 
     await waitFor(() => {
@@ -190,8 +245,8 @@ describe("ConversationList", () => {
     });
     expect(useImStore.getState().currentConversationId).toBe("direct-1");
     expect(useImStore.getState().mobilePanel).toBe("chat");
-    expect(useImStore.getState().unreadCorrections).not.toHaveProperty(
-      "direct-1",
-    );
+    expect(useImStore.getState().unreadCorrections).toMatchObject({
+      "direct-1": 3,
+    });
   });
 });

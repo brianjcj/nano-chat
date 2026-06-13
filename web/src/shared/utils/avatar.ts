@@ -57,7 +57,7 @@ export function getAvatarInitials(user: AvatarUser): string {
   if (words.length >= 2) {
     return [firstVisibleCharacter(words[0]), firstVisibleCharacter(words[1])]
       .join("")
-      .toLocaleUpperCase();
+      .toUpperCase();
   }
 
   const compactName = words[0] ?? source;
@@ -66,7 +66,7 @@ export function getAvatarInitials(user: AvatarUser): string {
     .slice(0, 2)
     .join("");
 
-  return (initials || INITIAL_FALLBACK).toLocaleUpperCase();
+  return (initials || INITIAL_FALLBACK).toUpperCase();
 }
 
 export function getAvatarGradient(userId: string) {

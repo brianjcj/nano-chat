@@ -1,5 +1,12 @@
 import { Languages, LogOut, PencilLine } from "lucide-react";
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useId,
+  useMemo,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 
@@ -27,6 +34,7 @@ export function UserMenu() {
   const navigate = useNavigate();
   const { clearSession, saveSession, session } = useSession();
   const { i18n, t } = useTranslation();
+  const disclosurePanelId = useId();
   const [isOpen, setIsOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -68,6 +76,15 @@ export function UserMenu() {
     setIsEditOpen(true);
   }
 
+  function closeDisclosureOnEscape(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Escape" || !isOpen) {
+      return;
+    }
+
+    event.stopPropagation();
+    setIsOpen(false);
+  }
+
   async function saveDisplayName(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -90,10 +107,10 @@ export function UserMenu() {
   }
 
   return (
-    <div className="relative">
+    <div className="relative" onKeyDown={closeDisclosureOnEscape}>
       <button
+        aria-controls={disclosurePanelId}
         aria-expanded={isOpen}
-        aria-haspopup="menu"
         aria-label={`${t("shell.userMenu.title")}: ${visibleName}`}
         className="group flex items-center gap-3 rounded-full border border-white/74 bg-white/78 py-1.5 pl-1.5 pr-4 text-left shadow-[0_18px_50px_var(--shadow-color)] backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:bg-white"
         onClick={() => setIsOpen((value) => !value)}
@@ -118,7 +135,12 @@ export function UserMenu() {
       </button>
 
       {isOpen ? (
-        <div className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-72 rounded-[calc(var(--radius)*1.05)] border border-white/78 bg-white/94 p-3 text-[var(--foreground)] shadow-[0_24px_70px_var(--shadow-color)] backdrop-blur">
+        <div
+          aria-label={t("shell.userMenu.title")}
+          className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-72 rounded-[calc(var(--radius)*1.05)] border border-white/78 bg-white/94 p-3 text-[var(--foreground)] shadow-[0_24px_70px_var(--shadow-color)] backdrop-blur"
+          id={disclosurePanelId}
+          role="region"
+        >
           <div className="mb-3 flex items-center gap-3 rounded-[calc(var(--radius)*0.85)] bg-[var(--surface-muted)]/70 p-3">
             <span
               className={cn(

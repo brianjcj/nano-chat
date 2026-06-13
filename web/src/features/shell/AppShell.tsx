@@ -33,14 +33,14 @@ export function AppShell() {
   }, [conversationId, setCurrentConversationId, setMobilePanel]);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
+    <div className="relative h-dvh min-h-0 overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_8%,rgb(255_190_164_/_38%),transparent_28rem),radial-gradient(circle_at_88%_10%,rgb(138_109_255_/_16%),transparent_24rem),linear-gradient(135deg,rgb(255_255_255_/_28%),transparent_45%)]" />
-      <div className="relative flex min-h-screen">
+      <div className="relative flex h-full min-h-0">
         <DesktopRail />
-        <div className="flex min-w-0 flex-1">
+        <div className="flex h-full min-h-0 min-w-0 flex-1">
           <aside
             className={cn(
-              "min-h-screen min-w-0 flex-1 border-r border-white/70 bg-white/32 pb-24 backdrop-blur-xl md:flex md:max-w-[24rem] md:flex-none md:pb-0",
+              "h-full min-h-0 min-w-0 flex-1 flex-col border-r border-white/70 bg-white/32 pb-24 backdrop-blur-xl md:flex md:max-w-[24rem] md:flex-none md:pb-0",
               mobilePanel === "conversations" ? "flex" : "hidden md:flex",
             )}
           >
@@ -50,7 +50,7 @@ export function AppShell() {
           <main
             aria-label={t("shell.mainWorkspace")}
             className={cn(
-              "min-h-screen min-w-0 flex-1 pb-24 md:flex md:pb-0",
+              "h-full min-h-0 min-w-0 flex-1 flex-col pb-24 md:flex md:pb-0",
               mobilePanel === "chat" ? "flex" : "hidden md:flex",
             )}
           >
@@ -101,7 +101,7 @@ function Workspace({ conversationId }: { conversationId: string | null }) {
   }
 
   return (
-    <section className="flex min-h-screen w-full flex-col px-5 py-5 md:px-8 md:py-8">
+    <section className="flex h-full min-h-0 w-full flex-col px-5 py-5 md:px-8 md:py-8">
       <div className="mb-5 flex items-center justify-between md:hidden">
         {conversationId ? (
           <button
@@ -117,7 +117,7 @@ function Workspace({ conversationId }: { conversationId: string | null }) {
         )}
       </div>
 
-      <div className="flex flex-1 items-center justify-center">
+      <div className="flex min-h-0 flex-1 items-center justify-center">
         <div className="relative w-full max-w-3xl overflow-hidden rounded-[calc(var(--radius)*1.45)] border border-white/72 bg-white/64 p-8 shadow-[0_30px_90px_var(--shadow-color)] backdrop-blur md:p-12">
           <div className="absolute -right-20 -top-24 size-56 rounded-full bg-[color-mix(in_oklab,var(--primary)_18%,transparent)] blur-3xl" />
           <div className="absolute -bottom-24 -left-20 size-60 rounded-full bg-[color-mix(in_oklab,var(--accent)_16%,transparent)] blur-3xl" />

@@ -169,21 +169,23 @@ function updateConversationLatestMessage(
         return conversations;
       }
 
-      return conversations.map((conversation) => {
-        if (conversation.conversation_id !== conversationId) {
-          return conversation;
-        }
+      return conversations
+        .map((conversation) => {
+          if (conversation.conversation_id !== conversationId) {
+            return conversation;
+          }
 
-        if (message.message_seq < conversation.latest_message_seq) {
-          return conversation;
-        }
+          if (message.message_seq < conversation.latest_message_seq) {
+            return conversation;
+          }
 
-        return {
-          ...conversation,
-          latest_message_seq: message.message_seq,
-          latest_message: toLatestMessage(message),
-        };
-      });
+          return {
+            ...conversation,
+            latest_message_seq: message.message_seq,
+            latest_message: toLatestMessage(message),
+          };
+        })
+        .sort(compareConversationLatestMessage);
     },
   );
 }
@@ -312,6 +314,53 @@ function toLatestMessage(message: Message): ConversationSummary["latest_message"
     body: message.body,
     created_at: message.created_at,
   };
+}
+
+function compareConversationLatestMessage(
+  left: ConversationSummary,
+  right: ConversationSummary,
+) {
+  const leftHasLatestMessage = Boolean(left.latest_message);
+  const rightHasLatestMessage = Boolean(right.latest_message);
+
+  if (leftHasLatestMessage !== rightHasLatestMessage) {
+    return leftHasLatestMessage ? -1 : 1;
+  }
+
+  if (!leftHasLatestMessage && !rightHasLatestMessage) {
+    return 0;
+  }
+
+  const leftCreatedAt = parseLatestMessageCreatedAt(left);
+  const rightCreatedAt = parseLatestMessageCreatedAt(right);
+
+  if (
+    leftCreatedAt !== null &&
+    rightCreatedAt !== null &&
+    leftCreatedAt !== rightCreatedAt
+  ) {
+    return rightCreatedAt - leftCreatedAt;
+  }
+
+  const latestSeqComparison = right.latest_message_seq - left.latest_message_seq;
+
+  if (latestSeqComparison !== 0) {
+    return latestSeqComparison;
+  }
+
+  return 0;
+}
+
+function parseLatestMessageCreatedAt(conversation: ConversationSummary) {
+  const createdAt = conversation.latest_message?.created_at;
+
+  if (!createdAt) {
+    return null;
+  }
+
+  const timestamp = Date.parse(createdAt);
+
+  return Number.isFinite(timestamp) ? timestamp : null;
 }
 
 function compareMessageSeq(left: Message, right: Message) {

@@ -132,6 +132,54 @@ describe("IM realtime cache updates", () => {
     ).toHaveLength(1);
   });
 
+  it("resorts conversations after a realtime latest-message update while keeping empty groups stable", () => {
+    const queryClient = createQueryClient();
+    const olderMessage = makeMessage(2, "conversation-older");
+    const staleMessage = makeMessage(1, "conversation-target");
+    const incomingMessage = makeMessage(3, "conversation-target");
+    queryClient.setQueryData(imQueryKeys.conversations(), [
+      makeConversation("conversation-older", olderMessage),
+      makeConversation("empty-group-a", makeMessage(0, "empty-group-a")),
+      makeConversation("conversation-target", staleMessage),
+      makeConversation("empty-group-b", makeMessage(0, "empty-group-b")),
+    ]);
+    queryClient.setQueryData<ConversationSummary[]>(
+      imQueryKeys.conversations(),
+      (conversations) =>
+        conversations?.map((conversation) =>
+          conversation.conversation_id.startsWith("empty-group")
+            ? {
+                ...conversation,
+                latest_message_seq: 0,
+                latest_message: null,
+              }
+            : conversation,
+        ),
+    );
+
+    applyRealtimeEvent({
+      queryClient,
+      store: useImStore,
+      event: messageCreated(incomingMessage),
+    });
+
+    const conversations = queryClient.getQueryData<ConversationSummary[]>(
+      imQueryKeys.conversations(),
+    );
+    expect(
+      conversations?.map((conversation) => conversation.conversation_id),
+    ).toEqual([
+      "conversation-target",
+      "conversation-older",
+      "empty-group-a",
+      "empty-group-b",
+    ]);
+    expect(conversations?.[0]?.latest_message).toMatchObject({
+      message_id: incomingMessage.message_id,
+      message_seq: 3,
+    });
+  });
+
   it("does not create a message cache for message.created when the conversation messages are not loaded", () => {
     const queryClient = createQueryClient();
     const message = makeMessage(1, "conversation-2");
