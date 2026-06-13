@@ -44,6 +44,29 @@ struct MemberStateRow {
     state: String,
 }
 
+#[derive(Debug, sqlx::FromRow)]
+struct MarkReadRow {
+    read_seq: i64,
+    old_read_seq: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarkReadResult {
+    pub read_seq: i64,
+    pub changed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddMemberResult {
+    pub member: ConversationMember,
+    pub newly_added: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LeaveGroupResult {
+    pub dissolved: bool,
+}
+
 impl From<ConversationSummaryRow> for ConversationSummary {
     fn from(row: ConversationSummaryRow) -> Self {
         Self {
@@ -202,6 +225,19 @@ pub async fn add_member(
     conversation_id: Uuid,
     member_user_id: Uuid,
 ) -> AppResult<ConversationMember> {
+    Ok(
+        add_member_with_status(pool, requester_user_id, conversation_id, member_user_id)
+            .await?
+            .member,
+    )
+}
+
+pub async fn add_member_with_status(
+    pool: &PgPool,
+    requester_user_id: Uuid,
+    conversation_id: Uuid,
+    member_user_id: Uuid,
+) -> AppResult<AddMemberResult> {
     let mut tx = pool.begin().await.map_err(internal_error)?;
     let conversation = lock_conversation(&mut tx, conversation_id).await?;
     ensure_group_conversation(&conversation)?;
@@ -224,7 +260,10 @@ pub async fn add_member(
     match existing_member.as_ref().map(|row| row.state.as_str()) {
         Some("active") => {
             tx.commit().await.map_err(internal_error)?;
-            return Ok(member.into());
+            return Ok(AddMemberResult {
+                member: member.into(),
+                newly_added: false,
+            });
         }
         Some("left") | None => {}
         Some(_) => return Err(internal_error_message("Invalid conversation member state")),
@@ -290,10 +329,22 @@ pub async fn add_member(
         .map_err(internal_error)?;
 
     tx.commit().await.map_err(internal_error)?;
-    Ok(member.into())
+    Ok(AddMemberResult {
+        member: member.into(),
+        newly_added: true,
+    })
 }
 
 pub async fn leave_group(pool: &PgPool, user_id: Uuid, conversation_id: Uuid) -> AppResult<()> {
+    leave_group_with_status(pool, user_id, conversation_id).await?;
+    Ok(())
+}
+
+pub async fn leave_group_with_status(
+    pool: &PgPool,
+    user_id: Uuid,
+    conversation_id: Uuid,
+) -> AppResult<LeaveGroupResult> {
     let mut tx = pool.begin().await.map_err(internal_error)?;
     let conversation = lock_conversation(&mut tx, conversation_id).await?;
     ensure_group_conversation(&conversation)?;
@@ -330,7 +381,8 @@ pub async fn leave_group(pool: &PgPool, user_id: Uuid, conversation_id: Uuid) ->
     .map_err(internal_error)?;
 
     let remaining_active_members = active_member_count_tx(&mut tx, conversation_id).await?;
-    if remaining_active_members == 0 {
+    let dissolved = remaining_active_members == 0;
+    if dissolved {
         sqlx::query(
             "update conversations
              set state = 'dissolved', dissolved_at = $2, updated_at = $2
@@ -351,7 +403,7 @@ pub async fn leave_group(pool: &PgPool, user_id: Uuid, conversation_id: Uuid) ->
     }
 
     tx.commit().await.map_err(internal_error)?;
-    Ok(())
+    Ok(LeaveGroupResult { dissolved })
 }
 
 pub async fn active_member_ids(pool: &PgPool, conversation_id: Uuid) -> AppResult<Vec<Uuid>> {
@@ -398,6 +450,19 @@ pub async fn mark_read(
     conversation_id: Uuid,
     read_seq: i64,
 ) -> AppResult<i64> {
+    Ok(
+        mark_read_with_status(pool, user_id, conversation_id, read_seq)
+            .await?
+            .read_seq,
+    )
+}
+
+pub async fn mark_read_with_status(
+    pool: &PgPool,
+    user_id: Uuid,
+    conversation_id: Uuid,
+    read_seq: i64,
+) -> AppResult<MarkReadResult> {
     if read_seq < 0 {
         return Err(AppError::invalid_request(
             "read_seq must be greater than or equal to 0",
@@ -407,13 +472,24 @@ pub async fn mark_read(
     let conversation = get_conversation(pool, conversation_id).await?;
     ensure_not_dissolved(&conversation)?;
 
-    sqlx::query_scalar::<_, i64>(
-        "update conversation_members
-         set read_seq = greatest(read_seq, least($3, $4))
-         where conversation_id = $1
-           and user_id = $2
-           and state = 'active'
-         returning read_seq",
+    let row = sqlx::query_as::<_, MarkReadRow>(
+        "with target as (
+             select read_seq as old_read_seq
+             from conversation_members
+             where conversation_id = $1
+               and user_id = $2
+               and state = 'active'
+             for update
+         ), updated as (
+             update conversation_members cm
+             set read_seq = greatest(cm.read_seq, least($3, $4))
+             from target
+             where cm.conversation_id = $1
+               and cm.user_id = $2
+               and cm.state = 'active'
+             returning cm.read_seq, target.old_read_seq
+         )
+         select read_seq, old_read_seq from updated",
     )
     .bind(conversation_id)
     .bind(user_id)
@@ -422,7 +498,12 @@ pub async fn mark_read(
     .fetch_optional(pool)
     .await
     .map_err(internal_error)?
-    .ok_or_else(not_conversation_member)
+    .ok_or_else(not_conversation_member)?;
+
+    Ok(MarkReadResult {
+        read_seq: row.read_seq,
+        changed: row.read_seq > row.old_read_seq,
+    })
 }
 
 fn normalize_group_name(name: String) -> AppResult<String> {

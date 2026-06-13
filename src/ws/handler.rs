@@ -22,11 +22,11 @@ use crate::{
     auth::{service as auth_service, types::CurrentUser},
     conversations::service as conversations_service,
     error::{AppError, AppResult, ErrorCode},
-    messages::{
-        service as messages_service,
-        types::{DirectTarget, MessageDto},
+    messages::{service as messages_service, types::DirectTarget},
+    realtime::{
+        notify::fanout_notify_payload,
+        types::{ConnectionId, RealtimeEvent, RealtimeNotifyPayload},
     },
-    realtime::types::ConnectionId,
     time::{now_utc, to_rfc3339_utc},
     ws::protocol::{
         ClientEnvelope, ConversationReadPayload, DirectMessageSendPayload, HeartbeatPingPayload,
@@ -252,7 +252,8 @@ async fn dispatch_client_envelope(
                 .await
         }
         "conversation.read" => {
-            handle_conversation_read(state, current_user, outbound_tx, envelope).await
+            handle_conversation_read(state, current_user, connection_id, outbound_tx, envelope)
+                .await
         }
         "heartbeat.ping" => handle_heartbeat_ping(outbound_tx, envelope).await,
         _ => {
@@ -297,11 +298,13 @@ async fn handle_message_send(
                 return false;
             }
             if newly_created {
-                fanout_message_created(
+                publish_realtime_event(
                     state,
-                    result.conversation_id,
-                    result.message,
-                    connection_id,
+                    Some(connection_id),
+                    RealtimeEvent::MessageCreated {
+                        conversation_id: result.conversation_id,
+                        message: result.message,
+                    },
                 )
                 .await;
             }
@@ -348,11 +351,13 @@ async fn handle_direct_message_send(
                 return false;
             }
             if newly_created {
-                fanout_message_created(
+                publish_realtime_event(
                     state,
-                    result.conversation_id,
-                    result.message,
-                    connection_id,
+                    Some(connection_id),
+                    RealtimeEvent::MessageCreated {
+                        conversation_id: result.conversation_id,
+                        message: result.message,
+                    },
                 )
                 .await;
             }
@@ -365,6 +370,7 @@ async fn handle_direct_message_send(
 async fn handle_conversation_read(
     state: &AppState,
     current_user: &CurrentUser,
+    connection_id: ConnectionId,
     outbound_tx: &mpsc::Sender<ServerEnvelope>,
     envelope: ClientEnvelope,
 ) -> bool {
@@ -376,7 +382,7 @@ async fn handle_conversation_read(
         }
     };
 
-    match conversations_service::mark_read(
+    match conversations_service::mark_read_with_status(
         &state.pool,
         current_user.user_id,
         payload.conversation_id,
@@ -384,14 +390,30 @@ async fn handle_conversation_read(
     )
     .await
     {
-        Ok(read_seq) => {
-            send_ok(
+        Ok(result) => {
+            if !send_ok(
                 outbound_tx,
                 id,
                 "conversation.read.ok",
-                json!({"conversation_id": payload.conversation_id, "read_seq": read_seq}),
+                json!({"conversation_id": payload.conversation_id, "read_seq": result.read_seq}),
             )
             .await
+            {
+                return false;
+            }
+            if result.changed {
+                publish_realtime_event(
+                    state,
+                    Some(connection_id),
+                    RealtimeEvent::ConversationReadUpdated {
+                        conversation_id: payload.conversation_id,
+                        user_id: current_user.user_id,
+                        read_seq: result.read_seq,
+                    },
+                )
+                .await;
+            }
+            true
         }
         Err(error) => send_app_error(outbound_tx, id, error).await,
     }
@@ -418,36 +440,24 @@ async fn handle_heartbeat_ping(
     .await
 }
 
-async fn fanout_message_created(
+async fn publish_realtime_event(
     state: &AppState,
-    conversation_id: Uuid,
-    message: MessageDto,
-    origin_connection_id: ConnectionId,
+    origin_connection_id: Option<ConnectionId>,
+    event: RealtimeEvent,
 ) {
-    match conversations_service::visible_user_ids_for_message(
-        &state.pool,
-        conversation_id,
-        message.message_seq,
-    )
-    .await
-    {
-        Ok(user_ids) => {
-            state.registry.send_to_users(
-                user_ids,
-                ServerEnvelope::event(
-                    "message.created",
-                    json!({"conversation_id": conversation_id, "message": message}),
-                ),
-                Some(origin_connection_id),
-            );
-        }
-        Err(error) => {
-            tracing::warn!(
-                code = error.code.as_str(),
-                %conversation_id,
-                "failed to resolve local websocket fanout recipients"
-            );
-        }
+    let event_type = event.event_type();
+    let payload = RealtimeNotifyPayload {
+        origin_instance_id: state.instance_id.clone(),
+        origin_connection_id,
+        event,
+    };
+
+    if let Err(error) = fanout_notify_payload(&state.pool, &state.registry, &payload).await {
+        tracing::warn!(%error, event_type, "failed to fan out websocket realtime event locally");
+    }
+
+    if let Err(error) = state.notify_publisher.publish(&payload).await {
+        tracing::warn!(%error, event_type, "failed to publish websocket realtime notify event");
     }
 }
 

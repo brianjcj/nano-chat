@@ -1,0 +1,221 @@
+use sqlx::{PgPool, postgres::PgListener};
+use tokio::task::JoinHandle;
+use uuid::Uuid;
+
+use crate::{
+    conversations::service as conversations_service,
+    error::AppError,
+    realtime::{
+        connection_registry::ConnectionRegistry,
+        types::{RealtimeEvent, RealtimeNotifyPayload, RealtimeNotifyPayloadError},
+    },
+};
+
+#[derive(Debug, thiserror::Error)]
+pub enum NotifyError {
+    #[error(transparent)]
+    Payload(#[from] RealtimeNotifyPayloadError),
+    #[error(transparent)]
+    Database(#[from] sqlx::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum NotifyFanoutError {
+    #[error(transparent)]
+    App(#[from] AppError),
+    #[error(transparent)]
+    Database(#[from] sqlx::Error),
+}
+
+#[derive(Clone)]
+pub struct NotifyPublisher {
+    pool: PgPool,
+    channel: String,
+}
+
+impl NotifyPublisher {
+    pub fn new(pool: PgPool, channel: impl Into<String>) -> Self {
+        Self {
+            pool,
+            channel: channel.into(),
+        }
+    }
+
+    pub async fn publish(&self, payload: &RealtimeNotifyPayload) -> Result<(), NotifyError> {
+        let encoded = payload.to_pg_notify_payload()?;
+        sqlx::query("select pg_notify($1, $2)")
+            .bind(&self.channel)
+            .bind(encoded)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+}
+
+pub struct NotifyListener {
+    listener: PgListener,
+    channel: String,
+    local_instance_id: String,
+    pool: PgPool,
+    registry: ConnectionRegistry,
+}
+
+impl NotifyListener {
+    pub async fn connect(
+        database_url: &str,
+        channel: impl Into<String>,
+        local_instance_id: impl Into<String>,
+        pool: PgPool,
+        registry: ConnectionRegistry,
+    ) -> Result<Self, NotifyError> {
+        let channel = channel.into();
+        let mut listener = PgListener::connect(database_url).await?;
+        listener.listen(&channel).await?;
+        Ok(Self {
+            listener,
+            channel,
+            local_instance_id: local_instance_id.into(),
+            pool,
+            registry,
+        })
+    }
+
+    pub async fn start(
+        database_url: &str,
+        channel: impl Into<String>,
+        local_instance_id: impl Into<String>,
+        pool: PgPool,
+        registry: ConnectionRegistry,
+    ) -> Result<JoinHandle<()>, NotifyError> {
+        Ok(
+            Self::connect(database_url, channel, local_instance_id, pool, registry)
+                .await?
+                .spawn(),
+        )
+    }
+
+    pub fn spawn(self) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            if let Err(error) = self.run().await {
+                tracing::error!(%error, "postgres notify listener stopped");
+            }
+        })
+    }
+
+    pub async fn run(mut self) -> Result<(), NotifyError> {
+        loop {
+            let notification = self.listener.recv().await?;
+            if notification.channel() != self.channel {
+                continue;
+            }
+
+            let payload =
+                match RealtimeNotifyPayload::from_pg_notify_payload(notification.payload()) {
+                    Ok(payload) => payload,
+                    Err(error) => {
+                        tracing::warn!(%error, "discarding invalid realtime notify payload");
+                        continue;
+                    }
+                };
+
+            if payload.origin_instance_id == self.local_instance_id {
+                continue;
+            }
+
+            match fanout_notify_payload(&self.pool, &self.registry, &payload).await {
+                Ok(delivered) => {
+                    tracing::debug!(
+                        delivered,
+                        event_type = payload.event.event_type(),
+                        "delivered realtime notify payload to local websocket connections"
+                    );
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        %error,
+                        event_type = payload.event.event_type(),
+                        "failed to fan out realtime notify payload"
+                    );
+                }
+            }
+        }
+    }
+}
+
+pub async fn fanout_notify_payload(
+    pool: &PgPool,
+    registry: &ConnectionRegistry,
+    payload: &RealtimeNotifyPayload,
+) -> Result<usize, NotifyFanoutError> {
+    let envelope = payload.event.server_envelope();
+    let skip_connection_id = payload.origin_connection_id;
+    let delivered = match &payload.event {
+        RealtimeEvent::MessageCreated {
+            conversation_id,
+            message,
+        } => {
+            let user_ids = conversations_service::visible_user_ids_for_message(
+                pool,
+                *conversation_id,
+                message.message_seq,
+            )
+            .await?;
+            registry.send_to_users(user_ids, envelope, skip_connection_id)
+        }
+        RealtimeEvent::ConversationReadUpdated {
+            conversation_id, ..
+        }
+        | RealtimeEvent::ConversationMemberAdded {
+            conversation_id, ..
+        } => {
+            let user_ids = conversations_service::active_member_ids(pool, *conversation_id).await?;
+            registry.send_to_users(user_ids, envelope, skip_connection_id)
+        }
+        RealtimeEvent::ConversationMemberLeft {
+            conversation_id,
+            user_id,
+        } => {
+            let user_ids = active_or_specific_member_ids(pool, *conversation_id, *user_id).await?;
+            registry.send_to_users(user_ids, envelope, skip_connection_id)
+        }
+        RealtimeEvent::ConversationDissolved { conversation_id } => {
+            let user_ids = all_conversation_member_ids(pool, *conversation_id).await?;
+            registry.send_to_users(user_ids, envelope, skip_connection_id)
+        }
+        RealtimeEvent::ServerDraining => registry.send_to_all(envelope, skip_connection_id),
+    };
+    Ok(delivered)
+}
+
+async fn active_or_specific_member_ids(
+    pool: &PgPool,
+    conversation_id: Uuid,
+    user_id: Uuid,
+) -> Result<Vec<Uuid>, sqlx::Error> {
+    sqlx::query_scalar::<_, Uuid>(
+        "select user_id
+         from conversation_members
+         where conversation_id = $1
+           and (state = 'active' or user_id = $2)
+         order by user_id",
+    )
+    .bind(conversation_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
+async fn all_conversation_member_ids(
+    pool: &PgPool,
+    conversation_id: Uuid,
+) -> Result<Vec<Uuid>, sqlx::Error> {
+    sqlx::query_scalar::<_, Uuid>(
+        "select user_id
+         from conversation_members
+         where conversation_id = $1
+         order by user_id",
+    )
+    .bind(conversation_id)
+    .fetch_all(pool)
+    .await
+}

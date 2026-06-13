@@ -3,6 +3,7 @@ use nano_chat::{
     app::{AppState, build_router},
     config::Config,
     db,
+    realtime::notify::NotifyListener,
 };
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
@@ -15,7 +16,16 @@ async fn main() -> anyhow::Result<()> {
 
     let pool = db::create_lazy_pool(&config.database_url)?;
     let bind_addr = config.bind_addr.clone();
-    let app = build_router(AppState::new(config, pool)).layer(TraceLayer::new_for_http());
+    let state = AppState::new(config, pool);
+    let _notify_listener = NotifyListener::start(
+        &state.config.database_url,
+        state.config.notify_channel.clone(),
+        state.instance_id.clone(),
+        state.pool.clone(),
+        state.registry.clone(),
+    )
+    .await?;
+    let app = build_router(state).layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind(&bind_addr)
         .await

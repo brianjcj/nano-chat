@@ -26,7 +26,7 @@ pub struct ConversationSummary {
     pub active_member_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConversationMember {
     pub user_id: Uuid,
     pub username: String,

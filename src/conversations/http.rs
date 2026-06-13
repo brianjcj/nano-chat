@@ -19,6 +19,10 @@ use crate::{
     },
     error::{AppError, AppResult},
     messages::{service as message_service, types::MessageCursor},
+    realtime::{
+        notify::fanout_notify_payload,
+        types::{RealtimeEvent, RealtimeNotifyPayload},
+    },
 };
 
 pub fn router() -> Router<AppState> {
@@ -88,14 +92,24 @@ async fn add_member(
 ) -> AppResult<impl IntoResponse> {
     let Path(conversation_id) = conversation_id.map_err(AppError::from_path_rejection)?;
     let Json(request) = request.map_err(AppError::from_json_rejection)?;
-    let member = service::add_member(
+    let result = service::add_member_with_status(
         &state.pool,
         current_user.user_id,
         conversation_id,
         request.user_id,
     )
     .await?;
-    Ok(Json(member))
+    if result.newly_added {
+        publish_conversation_event(
+            &state,
+            RealtimeEvent::ConversationMemberAdded {
+                conversation_id,
+                member: result.member.clone(),
+            },
+        )
+        .await;
+    }
+    Ok(Json(result.member))
 }
 
 async fn leave_group(
@@ -104,6 +118,39 @@ async fn leave_group(
     conversation_id: Result<Path<Uuid>, PathRejection>,
 ) -> AppResult<StatusCode> {
     let Path(conversation_id) = conversation_id.map_err(AppError::from_path_rejection)?;
-    service::leave_group(&state.pool, current_user.user_id, conversation_id).await?;
+    let result =
+        service::leave_group_with_status(&state.pool, current_user.user_id, conversation_id)
+            .await?;
+    publish_conversation_event(
+        &state,
+        RealtimeEvent::ConversationMemberLeft {
+            conversation_id,
+            user_id: current_user.user_id,
+        },
+    )
+    .await;
+    if result.dissolved {
+        publish_conversation_event(
+            &state,
+            RealtimeEvent::ConversationDissolved { conversation_id },
+        )
+        .await;
+    }
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn publish_conversation_event(state: &AppState, event: RealtimeEvent) {
+    let payload = RealtimeNotifyPayload {
+        origin_instance_id: state.instance_id.clone(),
+        origin_connection_id: None,
+        event,
+    };
+
+    if let Err(error) = fanout_notify_payload(&state.pool, &state.registry, &payload).await {
+        tracing::warn!(%error, "failed to fan out conversation realtime event locally");
+    }
+
+    if let Err(error) = state.notify_publisher.publish(&payload).await {
+        tracing::warn!(%error, "failed to publish conversation realtime notify event");
+    }
 }

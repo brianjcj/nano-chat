@@ -458,21 +458,84 @@ Success type: `heartbeat.pong`.
 
 Recommended client heartbeat interval is the configured server interval, default `30` seconds. Connections that do not send any valid envelope for the idle timeout, default `90` seconds, are removed from the local registry and closed.
 
-### Local event fan-out
+### Realtime event fan-out
 
-After a successful `message.send` or `direct_message.send`, other local WebSocket connections for users whose visibility spans include the created message sequence are eligible to receive:
+After successful state changes, the server fans out WebSocket events locally and publishes a small JSON payload on Postgres `LISTEN/NOTIFY` so other Nano Chat instances can fan out to their own local registries. The channel is configured by `NANO_CHAT_NOTIFY_CHANNEL` and defaults to `nano_chat_events`.
+
+Realtime notifications are best-effort and at-most-once. They are not the source of truth: message history and conversation sync APIs remain authoritative. Clients should track the highest contiguous `message_seq` seen per conversation. If a `message.created` event reveals a sequence gap, reconnects occur, or the client suspects missed events, recover by calling `GET /api/v1/conversations/{conversation_id}/messages?after_seq=<last_contiguous_seq>`.
+
+`message.created` is emitted only for newly inserted messages. Idempotent retries that return an existing message do not emit another event. Recipients are users whose visibility spans include the created `message_seq`, so former group members do not receive messages sent after they left.
 
 ```json
 {
   "type": "message.created",
   "payload": {
     "conversation_id": "018f0000-0000-7000-8000-000000000010",
-    "message": {}
+    "message": {
+      "message_id": "018f0000-0000-7000-8000-000000000020",
+      "conversation_id": "018f0000-0000-7000-8000-000000000010",
+      "message_seq": 12,
+      "sender": {
+        "user_id": "018f0000-0000-7000-8000-000000000001",
+        "username": "alice",
+        "display_name": "Alice"
+      },
+      "body": "hello",
+      "created_at": "2026-06-13T00:00:00.000Z"
+    }
   }
 }
 ```
 
-The origin connection receives only `message.send.ok` or `direct_message.send.ok`; it does not receive a duplicate `message.created` event for its own command. Idempotent retries that return an existing message do not emit another `message.created` event. Other connections owned by the same user can receive the event. Fan-out uses bounded per-connection queues; recipients whose local queue is full or closed are skipped. This fan-out is instance-local only until cross-instance Postgres `LISTEN/NOTIFY` is added.
+Other events use the same server envelope shape:
+
+```json
+{
+  "type": "conversation.read_updated",
+  "payload": {
+    "conversation_id": "018f0000-0000-7000-8000-000000000010",
+    "user_id": "018f0000-0000-7000-8000-000000000001",
+    "read_seq": 12
+  }
+}
+```
+
+```json
+{
+  "type": "conversation.member_added",
+  "payload": {
+    "conversation_id": "018f0000-0000-7000-8000-000000000010",
+    "member": {
+      "user_id": "018f0000-0000-7000-8000-000000000003",
+      "username": "carol",
+      "display_name": "Carol"
+    }
+  }
+}
+```
+
+```json
+{
+  "type": "conversation.member_left",
+  "payload": {
+    "conversation_id": "018f0000-0000-7000-8000-000000000010",
+    "user_id": "018f0000-0000-7000-8000-000000000003"
+  }
+}
+```
+
+```json
+{
+  "type": "conversation.dissolved",
+  "payload": {
+    "conversation_id": "018f0000-0000-7000-8000-000000000010"
+  }
+}
+```
+
+The origin WebSocket connection receives only its command response, such as `message.send.ok`, `direct_message.send.ok`, or `conversation.read.ok`; it does not receive a duplicate event for that same command. Other connections owned by the same user can receive the event. HTTP-originated membership events do not have an origin WebSocket connection to skip. Fan-out uses bounded per-connection queues; recipients whose local queue is full or closed are skipped.
+
+Postgres NOTIFY payloads include `origin_instance_id`, optional `origin_connection_id`, and the event, and are rejected by the server if the serialized payload is 8000 bytes or larger. The receiving instance uses the same visibility rules as local delivery and ignores notifications published by its own `origin_instance_id` to avoid duplicates. Cross-instance fan-out does not require sticky sessions.
 
 ## Error Format
 

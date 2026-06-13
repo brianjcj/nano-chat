@@ -180,6 +180,27 @@ impl ConnectionRegistry {
             .count()
     }
 
+    pub fn send_to_all(
+        &self,
+        envelope: ServerEnvelope,
+        skip_connection_id: Option<ConnectionId>,
+    ) -> usize {
+        let targets = {
+            let inner = self.lock_inner();
+            inner
+                .connections
+                .iter()
+                .filter(|(connection_id, _)| Some(**connection_id) != skip_connection_id)
+                .map(|(_, connection)| connection.sender.clone())
+                .collect::<Vec<_>>()
+        };
+
+        targets
+            .into_iter()
+            .filter(|sender| sender.try_send(envelope.clone()).is_ok())
+            .count()
+    }
+
     pub fn cleanup_idle(&self, now: DateTime<Utc>, idle_timeout: Duration) -> Vec<ConnectionId> {
         let cutoff = now - idle_timeout;
         let mut inner = self.lock_inner();
