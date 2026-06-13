@@ -1,8 +1,8 @@
 use axum::{
     Json, Router,
     extract::{
-        Path, State,
-        rejection::{JsonRejection, PathRejection},
+        Path, Query, State,
+        rejection::{JsonRejection, PathRejection, QueryRejection},
     },
     http::StatusCode,
     response::IntoResponse,
@@ -18,12 +18,17 @@ use crate::{
         types::{AddMemberRequest, CreateGroupRequest},
     },
     error::{AppError, AppResult},
+    messages::{service as message_service, types::MessageCursor},
 };
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/conversations", get(list_conversations))
         .route("/conversations/groups", post(create_group))
+        .route(
+            "/conversations/{conversation_id}/messages",
+            get(list_messages),
+        )
         .route(
             "/conversations/{conversation_id}/members",
             get(list_members).post(add_member),
@@ -50,6 +55,19 @@ async fn create_group(
     let Json(request) = request.map_err(AppError::from_json_rejection)?;
     let group = service::create_group(&state.pool, current_user.user_id, request).await?;
     Ok((StatusCode::CREATED, Json(group)))
+}
+
+async fn list_messages(
+    current_user: CurrentUser,
+    State(state): State<AppState>,
+    conversation_id: Result<Path<Uuid>, PathRejection>,
+    cursor: Result<Query<MessageCursor>, QueryRejection>,
+) -> AppResult<impl IntoResponse> {
+    let Path(conversation_id) = conversation_id.map_err(AppError::from_path_rejection)?;
+    let Query(cursor) = cursor.map_err(AppError::from_query_rejection)?;
+    let messages =
+        message_service::list_messages(&state.pool, current_user, conversation_id, cursor).await?;
+    Ok(Json(messages))
 }
 
 async fn list_members(

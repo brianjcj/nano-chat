@@ -1,16 +1,21 @@
 use axum::{
-    Router,
+    Json, Router,
     body::Body,
     http::{
         Request, StatusCode,
         header::{AUTHORIZATION, CONTENT_TYPE},
     },
-    response::Response,
+    response::{IntoResponse, Response},
 };
 use http_body_util::BodyExt;
 use nano_chat::{
     app::{AppState, build_router},
+    auth::types::CurrentUser,
     config::Config,
+    messages::{
+        service as messages_service,
+        types::{DirectTarget, SendMessageResult},
+    },
 };
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::{Value, json};
@@ -195,6 +200,125 @@ impl TestContext {
         );
         self.app.clone().oneshot(request).await.unwrap()
     }
+
+    pub async fn send_direct_message(
+        &self,
+        user: &TestUser,
+        target_username: &str,
+        client_msg_id: &str,
+        body: &str,
+    ) -> SendMessageResult {
+        messages_service::send_direct_message(
+            &self.pool,
+            user.current_user(),
+            DirectTarget::Username(target_username.to_string()),
+            client_msg_id.to_string(),
+            body.to_string(),
+        )
+        .await
+        .expect("direct message should send")
+    }
+
+    pub async fn send_direct_message_raw(
+        &self,
+        user: &TestUser,
+        target_username: &str,
+        client_msg_id: &str,
+        body: &str,
+    ) -> Response {
+        match messages_service::send_direct_message(
+            &self.pool,
+            user.current_user(),
+            DirectTarget::Username(target_username.to_string()),
+            client_msg_id.to_string(),
+            body.to_string(),
+        )
+        .await
+        {
+            Ok(result) => (StatusCode::OK, Json(result)).into_response(),
+            Err(error) => error.into_response(),
+        }
+    }
+
+    pub async fn send_message(
+        &self,
+        user: &TestUser,
+        conversation_id: Uuid,
+        client_msg_id: &str,
+        body: &str,
+    ) -> SendMessageResult {
+        messages_service::send_message(
+            &self.pool,
+            user.current_user(),
+            conversation_id,
+            client_msg_id.to_string(),
+            body.to_string(),
+        )
+        .await
+        .expect("message should send")
+    }
+
+    pub async fn send_message_raw(
+        &self,
+        user: &TestUser,
+        conversation_id: Uuid,
+        client_msg_id: &str,
+        body: &str,
+    ) -> Response {
+        match messages_service::send_message(
+            &self.pool,
+            user.current_user(),
+            conversation_id,
+            client_msg_id.to_string(),
+            body.to_string(),
+        )
+        .await
+        {
+            Ok(result) => (StatusCode::OK, Json(result)).into_response(),
+            Err(error) => error.into_response(),
+        }
+    }
+
+    pub async fn messages(
+        &self,
+        user: &TestUser,
+        conversation_id: Uuid,
+        query: &str,
+    ) -> Vec<TestMessage> {
+        let response = self.messages_raw(user, conversation_id, query).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        response_json_as(response).await
+    }
+
+    pub async fn messages_raw(
+        &self,
+        user: &TestUser,
+        conversation_id: Uuid,
+        query: &str,
+    ) -> Response {
+        let suffix = if query.is_empty() {
+            String::new()
+        } else {
+            format!("?{query}")
+        };
+        let request = authed_empty_request(
+            "GET",
+            &format!("/api/v1/conversations/{conversation_id}/messages{suffix}"),
+            user,
+        );
+        self.app.clone().oneshot(request).await.unwrap()
+    }
+
+    pub async fn update_display_name(&self, user: &TestUser, display_name: Option<&str>) {
+        let request = authed_json_request(
+            "PATCH",
+            "/api/v1/me",
+            user,
+            json!({"display_name": display_name}),
+        );
+        let response = self.app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
 }
 
 #[allow(dead_code)]
@@ -205,6 +329,18 @@ pub struct TestUser {
     pub display_name: Option<String>,
     pub client_id: Uuid,
     pub access_token: String,
+}
+
+#[allow(dead_code)]
+impl TestUser {
+    pub fn current_user(&self) -> CurrentUser {
+        CurrentUser {
+            user_id: self.user_id,
+            username: self.username.clone(),
+            display_name: self.display_name.clone(),
+            client_id: self.client_id,
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -227,6 +363,17 @@ pub struct TestMember {
     pub user_id: Uuid,
     pub username: String,
     pub display_name: Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize)]
+pub struct TestMessage {
+    pub message_id: Uuid,
+    pub conversation_id: Uuid,
+    pub message_seq: i64,
+    pub sender: TestMember,
+    pub body: String,
+    pub created_at: String,
 }
 
 #[derive(Debug, Deserialize)]

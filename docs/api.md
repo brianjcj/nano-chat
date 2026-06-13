@@ -121,13 +121,13 @@ Success: `200 OK`
 
 ## Conversations
 
-Conversation endpoints require authentication. Task 4 supports group lifecycle and membership only; direct conversations and messages are added later.
+Conversation endpoints require authentication. Public HTTP supports conversation listing, group membership, and message history. Message sending is reserved for the WebSocket command layer; there is intentionally no public HTTP send-message endpoint.
 
 ### List conversations
 
 `GET /api/v1/conversations`
 
-Returns active conversations for the authenticated user. The default list includes active groups even when they have no messages, excludes groups the user has left, and excludes dissolved groups.
+Returns active conversations for the authenticated user. The default list includes active groups even when they have no messages, includes direct conversations only after their first message, excludes groups the user has left, and excludes dissolved groups.
 
 Success: `200 OK`
 
@@ -146,7 +146,7 @@ Success: `200 OK`
 ]
 ```
 
-`latest_message_seq` is `0` until the group has messages. `unread_count` is computed from `latest_message_seq - read_seq`.
+`latest_message_seq` is `0` until the conversation has messages. `unread_count` is computed from `latest_message_seq - read_seq`.
 
 ### Create group
 
@@ -226,6 +226,60 @@ Rules:
 
 Success: `204 No Content`.
 
+## Messages
+
+### List message history
+
+`GET /api/v1/conversations/{conversation_id}/messages`
+
+Query parameters:
+
+- `after_seq`: optional. When present, returns messages with `message_seq > after_seq`.
+- `before_seq`: optional. When present, returns messages with `message_seq < before_seq`.
+- `limit`: optional, defaults to `50`, capped at `100`.
+
+History responses are returned in ascending `message_seq` order. The caller must have a visibility span for the conversation. Former group members can read only messages inside their closed spans; messages sent after they left are filtered out.
+
+Success: `200 OK`
+
+```json
+[
+  {
+    "message_id": "018f0000-0000-7000-8000-000000000020",
+    "conversation_id": "018f0000-0000-7000-8000-000000000010",
+    "message_seq": 1,
+    "sender": {
+      "user_id": "018f0000-0000-7000-8000-000000000001",
+      "username": "alice",
+      "display_name": "Alice"
+    },
+    "body": "hello bob",
+    "created_at": "2026-06-13T00:00:00.000Z"
+  }
+]
+```
+
+The `sender` object is the sender's current user summary at read time, not a message-time snapshot.
+
+### Message sending semantics
+
+Message sending is implemented for the WebSocket command layer and internal service callers only. Do not call HTTP to send messages.
+
+Rules:
+
+- `body` is stored as sent, but `body.trim()` must be non-empty.
+- `body` is limited to 4096 UTF-8 bytes.
+- `client_msg_id` is client-generated, must be 1-100 characters, and is recommended but not required to be a UUID.
+- Idempotency scope is `(sender_user_id, client_id, client_msg_id)`.
+- Reusing the same idempotency key with the same request returns the existing message and does not allocate a duplicate sequence.
+- Reusing the same idempotency key with a different request returns `idempotency_conflict`.
+- Sending to an existing conversation validates that the sender is a direct member or an active group member.
+- Former group members cannot send to the group.
+- Dissolved groups reject sends with `conversation_dissolved`.
+- The sender's `read_seq` advances to the sent message sequence.
+
+Direct sends target a user by username or user id. The first direct message creates the direct conversation, inserts both direct members, creates visibility spans from sequence `1`, allocates message sequence `1`, and commits all of that atomically. Later direct sends reuse the same direct conversation. Empty direct conversations are not exposed in conversation lists.
+
 ## Error Format
 
 Errors use stable machine-readable codes. Request parsing errors (for example malformed JSON, non-JSON request content, invalid query parameters, or invalid path IDs such as malformed `conversation_id` UUIDs) use this same envelope.
@@ -249,9 +303,14 @@ Auth/user error codes introduced here:
 - `client_owner_mismatch`: supplied login `client_id` belongs to another user.
 - `user_not_found`: requested user does not exist.
 
-Conversation error codes introduced here:
+Conversation and message error codes introduced here:
 
 - `conversation_not_found`: requested conversation does not exist.
+- `message_not_found`: requested message does not exist.
+- `not_conversation_member`: caller has no membership/visibility for the conversation.
 - `not_active_member`: caller is not an active member for an operation requiring active membership.
-- `conversation_dissolved`: dissolved groups cannot be modified.
+- `conversation_dissolved`: dissolved groups cannot be modified or receive messages.
 - `group_member_limit_exceeded`: group active member limit would exceed 500.
+- `empty_message`: message body is empty after trimming whitespace.
+- `message_too_large`: message body exceeds the configured maximum, currently 4096 bytes.
+- `idempotency_conflict`: `client_msg_id` was reused for a different message request.

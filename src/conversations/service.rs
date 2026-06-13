@@ -92,6 +92,7 @@ pub async fn list_conversations(
          where cm.user_id = $1
            and cm.state = 'active'
            and c.state = 'active'
+           and (c.type = 'group' or c.last_message_seq > 0)
          order by c.last_message_at desc nulls last,
                   c.created_at desc,
                   c.conversation_id desc",
