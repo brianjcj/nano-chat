@@ -34,6 +34,8 @@ use crate::{
     },
 };
 
+const OUTBOUND_CHANNEL_CAPACITY: usize = 100;
+
 #[derive(Debug, Deserialize)]
 pub struct WsQuery {
     pub version: Option<String>,
@@ -71,7 +73,7 @@ pub async fn ws_handler(
 }
 
 async fn handle_socket(mut socket: WebSocket, state: AppState, current_user: CurrentUser) {
-    let (outbound_tx, outbound_rx) = mpsc::unbounded_channel();
+    let (outbound_tx, outbound_rx) = mpsc::channel(OUTBOUND_CHANNEL_CAPACITY);
     let registered = match state.registry.register(
         current_user.user_id,
         current_user.client_id,
@@ -148,7 +150,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, current_user: Cur
             _ = cleanup_interval.tick() => {
                 let removed = state.registry.cleanup_idle(now_utc(), idle_timeout);
                 if removed.contains(&connection_id) || !state.registry.contains(connection_id) {
-                    let _ = outbound_tx.send(ServerEnvelope::error(
+                    let _ = outbound_tx.try_send(ServerEnvelope::error(
                         None,
                         ErrorCode::HeartbeatTimeout,
                         "WebSocket heartbeat timed out",
@@ -174,7 +176,7 @@ async fn handle_incoming_message(
     state: &AppState,
     current_user: &CurrentUser,
     connection_id: ConnectionId,
-    outbound_tx: &mpsc::UnboundedSender<ServerEnvelope>,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
 ) -> bool {
     match message {
         Message::Text(text) => {
@@ -201,7 +203,16 @@ async fn handle_incoming_message(
                 }
             };
 
-            state.registry.touch(connection_id);
+            if !state.registry.touch(connection_id) {
+                send_and_close(
+                    outbound_tx,
+                    None,
+                    ErrorCode::HeartbeatTimeout,
+                    "WebSocket heartbeat timed out",
+                );
+                return false;
+            }
+
             dispatch_client_envelope(state, current_user, connection_id, outbound_tx, envelope)
                 .await
         }
@@ -228,7 +239,7 @@ async fn dispatch_client_envelope(
     state: &AppState,
     current_user: &CurrentUser,
     connection_id: ConnectionId,
-    outbound_tx: &mpsc::UnboundedSender<ServerEnvelope>,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
     envelope: ClientEnvelope,
 ) -> bool {
     match envelope.message_type.as_str() {
@@ -259,7 +270,7 @@ async fn handle_message_send(
     state: &AppState,
     current_user: &CurrentUser,
     connection_id: ConnectionId,
-    outbound_tx: &mpsc::UnboundedSender<ServerEnvelope>,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
     envelope: ClientEnvelope,
 ) -> bool {
     let id = envelope.id.clone();
@@ -281,9 +292,17 @@ async fn handle_message_send(
     .await
     {
         Ok(result) => {
+            let newly_created = result.newly_created;
             send_ok(outbound_tx, id, "message.send.ok", json!(result));
-            fanout_message_created(state, result.conversation_id, result.message, connection_id)
+            if newly_created {
+                fanout_message_created(
+                    state,
+                    result.conversation_id,
+                    result.message,
+                    connection_id,
+                )
                 .await;
+            }
             true
         }
         Err(error) => {
@@ -297,7 +316,7 @@ async fn handle_direct_message_send(
     state: &AppState,
     current_user: &CurrentUser,
     connection_id: ConnectionId,
-    outbound_tx: &mpsc::UnboundedSender<ServerEnvelope>,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
     envelope: ClientEnvelope,
 ) -> bool {
     let id = envelope.id.clone();
@@ -327,9 +346,17 @@ async fn handle_direct_message_send(
     .await
     {
         Ok(result) => {
+            let newly_created = result.newly_created;
             send_ok(outbound_tx, id, "direct_message.send.ok", json!(result));
-            fanout_message_created(state, result.conversation_id, result.message, connection_id)
+            if newly_created {
+                fanout_message_created(
+                    state,
+                    result.conversation_id,
+                    result.message,
+                    connection_id,
+                )
                 .await;
+            }
             true
         }
         Err(error) => {
@@ -342,7 +369,7 @@ async fn handle_direct_message_send(
 async fn handle_conversation_read(
     state: &AppState,
     current_user: &CurrentUser,
-    outbound_tx: &mpsc::UnboundedSender<ServerEnvelope>,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
     envelope: ClientEnvelope,
 ) -> bool {
     let id = envelope.id.clone();
@@ -379,7 +406,7 @@ async fn handle_conversation_read(
 }
 
 fn handle_heartbeat_ping(
-    outbound_tx: &mpsc::UnboundedSender<ServerEnvelope>,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
     envelope: ClientEnvelope,
 ) -> bool {
     let id = envelope.id.clone();
@@ -447,29 +474,25 @@ fn direct_target(
 }
 
 fn send_ok(
-    outbound_tx: &mpsc::UnboundedSender<ServerEnvelope>,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
     id: Option<String>,
     message_type: &'static str,
     payload: serde_json::Value,
 ) {
-    let _ = outbound_tx.send(ServerEnvelope::ok(id, message_type, payload));
+    let _ = outbound_tx.try_send(ServerEnvelope::ok(id, message_type, payload));
 }
 
-fn send_app_error(
-    outbound_tx: &mpsc::UnboundedSender<ServerEnvelope>,
-    id: Option<String>,
-    error: AppError,
-) {
-    let _ = outbound_tx.send(ServerEnvelope::error(id, error.code, error.message));
+fn send_app_error(outbound_tx: &mpsc::Sender<ServerEnvelope>, id: Option<String>, error: AppError) {
+    let _ = outbound_tx.try_send(ServerEnvelope::error(id, error.code, error.message));
 }
 
 fn send_and_close(
-    outbound_tx: &mpsc::UnboundedSender<ServerEnvelope>,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
     id: Option<String>,
     code: ErrorCode,
     message: impl Into<String>,
 ) {
-    let _ = outbound_tx.send(ServerEnvelope::error(id, code, message));
+    let _ = outbound_tx.try_send(ServerEnvelope::error(id, code, message));
 }
 
 async fn send_envelope_to_socket(socket: &mut WebSocket, envelope: ServerEnvelope) {
@@ -484,4 +507,69 @@ fn too_many_connections_error() -> AppError {
         ErrorCode::TooManyConnections,
         "Too many active WebSocket connections",
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{config::Config, db, realtime::connection_registry::ConnectionRegistry};
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn text_message_for_removed_connection_closes_without_dispatching() {
+        let state = test_state();
+        let current_user = test_current_user();
+        let (outbound_tx, mut outbound_rx) = mpsc::channel(1);
+        let connection_id = Uuid::now_v7();
+
+        let keep_processing = handle_incoming_message(
+            Message::Text(
+                json!({"id": "hb-1", "type": "heartbeat.ping", "payload": {}})
+                    .to_string()
+                    .into(),
+            ),
+            &state,
+            &current_user,
+            connection_id,
+            &outbound_tx,
+        )
+        .await;
+
+        assert!(!keep_processing);
+        let envelope = outbound_rx
+            .try_recv()
+            .expect("removed connection should receive a close error envelope");
+        assert_eq!(envelope.message_type, "error");
+        assert_eq!(
+            envelope.error.expect("error envelope").code,
+            ErrorCode::HeartbeatTimeout.as_str()
+        );
+    }
+
+    fn test_state() -> AppState {
+        let config = Config {
+            database_url: "postgres://nano:nano@localhost:5432/nano_chat_test".to_string(),
+            jwt_secret: "0123456789abcdef0123456789abcdef".to_string(),
+            bind_addr: "127.0.0.1:0".to_string(),
+            rust_log: "nano_chat=debug".to_string(),
+            notify_channel: "nano_chat_events".to_string(),
+            max_connections_per_user: 10,
+            heartbeat_interval_secs: 30,
+            heartbeat_idle_timeout_secs: 90,
+            max_ws_payload_bytes: 64 * 1024,
+            max_message_bytes: 4096,
+        };
+        let pool = db::create_lazy_pool(&config.database_url).expect("create lazy pool");
+        let registry = ConnectionRegistry::new(config.max_connections_per_user);
+        AppState::with_registry(config, pool, registry)
+    }
+
+    fn test_current_user() -> CurrentUser {
+        CurrentUser {
+            user_id: Uuid::now_v7(),
+            username: "alice".to_string(),
+            display_name: Some("Alice".to_string()),
+            client_id: Uuid::now_v7(),
+        }
+    }
 }

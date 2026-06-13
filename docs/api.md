@@ -472,7 +472,7 @@ After a successful `message.send` or `direct_message.send`, other local WebSocke
 }
 ```
 
-The origin connection receives only `message.send.ok` or `direct_message.send.ok`; it does not receive a duplicate `message.created` event for its own command. Other connections owned by the same user can receive the event. This fan-out is instance-local only until cross-instance Postgres `LISTEN/NOTIFY` is added.
+The origin connection receives only `message.send.ok` or `direct_message.send.ok`; it does not receive a duplicate `message.created` event for its own command. Idempotent retries that return an existing message do not emit another `message.created` event. Other connections owned by the same user can receive the event. Fan-out uses bounded per-connection queues; recipients whose local queue is full or closed are skipped. This fan-out is instance-local only until cross-instance Postgres `LISTEN/NOTIFY` is added.
 
 ## Error Format
 

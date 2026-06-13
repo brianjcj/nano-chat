@@ -70,6 +70,11 @@ async fn same_client_msg_id_with_same_request_returns_existing_message_without_d
         .send_direct_message(&alice, "bob", "repeat-key", "same body")
         .await;
 
+    assert!(first.newly_created(), "first send should insert a message");
+    assert!(
+        !second.newly_created(),
+        "same-key same-request retry should return the existing message"
+    );
     assert_eq!(second.conversation_id, first.conversation_id);
     assert_eq!(second.message.message_id, first.message.message_id);
     assert_eq!(second.message.message_seq, first.message.message_seq);

@@ -150,7 +150,7 @@ impl ConnectionRegistry {
 
         targets
             .into_iter()
-            .filter(|sender| sender.send(envelope.clone()).is_ok())
+            .filter(|sender| sender.try_send(envelope.clone()).is_ok())
             .count()
     }
 
@@ -176,7 +176,7 @@ impl ConnectionRegistry {
 
         targets
             .into_iter()
-            .filter(|sender| sender.send(envelope.clone()).is_ok())
+            .filter(|sender| sender.try_send(envelope.clone()).is_ok())
             .count()
     }
 
@@ -204,7 +204,7 @@ impl ConnectionRegistry {
         user_id: Uuid,
         client_id: Uuid,
     ) -> Result<RegisteredConnection, RegistryError> {
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::channel(1);
         self.register(user_id, client_id, sender)
     }
 
@@ -225,7 +225,7 @@ impl ConnectionRegistry {
         client_id: Uuid,
         seen_at: DateTime<Utc>,
     ) -> Result<RegisteredConnection, RegistryError> {
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::channel(1);
         self.register_seen_at(user_id, client_id, sender, seen_at)
     }
 
@@ -339,8 +339,8 @@ mod tests {
         let registry = ConnectionRegistry::new(10);
         let user_id = uuid::Uuid::now_v7();
         let client_id = uuid::Uuid::now_v7();
-        let (origin_tx, mut origin_rx) = mpsc::unbounded_channel();
-        let (other_tx, mut other_rx) = mpsc::unbounded_channel();
+        let (origin_tx, mut origin_rx) = mpsc::channel(1);
+        let (other_tx, mut other_rx) = mpsc::channel(1);
         let origin = registry
             .register_test_connection_with_sender(user_id, client_id, origin_tx)
             .unwrap();
@@ -358,6 +358,28 @@ mod tests {
         assert!(origin_rx.try_recv().is_err());
         let delivered = other_rx.try_recv().unwrap();
         assert_eq!(delivered.message_type, "message.created");
+    }
+
+    #[test]
+    fn registry_fanout_does_not_count_full_receiver_queue_as_delivered() {
+        let registry = ConnectionRegistry::new(10);
+        let user_id = uuid::Uuid::now_v7();
+        let client_id = uuid::Uuid::now_v7();
+        let (sender, _receiver) = mpsc::channel(1);
+        sender
+            .try_send(ServerEnvelope::event("preloaded", json!({})))
+            .unwrap();
+        registry
+            .register_test_connection_with_sender(user_id, client_id, sender)
+            .unwrap();
+
+        let sent = registry.send_to_users(
+            [user_id],
+            ServerEnvelope::event("message.created", json!({"message_seq": 1})),
+            None,
+        );
+
+        assert_eq!(sent, 0);
     }
 
     #[test]

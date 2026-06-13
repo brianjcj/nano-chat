@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::ws::protocol::ServerEnvelope;
 
 pub type ConnectionId = Uuid;
-pub type ConnectionSender = mpsc::UnboundedSender<ServerEnvelope>;
+pub type ConnectionSender = mpsc::Sender<ServerEnvelope>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegisteredConnection {

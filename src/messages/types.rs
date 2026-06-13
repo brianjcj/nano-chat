@@ -14,6 +14,14 @@ pub enum DirectTarget {
 pub struct SendMessageResult {
     pub conversation_id: Uuid,
     pub message: MessageDto,
+    #[serde(skip)]
+    pub(crate) newly_created: bool,
+}
+
+impl SendMessageResult {
+    pub fn newly_created(&self) -> bool {
+        self.newly_created
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

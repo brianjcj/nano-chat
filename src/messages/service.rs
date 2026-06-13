@@ -303,6 +303,7 @@ async fn send_message_in_locked_conversation(
     Ok(SendMessageResult {
         conversation_id: message.conversation_id,
         message,
+        newly_created: true,
     })
 }
 
@@ -334,6 +335,7 @@ async fn existing_message_result(
     Ok(SendMessageResult {
         conversation_id: message.conversation_id,
         message,
+        newly_created: false,
     })
 }
 
