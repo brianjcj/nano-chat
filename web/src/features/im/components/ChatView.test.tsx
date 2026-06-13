@@ -23,7 +23,10 @@ import type {
 } from "@/shared/api/types";
 import { createAppI18n } from "@/shared/i18n/i18n";
 import { RealtimeClientProvider } from "@/shared/realtime/RealtimeClientContext";
-import type { RealtimeClient } from "@/shared/realtime/realtimeClient";
+import type {
+  RealtimeClient,
+  RealtimeStatus,
+} from "@/shared/realtime/realtimeClient";
 import type { ChatMessage } from "@/shared/utils/message";
 
 const localUser: UserSummary = {
@@ -103,6 +106,7 @@ type RenderChatViewOptions = {
   conversations?: ConversationSummary[];
   listMessages?: ApiClient["listMessages"];
   queryClient?: QueryClient;
+  realtimeStatus?: RealtimeStatus;
   sendCommand?: (type: string, payload: unknown) => Promise<unknown>;
   session?: AuthResponse;
 };
@@ -113,9 +117,11 @@ async function renderChatView({
   conversations = [conversation()],
   listMessages = vi.fn<ApiClient["listMessages"]>().mockResolvedValue([]),
   queryClient = createQueryClient(),
+  realtimeStatus = "connected",
   sendCommand = vi.fn().mockResolvedValue({}),
   session = makeAuthResponse(),
 }: RenderChatViewOptions = {}) {
+  useImStore.getState().setRealtimeStatus(realtimeStatus);
   queryClient.setQueryData(imQueryKeys.conversations(), conversations);
   const apiClient = createFakeApiClient({
     listConversations: vi.fn().mockResolvedValue(conversations),
@@ -522,6 +528,47 @@ describe("ChatView", () => {
     });
   });
 
+  it("waits for realtime connected before marking read on startup", async () => {
+    const listMessages = vi
+      .fn<ApiClient["listMessages"]>()
+      .mockResolvedValue([message(1), message(2), message(3)]);
+    const sendCommand = vi.fn((type: string, payload: unknown) => {
+      if (type === "conversation.read") {
+        return Promise.resolve({
+          conversation_id: "conversation-1",
+          read_seq: (payload as { read_seq: number }).read_seq,
+        });
+      }
+
+      return Promise.resolve({});
+    });
+
+    await renderChatView({
+      conversations: [
+        conversation({ latest_message_seq: 3, read_seq: 1, unread_count: 2 }),
+      ],
+      listMessages,
+      realtimeStatus: "connecting",
+      sendCommand,
+    });
+
+    expect(await screen.findByText("Message 3")).toBeInTheDocument();
+    expect(
+      sendCommand.mock.calls.filter(([type]) => type === "conversation.read"),
+    ).toHaveLength(0);
+
+    act(() => {
+      useImStore.getState().setRealtimeStatus("connected");
+    });
+
+    await waitFor(() => {
+      expect(sendCommand).toHaveBeenCalledWith("conversation.read", {
+        conversation_id: "conversation-1",
+        read_seq: 3,
+      });
+    });
+  });
+
   it("retries the same read sequence after a transient conversation.read failure", async () => {
     const listMessages = vi
       .fn<ApiClient["listMessages"]>()
@@ -562,19 +609,6 @@ describe("ChatView", () => {
     });
 
     firstRead.reject(new Error("offline"));
-    await Promise.resolve();
-    await Promise.resolve();
-
-    act(() => {
-      queryClient.setQueryData(imQueryKeys.conversations(), [
-        conversation({
-          latest_message_seq: 3,
-          read_seq: 1,
-          unread_count: 2,
-          active_member_count: 3,
-        }),
-      ]);
-    });
 
     await waitFor(() => {
       expect(
@@ -622,6 +656,58 @@ describe("ChatView", () => {
           .getQueryData<ChatMessage[]>(imQueryKeys.messages("conversation-1"))
           ?.map((candidate) => candidate.message_seq),
       ).toEqual([1, 2, 3]);
+    });
+    expect(useImStore.getState().historySyncMarkers).not.toHaveProperty(
+      "conversation-1",
+    );
+  });
+
+  it("continues history sync when a full after_seq page leaves a larger gap", async () => {
+    useImStore.getState().markHistorySyncNeeded("conversation-1", 1);
+    const firstGapPage = Array.from({ length: 100 }, (_, index) =>
+      message(index + 2),
+    );
+    const listMessages = vi
+      .fn<ApiClient["listMessages"]>()
+      .mockImplementation((_conversationId, query) => {
+        if (query?.after_seq === 1) {
+          return Promise.resolve(firstGapPage);
+        }
+
+        if (query?.after_seq === 101) {
+          return Promise.resolve([message(102)]);
+        }
+
+        return Promise.resolve([message(1), message(103)]);
+      });
+    const queryClient = createQueryClient();
+
+    await renderChatView({
+      conversations: [
+        conversation({ latest_message_seq: 103, read_seq: 103, unread_count: 0 }),
+      ],
+      listMessages,
+      queryClient,
+    });
+
+    await waitFor(() => {
+      expect(listMessages).toHaveBeenCalledWith("conversation-1", {
+        after_seq: 1,
+        limit: 100,
+      });
+    });
+    await waitFor(() => {
+      expect(listMessages).toHaveBeenCalledWith("conversation-1", {
+        after_seq: 101,
+        limit: 100,
+      });
+    });
+    await waitFor(() => {
+      expect(
+        queryClient
+          .getQueryData<ChatMessage[]>(imQueryKeys.messages("conversation-1"))
+          ?.map((candidate) => candidate.message_seq),
+      ).toEqual(Array.from({ length: 103 }, (_, index) => index + 1));
     });
     expect(useImStore.getState().historySyncMarkers).not.toHaveProperty(
       "conversation-1",

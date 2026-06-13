@@ -13,6 +13,14 @@ type UseMarkReadOptions = {
   isNearBottom: boolean;
 };
 
+type ReadRetryState = {
+  failedAttempts: number;
+  seq: number;
+};
+
+const READ_RETRY_DELAY_MS = 100;
+const MAX_READ_RETRY_TICKS = 3;
+
 export function useMarkRead({
   conversation,
   highestContiguousSeq,
@@ -20,12 +28,28 @@ export function useMarkRead({
 }: UseMarkReadOptions) {
   const queryClient = useQueryClient();
   const realtimeClient = useRealtimeClient();
+  const realtimeStatus = useImStore((state) => state.realtimeStatus);
   const visibilityState = useDocumentVisibilityState();
   const inFlightReadSeqRef = useRef<Record<string, number>>({});
   const lastSucceededReadSeqRef = useRef<Record<string, number>>({});
+  const retryStateRef = useRef<Record<string, ReadRetryState>>({});
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
+
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current !== null) {
+        clearTimeout(retryTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!conversation || visibilityState !== "visible" || !isNearBottom) {
+      return;
+    }
+
+    if (realtimeStatus !== "connected") {
       return;
     }
 
@@ -62,11 +86,39 @@ export function useMarkRead({
           lastSucceededReadSeqRef.current[result.conversation_id] ?? 0,
           result.read_seq,
         );
+        delete retryStateRef.current[result.conversation_id];
         applyReadResult(queryClient, result);
         useImStore.getState().clearUnreadCorrection(result.conversation_id);
       })
       .catch(() => {
-        // Server state remains authoritative for out-of-range or business errors.
+        if (inFlightReadSeqRef.current[conversationId] === highestContiguousSeq) {
+          delete inFlightReadSeqRef.current[conversationId];
+        }
+
+        if (useImStore.getState().realtimeStatus !== "connected") {
+          return;
+        }
+
+        const currentRetryState = retryStateRef.current[conversationId];
+        const failedAttempts =
+          currentRetryState?.seq === highestContiguousSeq
+            ? currentRetryState.failedAttempts + 1
+            : 1;
+
+        retryStateRef.current[conversationId] = {
+          failedAttempts,
+          seq: highestContiguousSeq,
+        };
+
+        if (
+          failedAttempts <= MAX_READ_RETRY_TICKS &&
+          retryTimerRef.current === null
+        ) {
+          retryTimerRef.current = setTimeout(() => {
+            retryTimerRef.current = null;
+            setRetryTick((tick) => tick + 1);
+          }, READ_RETRY_DELAY_MS);
+        }
       })
       .finally(() => {
         if (inFlightReadSeqRef.current[conversationId] === highestContiguousSeq) {
@@ -79,6 +131,8 @@ export function useMarkRead({
     isNearBottom,
     queryClient,
     realtimeClient,
+    realtimeStatus,
+    retryTick,
     visibilityState,
   ]);
 

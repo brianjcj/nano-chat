@@ -114,6 +114,18 @@ export function useConversationMessages(
           useImStore.getState().historySyncMarkers[conversationId];
 
         if (latestMarker?.after_seq === afterSeq) {
+          const highestSyncedSeq = getHighestMessageSeq(syncedMessages);
+
+          if (
+            syncedMessages.length >= HISTORY_SYNC_PAGE_SIZE &&
+            highestSyncedSeq > afterSeq
+          ) {
+            useImStore
+              .getState()
+              .markHistorySyncNeeded(conversationId, highestSyncedSeq);
+            return;
+          }
+
           useImStore.getState().clearHistorySyncMarker(conversationId);
         }
       })
@@ -223,6 +235,18 @@ function getMinimumMessageSeq(messages: ChatMessage[] | Message[]) {
   }
 
   return Math.min(...seqs);
+}
+
+function getHighestMessageSeq(messages: ChatMessage[] | Message[]) {
+  const seqs = messages
+    .map((message) => message.message_seq)
+    .filter((messageSeq): messageSeq is number => typeof messageSeq === "number");
+
+  if (seqs.length === 0) {
+    return 0;
+  }
+
+  return Math.max(...seqs);
 }
 
 function getHighestContiguousLoadedSeq(messages: ChatMessage[]) {
