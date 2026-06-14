@@ -662,6 +662,60 @@ describe("ChatView", () => {
     );
   });
 
+  it("detects a reconnect latest-page gap and syncs the inaccessible middle messages", async () => {
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(
+      imQueryKeys.messages("conversation-1"),
+      Array.from({ length: 100 }, (_, index) => message(index + 1)),
+    );
+    const latestPage = Array.from({ length: 50 }, (_, index) =>
+      message(index + 151),
+    );
+    const missingMiddlePage = Array.from({ length: 50 }, (_, index) =>
+      message(index + 101),
+    );
+    const listMessages = vi
+      .fn<ApiClient["listMessages"]>()
+      .mockImplementation((_conversationId, query) => {
+        if (query?.after_seq === 100) {
+          return Promise.resolve(missingMiddlePage);
+        }
+
+        return Promise.resolve(latestPage);
+      });
+
+    await renderChatView({
+      conversations: [
+        conversation({ latest_message_seq: 200, read_seq: 100, unread_count: 100 }),
+      ],
+      listMessages,
+      queryClient,
+    });
+
+    await waitFor(() => {
+      expect(listMessages).toHaveBeenCalledWith("conversation-1", {
+        before_seq: 201,
+        limit: 50,
+      });
+    });
+    await waitFor(() => {
+      expect(listMessages).toHaveBeenCalledWith("conversation-1", {
+        after_seq: 100,
+        limit: 100,
+      });
+    });
+    await waitFor(() => {
+      expect(
+        queryClient
+          .getQueryData<ChatMessage[]>(imQueryKeys.messages("conversation-1"))
+          ?.map((candidate) => candidate.message_seq),
+      ).toEqual(Array.from({ length: 200 }, (_, index) => index + 1));
+    });
+    expect(useImStore.getState().historySyncMarkers).not.toHaveProperty(
+      "conversation-1",
+    );
+  });
+
   it("continues history sync when a full after_seq page leaves a larger gap", async () => {
     useImStore.getState().markHistorySyncNeeded("conversation-1", 1);
     const firstGapPage = Array.from({ length: 100 }, (_, index) =>

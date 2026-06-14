@@ -466,6 +466,10 @@ describe("direct draft flow", () => {
       await screen.findByText("Could not send your first message. Try again."),
     ).toBeInTheDocument();
     expect(composer).toHaveValue("Hello Bob");
+    const firstPayload = sendCommand.mock.calls[0]?.[1] as {
+      body: string;
+      client_msg_id: string;
+    };
 
     await user.click(screen.getByRole("button", { name: "Send" }));
 
@@ -474,7 +478,10 @@ describe("direct draft flow", () => {
     });
     expect(sendCommand).toHaveBeenLastCalledWith(
       "direct_message.send",
-      expect.objectContaining({ body: "Hello Bob" }),
+      expect.objectContaining({
+        body: "Hello Bob",
+        client_msg_id: firstPayload.client_msg_id,
+      }),
     );
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(

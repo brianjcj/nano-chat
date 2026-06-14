@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useSession } from "@/app/AppProviders";
@@ -39,6 +39,12 @@ export type DirectDraftSendOutcome =
 
 type UseSendDirectDraftMessageResult = {
   sendMessage: (body: string) => Promise<DirectDraftSendOutcome>;
+};
+
+type PendingDirectDraftClientMsg = {
+  body: string;
+  clientMsgId: string;
+  draftKey: string;
 };
 
 export function useSendMessage(
@@ -128,6 +134,7 @@ export function useSendDirectDraftMessage(
   const queryClient = useQueryClient();
   const realtimeClient = useRealtimeClient();
   const { getValidSession } = useSession();
+  const pendingClientMsgRef = useRef<PendingDirectDraftClientMsg | null>(null);
 
   const sendMessage = useCallback(
     async (body: string) => {
@@ -143,7 +150,12 @@ export function useSendDirectDraftMessage(
         return { ok: false, code: "send_failed" } as const;
       }
 
-      const clientMsgId = createClientMsgId();
+      const draftKey = getDirectDraftKey(draft);
+      const clientMsgId = getOrCreateDirectDraftClientMsgId(
+        pendingClientMsgRef,
+        draftKey,
+        body,
+      );
       const target = draft.target_user_id
         ? { target_user_id: draft.target_user_id }
         : { target_username: draft.target_username };
@@ -163,6 +175,7 @@ export function useSendDirectDraftMessage(
           (messages = []) => mergeMessagesBySeq(messages, [result.message]),
         );
         seedDirectDraftConversation(queryClient, draft, result.message);
+        pendingClientMsgRef.current = null;
         void queryClient.invalidateQueries({
           queryKey: imQueryKeys.conversations(),
         });
@@ -180,6 +193,30 @@ export function useSendDirectDraftMessage(
   );
 
   return { sendMessage };
+}
+
+function getDirectDraftKey(draft: DirectDraft) {
+  return `${draft.target_user_id ?? ""}:${draft.target_username}`;
+}
+
+function getOrCreateDirectDraftClientMsgId(
+  pendingClientMsgRef: { current: PendingDirectDraftClientMsg | null },
+  draftKey: string,
+  body: string,
+) {
+  const pendingClientMsg = pendingClientMsgRef.current;
+
+  if (
+    pendingClientMsg?.draftKey === draftKey &&
+    pendingClientMsg.body === body
+  ) {
+    return pendingClientMsg.clientMsgId;
+  }
+
+  const clientMsgId = createClientMsgId();
+  pendingClientMsgRef.current = { body, clientMsgId, draftKey };
+
+  return clientMsgId;
 }
 
 function createOptimisticMessage({

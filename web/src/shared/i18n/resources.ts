@@ -46,7 +46,7 @@ export const appResources = {
         layout: {
           eyebrow: "柔和社交 IM 工作台",
           description:
-            "为实时对话准备的安全入口。登录后即可进入临时 IM 外壳，后续任务会补齐会话与消息体验。",
+            "为实时对话准备的安全入口。登录后即可继续你的会话与消息体验。",
         },
         validation: {
           usernameRequired: "请输入用户名。",
@@ -60,17 +60,17 @@ export const appResources = {
         mobileFeatureBar: "移动端功能栏",
         mainWorkspace: "主工作区",
         placeholder: {
-          title: "临时 IM 外壳",
+          title: "Nano Chat 工作区",
           description:
-            "认证与路由已经就绪。会话列表、消息收发和实时连接会在后续任务中接入。",
+            "认证、路由、会话列表、消息收发和实时连接已经就绪。",
           emptyEyebrow: "IM 工作台",
           emptyTitle: "选择一个会话开始聊天",
           emptyDescription:
-            "左侧会话列表已经接入实时缓存。消息视图会在下一阶段替换这里的占位工作区。",
+            "选择左侧会话后，即可在这里查看消息。",
           selectedEyebrow: "会话已选择",
-          selectedTitle: "聊天窗口即将接入",
+          selectedTitle: "聊天窗口",
           selectedDescription:
-            "已选中会话 {{conversationId}}。Task 6 会在这里展示真实消息流。",
+            "已选中会话 {{conversationId}}，可在此继续对话。",
         },
         connection: {
           connected: "已连接",
@@ -261,7 +261,7 @@ export const appResources = {
         layout: {
           eyebrow: "Soft-social IM workspace",
           description:
-            "A secure entry point for realtime conversations. After authentication, this task opens the temporary IM shell while future tasks add messaging flows.",
+            "A secure entry point for realtime conversations. Sign in to continue your chats.",
         },
         validation: {
           usernameRequired: "Enter a username.",
@@ -275,17 +275,17 @@ export const appResources = {
         mobileFeatureBar: "Mobile feature bar",
         mainWorkspace: "Main workspace",
         placeholder: {
-          title: "Temporary IM shell",
+          title: "Nano Chat workspace",
           description:
-            "Authentication and routing are ready. Conversation lists, messaging, and realtime connections will arrive in later tasks.",
+            "Authentication, routing, conversations, messaging, and realtime connections are ready.",
           emptyEyebrow: "IM workspace",
           emptyTitle: "Choose a conversation to start",
           emptyDescription:
-            "The conversation list is wired to the realtime cache. Task 6 will replace this calm placeholder with the message stream.",
+            "Choose a conversation to view its messages here.",
           selectedEyebrow: "Conversation selected",
-          selectedTitle: "Chat view is coming next",
+          selectedTitle: "Chat view",
           selectedDescription:
-            "Conversation {{conversationId}} is selected. Task 6 will render the real message stream here.",
+            "Conversation {{conversationId}} is selected. Continue the conversation here.",
         },
         connection: {
           connected: "Connected",

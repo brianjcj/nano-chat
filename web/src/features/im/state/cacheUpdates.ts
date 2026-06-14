@@ -71,9 +71,24 @@ function applyMessageCreated(
     conversationId,
     message,
   );
+  const isConversationAbsentFromList = isConversationAbsentFromConversationsCache(
+    queryClient,
+    conversationId,
+  );
 
-  updateConversationLatestMessage(queryClient, conversationId, message);
+  const didSeedConversation = updateConversationLatestMessage(
+    queryClient,
+    conversationId,
+    message,
+    currentUserId,
+  );
   upsertMessageInCanonicalCache(queryClient, conversationId, message);
+
+  if (isConversationAbsentFromList) {
+    void queryClient.invalidateQueries({
+      queryKey: imQueryKeys.conversations(),
+    });
+  }
 
   if (currentConversationId === conversationId) {
     if (message.message_seq > highestContiguousSeq + 1) {
@@ -84,7 +99,11 @@ function applyMessageCreated(
     return;
   }
 
-  if (isAlreadyKnown || message.sender.user_id === currentUserId) {
+  if (
+    didSeedConversation ||
+    isAlreadyKnown ||
+    message.sender.user_id === currentUserId
+  ) {
     return;
   }
 
@@ -164,16 +183,52 @@ function applyConversationDissolved(
   });
 }
 
+function isConversationAbsentFromConversationsCache(
+  queryClient: QueryClient,
+  conversationId: string,
+): boolean {
+  const conversations = queryClient.getQueryData<ConversationSummary[]>(
+    imQueryKeys.conversations(),
+  );
+
+  return Boolean(
+    conversations &&
+      !conversations.some(
+        (conversation) => conversation.conversation_id === conversationId,
+      ),
+  );
+}
+
 function updateConversationLatestMessage(
   queryClient: QueryClient,
   conversationId: string,
   message: Message,
-): void {
+  currentUserId: string | null | undefined,
+): boolean {
+  let didSeedConversation = false;
+
   queryClient.setQueryData<ConversationSummary[]>(
     imQueryKeys.conversations(),
     (conversations) => {
       if (!conversations) {
         return conversations;
+      }
+
+      const conversationExists = conversations.some(
+        (conversation) => conversation.conversation_id === conversationId,
+      );
+
+      if (!conversationExists) {
+        if (message.sender.user_id === currentUserId) {
+          return conversations;
+        }
+
+        didSeedConversation = true;
+
+        return [
+          createIncomingDirectConversationSummary(message),
+          ...conversations,
+        ].sort(compareConversationLatestMessage);
       }
 
       return conversations
@@ -195,6 +250,8 @@ function updateConversationLatestMessage(
         .sort(compareConversationLatestMessage);
     },
   );
+
+  return didSeedConversation;
 }
 
 function upsertMessageInCanonicalCache(
@@ -303,6 +360,23 @@ function getHighestContiguousMessageSeq(
   }
 
   return highestContiguousSeq;
+}
+
+function createIncomingDirectConversationSummary(
+  message: Message,
+): ConversationSummary {
+  return {
+    conversation_id: message.conversation_id,
+    type: "direct",
+    name: null,
+    state: "active",
+    latest_message_seq: message.message_seq,
+    read_seq: 0,
+    unread_count: 1,
+    active_member_count: 2,
+    direct_user: message.sender,
+    latest_message: toLatestMessage(message),
+  };
 }
 
 function toLatestMessage(message: Message): ConversationSummary["latest_message"] {

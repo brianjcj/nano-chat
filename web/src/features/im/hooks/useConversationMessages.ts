@@ -77,8 +77,23 @@ export function useConversationMessages(
     }
 
     const fetchedMessages = latestMessagesQuery.data;
+    const canonicalMessagesKey = imQueryKeys.messages(
+      conversation.conversation_id,
+    );
+    const existingMessages =
+      queryClient.getQueryData<ChatMessage[]>(canonicalMessagesKey) ?? [];
+
+    if (latestPageRevealsLoadedMiddleGap(existingMessages, fetchedMessages)) {
+      useImStore
+        .getState()
+        .markHistorySyncNeeded(
+          conversation.conversation_id,
+          getHighestContiguousLoadedSeq(existingMessages),
+        );
+    }
+
     queryClient.setQueryData<ChatMessage[]>(
-      imQueryKeys.messages(conversation.conversation_id),
+      canonicalMessagesKey,
       (existingMessages = []) =>
         mergeMessagesBySeq(existingMessages, fetchedMessages),
     );
@@ -223,6 +238,25 @@ function markAllHistoryLoaded(
     ...loadedAllHistoryByConversationId,
     [conversationId]: true,
   }));
+}
+
+function latestPageRevealsLoadedMiddleGap(
+  existingMessages: ChatMessage[],
+  fetchedMessages: Message[],
+) {
+  const highestContiguousLoadedSeq =
+    getHighestContiguousLoadedSeq(existingMessages);
+
+  if (highestContiguousLoadedSeq <= 0) {
+    return false;
+  }
+
+  const fetchedMinimumSeq = getMinimumMessageSeq(fetchedMessages);
+
+  return (
+    Number.isFinite(fetchedMinimumSeq) &&
+    fetchedMinimumSeq > highestContiguousLoadedSeq + 1
+  );
 }
 
 function getMinimumMessageSeq(messages: ChatMessage[] | Message[]) {

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 
 import { createQueryClient } from "@/app/queryClient";
 import { imQueryKeys } from "../api/imQueries";
@@ -196,6 +196,50 @@ describe("IM realtime cache updates", () => {
     expect(
       queryClient.getQueryData<Message[]>(imQueryKeys.messages("conversation-2")),
     ).toBeUndefined();
+  });
+
+  it("seeds an incoming direct conversation when message.created is absent from the conversation list", () => {
+    const queryClient = createQueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+    const incomingMessage = makeMessage(1, "direct-new");
+    queryClient.setQueryData(imQueryKeys.conversations(), []);
+    useImStore.getState().setCurrentConversationId("conversation-1");
+
+    applyRealtimeEvent({
+      queryClient,
+      store: useImStore,
+      currentUserId: "user-local",
+      event: messageCreated(incomingMessage),
+    });
+
+    expect(
+      queryClient.getQueryData<ConversationSummary[]>(
+        imQueryKeys.conversations(),
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        active_member_count: 2,
+        conversation_id: "direct-new",
+        direct_user: sender,
+        latest_message: expect.objectContaining({
+          body: "message 1",
+          message_id: incomingMessage.message_id,
+          message_seq: 1,
+        }),
+        latest_message_seq: 1,
+        name: null,
+        read_seq: 0,
+        state: "active",
+        type: "direct",
+        unread_count: 1,
+      }),
+    ]);
+    expect(useImStore.getState().unreadCorrections).not.toHaveProperty(
+      "direct-new",
+    );
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: imQueryKeys.conversations(),
+    });
   });
 
   it("does not insert message.created into query-specific history page caches", () => {
