@@ -638,7 +638,9 @@ docker compose up -d postgres
 TEST_DATABASE_URL=postgres://nano:nano@localhost:5432/nano_chat_test cargo test --tests -- --nocapture
 ```
 
-For local Web development, run the Vite dev server from `web/` and let Vite proxy API/WebSocket calls to the Rust backend. Production builds use `pnpm build` to create `web/dist`, which the Rust service serves directly.
+For local Web development, start the Rust backend on `127.0.0.1:3000`, then run `pnpm dev` from `web/`. The Vite dev server proxies `/api/v1` HTTP requests and `/ws` WebSocket upgrades to the Rust backend, so browser code can keep the default same-origin `VITE_API_BASE_URL=/api/v1` and derived `VITE_WS_URL=/ws?version=1` behavior. Override `VITE_API_BASE_URL` or `VITE_WS_URL` only when the browser must call a different API or WebSocket origin.
+
+Production builds use `pnpm build` to create `web/dist`. The Rust service serves that directory from `WEB_DIST_DIR` (Docker images set `WEB_DIST_DIR=/app/web/dist`) alongside `/api/v1`, `/ws`, `/healthz`, and `/readyz`; non-backend Web routes fall back to `index.html`.
 
 The Compose Postgres image defaults to `mirror.gcr.io/library/postgres:17` for environments where Docker Hub pulls are unreliable. Operators can use the official Docker Hub image by setting `POSTGRES_IMAGE=postgres:17`.
 

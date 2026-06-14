@@ -10,7 +10,7 @@ import {
 import { imQueryKeys } from "@/features/im/api/imQueries";
 import { useImStore } from "@/features/im/state/imStore";
 import type { ApiClient } from "@/shared/api/client";
-import type { UserSummary } from "@/shared/api/types";
+import type { ConversationSummary, Message, UserSummary } from "@/shared/api/types";
 
 vi.mock("@/shared/realtime/useRealtimeBridge", () => ({
   useRealtimeBridge: vi.fn(),
@@ -28,6 +28,60 @@ describe("AppShell", () => {
   beforeEach(() => {
     useImStore.getState().reset();
     window.localStorage.clear();
+  });
+
+  it("renders the chat workspace when loading an authenticated conversation route", async () => {
+    const remoteUser: UserSummary = {
+      user_id: "user-2",
+      username: "bob",
+      display_name: "Bob",
+    };
+    const conversation: ConversationSummary = {
+      conversation_id: "conversation-1",
+      type: "direct",
+      name: null,
+      state: "active",
+      latest_message_seq: 1,
+      read_seq: 1,
+      unread_count: 0,
+      active_member_count: 2,
+      direct_user: remoteUser,
+      latest_message: {
+        message_id: "message-1",
+        message_seq: 1,
+        sender: remoteUser,
+        body: "Hi from the routed conversation",
+        created_at: "2026-06-14T00:00:00.000Z",
+      },
+    };
+    const routeMessage: Message = {
+      message_id: "message-1",
+      conversation_id: "conversation-1",
+      message_seq: 1,
+      sender: remoteUser,
+      body: "Hi from the routed conversation",
+      created_at: "2026-06-14T00:00:00.000Z",
+    };
+    const listConversations = vi.fn().mockResolvedValue([conversation]);
+    const listMessages = vi.fn().mockResolvedValue([routeMessage]);
+    const { router } = await renderAppRoute({
+      initialEntries: ["/app/im/conversations/conversation-1"],
+      session: makeAuthResponse(),
+      apiClient: createShellApiClient({ listConversations, listMessages }),
+    });
+
+    expect(
+      await screen.findByRole("main", { name: "Main workspace" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Bob" })).toBeInTheDocument();
+    expect(await screen.findByText("Direct chat")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Hi from the routed conversation"),
+    ).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe(
+      "/app/im/conversations/conversation-1",
+    );
+    expect(useImStore.getState().currentConversationId).toBe("conversation-1");
   });
 
   it("renders the desktop feature rail, conversation list region, and main workspace", async () => {
@@ -80,10 +134,10 @@ describe("AppShell", () => {
     expect(mobileFeatureBar).toHaveClass("md:hidden");
   });
 
-  it("shows a connection status banner for realtime reconnection states", async () => {
+  it("shows translated connection status banners for realtime reconnection states", async () => {
     useImStore.getState().setRealtimeStatus("reconnecting");
 
-    await renderAppRoute({
+    const { i18n } = await renderAppRoute({
       initialEntries: ["/app/im"],
       session: makeAuthResponse(),
       apiClient: createShellApiClient(),
@@ -91,6 +145,12 @@ describe("AppShell", () => {
 
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Reconnecting…",
+    );
+
+    await i18n.changeLanguage("zh-CN");
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "正在重新连接…",
     );
   });
 

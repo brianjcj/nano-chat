@@ -171,13 +171,13 @@ export function UserMenu() {
                   active={i18n.language.startsWith("zh")}
                   onClick={() => void changeLanguage("zh-CN")}
                 >
-                  中文
+                  {t("shell.userMenu.languageZh")}
                 </LanguageButton>
                 <LanguageButton
                   active={i18n.language.startsWith("en")}
                   onClick={() => void changeLanguage("en-US")}
                 >
-                  English
+                  {t("shell.userMenu.languageEn")}
                 </LanguageButton>
               </div>
             </div>
