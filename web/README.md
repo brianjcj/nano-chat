@@ -15,11 +15,18 @@ pnpm install
 
 ## Local development
 
-Start the Rust backend first from the repository root, with Postgres and migrations already available:
+Start the Rust backend first from the repository root. The backend reads environment variables directly and does not auto-load `.env`:
 
 ```bash
-cargo run
+docker compose up -d postgres
+DATABASE_URL=postgres://nano:nano@localhost:5432/nano_chat_test sqlx migrate run
+DATABASE_URL=postgres://nano:nano@localhost:5432/nano_chat_test \
+  JWT_SECRET=change-me-development-secret-at-least-32-bytes \
+  BIND_ADDR=127.0.0.1:3000 \
+  cargo run
 ```
+
+If Postgres and migrations are already ready, only run the final env-prefixed `cargo run` command. See [`docs/api.md`](../docs/api.md#deployment-and-configuration-notes) for full backend setup.
 
 Then start Vite from `web/`:
 
@@ -53,7 +60,7 @@ pnpm build
 pnpm size
 ```
 
-`pnpm size` builds the app, gzips `dist/assets/*.js`, prints each JavaScript asset plus the total gzip size, and emits a soft warning if the total initial JavaScript gzip size exceeds 250 KB. The warning does not fail the command.
+`pnpm size` builds the app, gzips `dist/assets/*.js`, prints each JavaScript asset plus the total gzip size, and emits a soft warning if the total built JavaScript gzip size exceeds 250 KB. The warning does not fail the command.
 
 ## Production build and serving
 
