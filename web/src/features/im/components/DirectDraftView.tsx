@@ -1,4 +1,5 @@
 import { MessageCircleHeart } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 
@@ -17,6 +18,9 @@ export function DirectDraftView() {
   const setMobilePanel = useImStore((state) => state.setMobilePanel);
   const setWorkspaceNotice = useImStore((state) => state.setWorkspaceNotice);
   const sendDraftMessage = useSendDirectDraftMessage(draft);
+  const [sendErrorCode, setSendErrorCode] = useState<"send_failed" | null>(
+    null,
+  );
 
   if (!draft) {
     return (
@@ -36,9 +40,14 @@ export function DirectDraftView() {
   const title = draft.target_display_name?.trim() || draft.target_username;
 
   async function sendFirstMessage(body: string) {
+    setSendErrorCode(null);
     const result = await sendDraftMessage.sendMessage(body);
 
     if (!result.ok) {
+      if (result.code === "send_failed") {
+        setSendErrorCode(result.code);
+      }
+
       return result;
     }
 
@@ -79,6 +88,15 @@ export function DirectDraftView() {
           </p>
         </div>
       </div>
+
+      {sendErrorCode ? (
+        <p
+          className="mx-4 mb-3 rounded-[var(--radius)] border border-[color-mix(in_oklab,var(--destructive)_28%,white)] bg-[color-mix(in_oklab,var(--destructive)_8%,white)] px-3 py-2 text-sm font-semibold text-[var(--destructive)] md:mx-6"
+          role="alert"
+        >
+          {t("im.directDraft.sendFailure")}
+        </p>
+      ) : null}
 
       <MessageInput onSend={sendFirstMessage} />
     </section>

@@ -111,6 +111,7 @@ export const appResources = {
           description: "发送第一条消息后，单聊会话才会出现在列表中。",
           emptyTitle: "没有单聊草稿",
           emptyDescription: "从会话列表查找完整用户名来开始单聊。",
+          sendFailure: "第一条消息发送失败，请重试。",
         },
         newDirect: {
           title: "新建单聊",
@@ -181,6 +182,7 @@ export const appResources = {
         validation: {
           exactUsernameRequired: "请输入完整用户名",
           userNotFound: "用户不存在",
+          selfDirectNotAllowed: "不能和自己发起单聊。",
         },
       },
       errors: {
@@ -322,6 +324,7 @@ export const appResources = {
           description: "The direct conversation appears after you send the first message.",
           emptyTitle: "No direct draft",
           emptyDescription: "Look up an exact username from the conversation list to start a direct chat.",
+          sendFailure: "Could not send your first message. Try again.",
         },
         newDirect: {
           title: "New direct chat",
@@ -392,6 +395,7 @@ export const appResources = {
         validation: {
           exactUsernameRequired: "Enter an exact username",
           userNotFound: "User not found",
+          selfDirectNotAllowed: "You cannot start a direct chat with yourself.",
         },
       },
       errors: {

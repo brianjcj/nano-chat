@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/app/AppProviders";
 import { imQueryKeys } from "@/features/im/api/imQueries";
 import type { DirectDraft } from "@/features/im/state/imStore";
-import type { ConversationSummary, Message } from "@/shared/api/types";
+import type { ConversationSummary, Message, UserSummary } from "@/shared/api/types";
 import { useRealtimeClient } from "@/shared/realtime/RealtimeClientContext";
 import type { SendMessageResult } from "@/shared/realtime/protocol";
 import {
@@ -162,6 +162,7 @@ export function useSendDirectDraftMessage(
           imQueryKeys.messages(result.conversation_id),
           (messages = []) => mergeMessagesBySeq(messages, [result.message]),
         );
+        seedDirectDraftConversation(queryClient, draft, result.message);
         void queryClient.invalidateQueries({
           queryKey: imQueryKeys.conversations(),
         });
@@ -236,6 +237,88 @@ function markPendingMessageFailed(
           : message,
       ),
   );
+}
+
+function seedDirectDraftConversation(
+  queryClient: ReturnType<typeof useQueryClient>,
+  draft: DirectDraft,
+  message: Message,
+) {
+  const syntheticConversation = createDirectDraftConversationSummary(draft, message);
+
+  queryClient.setQueryData<ConversationSummary[]>(
+    imQueryKeys.conversations(),
+    (conversations = []) => {
+      const existingConversation = conversations.find(
+        (conversation) =>
+          conversation.conversation_id === syntheticConversation.conversation_id,
+      );
+
+      if (!existingConversation) {
+        return [syntheticConversation, ...conversations].sort(
+          compareConversationLatestMessage,
+        );
+      }
+
+      return conversations
+        .map((conversation) => {
+          if (conversation.conversation_id !== message.conversation_id) {
+            return conversation;
+          }
+
+          const shouldUseAckLatestMessage =
+            message.message_seq >= conversation.latest_message_seq;
+
+          return {
+            ...conversation,
+            active_member_count: Math.max(conversation.active_member_count, 2),
+            direct_user: conversation.direct_user ?? syntheticConversation.direct_user,
+            latest_message_seq: Math.max(
+              conversation.latest_message_seq,
+              message.message_seq,
+            ),
+            latest_message: shouldUseAckLatestMessage
+              ? syntheticConversation.latest_message
+              : conversation.latest_message,
+            read_seq: Math.max(conversation.read_seq, message.message_seq),
+            state: "active" as const,
+            type: "direct" as const,
+            unread_count: 0,
+          };
+        })
+        .sort(compareConversationLatestMessage);
+    },
+  );
+}
+
+function createDirectDraftConversationSummary(
+  draft: DirectDraft,
+  message: Message,
+): ConversationSummary {
+  const directUser: UserSummary = {
+    user_id: draft.target_user_id ?? draft.target_username,
+    username: draft.target_username,
+    display_name: draft.target_display_name ?? null,
+  };
+
+  return {
+    conversation_id: message.conversation_id,
+    type: "direct",
+    name: null,
+    state: "active",
+    latest_message_seq: message.message_seq,
+    read_seq: message.message_seq,
+    unread_count: 0,
+    active_member_count: 2,
+    direct_user: directUser,
+    latest_message: {
+      message_id: message.message_id,
+      message_seq: message.message_seq,
+      sender: message.sender,
+      body: message.body,
+      created_at: message.created_at,
+    },
+  };
 }
 
 function updateConversationLatestMessage(

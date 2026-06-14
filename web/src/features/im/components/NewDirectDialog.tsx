@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 
-import { useApiClient } from "@/app/AppProviders";
+import { useApiClient, useSession } from "@/app/AppProviders";
 import { useImStore } from "@/features/im/state/imStore";
 import { ApiError } from "@/shared/api/client";
 import { Button } from "@/shared/ui/button";
@@ -27,6 +27,7 @@ export function NewDirectDialog({
 }: NewDirectDialogProps) {
   const { t } = useTranslation();
   const apiClient = useApiClient();
+  const { session } = useSession();
   const navigate = useNavigate();
   const setCurrentConversationId = useImStore(
     (state) => state.setCurrentConversationId,
@@ -66,6 +67,11 @@ export function NewDirectDialog({
 
     try {
       const user = await apiClient.lookupUser(exactUsername);
+
+      if (user.user_id === session?.user.user_id) {
+        setErrorMessage(t("im.validation.selfDirectNotAllowed"));
+        return;
+      }
 
       setDirectDraft({
         target_username: user.username,

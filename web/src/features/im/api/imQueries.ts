@@ -80,55 +80,78 @@ function mergeConversationsMonotonically(
     ]),
   );
 
-  return sortConversationsByLatestMessage(
-    conversations.map((conversation) => {
-      const currentConversation = currentById.get(conversation.conversation_id);
+  const serverConversationIds = new Set(
+    conversations.map((conversation) => conversation.conversation_id),
+  );
+  const mergedConversations = conversations.map((conversation) => {
+    const currentConversation = currentById.get(conversation.conversation_id);
 
-      if (!currentConversation) {
-        return conversation;
-      }
+    if (!currentConversation) {
+      return conversation;
+    }
 
-      const currentHasNewerLatestMessage = hasNewerLatestMessage(
-        currentConversation,
-        conversation,
-      );
-      const shouldPreserveCurrentReadState =
-        currentHasNewerLatestMessage ||
-        currentConversation.read_seq > conversation.read_seq;
-      const latestMessageSeq = Math.max(
-        conversation.latest_message_seq,
-        currentConversation.latest_message_seq,
-      );
-      const latestMessage = currentHasNewerLatestMessage
-        ? currentConversation.latest_message
-        : conversation.latest_message;
-      const readSeq = shouldPreserveCurrentReadState
-        ? currentConversation.read_seq
-        : conversation.read_seq;
-      let unreadCount = conversation.unread_count;
-      if (currentHasNewerLatestMessage) {
-        unreadCount = currentConversation.unread_count;
-      } else if (shouldPreserveCurrentReadState) {
-        unreadCount = Math.max(0, latestMessageSeq - readSeq);
-      }
+    const currentHasNewerLatestMessage = hasNewerLatestMessage(
+      currentConversation,
+      conversation,
+    );
+    const shouldPreserveCurrentReadState =
+      currentHasNewerLatestMessage || currentConversation.read_seq > conversation.read_seq;
+    const latestMessageSeq = Math.max(
+      conversation.latest_message_seq,
+      currentConversation.latest_message_seq,
+    );
+    const latestMessage = currentHasNewerLatestMessage
+      ? currentConversation.latest_message
+      : conversation.latest_message;
+    const readSeq = shouldPreserveCurrentReadState
+      ? currentConversation.read_seq
+      : conversation.read_seq;
+    let unreadCount = conversation.unread_count;
+    if (currentHasNewerLatestMessage) {
+      unreadCount = currentConversation.unread_count;
+    } else if (shouldPreserveCurrentReadState) {
+      unreadCount = Math.max(0, latestMessageSeq - readSeq);
+    }
 
-      if (
-        latestMessageSeq === conversation.latest_message_seq &&
-        latestMessage === conversation.latest_message &&
-        readSeq === conversation.read_seq &&
-        unreadCount === conversation.unread_count
-      ) {
-        return conversation;
-      }
+    if (
+      latestMessageSeq === conversation.latest_message_seq &&
+      latestMessage === conversation.latest_message &&
+      readSeq === conversation.read_seq &&
+      unreadCount === conversation.unread_count
+    ) {
+      return conversation;
+    }
 
-      return {
-        ...conversation,
-        latest_message_seq: latestMessageSeq,
-        latest_message: latestMessage,
-        read_seq: readSeq,
-        unread_count: unreadCount,
-      };
-    }),
+    return {
+      ...conversation,
+      latest_message_seq: latestMessageSeq,
+      latest_message: latestMessage,
+      read_seq: readSeq,
+      unread_count: unreadCount,
+    };
+  });
+  const realtimeOnlyConversations = currentConversations.filter(
+    (conversation) =>
+      !serverConversationIds.has(conversation.conversation_id) &&
+      shouldPreserveRealtimeOnlyConversation(conversation),
+  );
+
+  return sortConversationsByLatestMessage([
+    ...mergedConversations,
+    ...realtimeOnlyConversations,
+  ]);
+}
+
+function shouldPreserveRealtimeOnlyConversation(
+  conversation: ConversationSummary,
+) {
+  return (
+    conversation.type === "direct" &&
+    conversation.state === "active" &&
+    Boolean(conversation.latest_message) &&
+    conversation.latest_message_seq > 0 &&
+    conversation.read_seq >= conversation.latest_message_seq &&
+    conversation.unread_count === 0
   );
 }
 
