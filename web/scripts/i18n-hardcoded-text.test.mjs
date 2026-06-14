@@ -9,8 +9,17 @@ const scannedRoots = [
   "src/features/auth",
   "src/features/shell",
   "src/features/im",
+  "src/shared/ui",
 ];
 const userVisibleTextPattern = /[A-Za-z\u4e00-\u9fff]/u;
+const userVisibleStringAttributes = new Set([
+  "alt",
+  "aria-description",
+  "aria-label",
+  "aria-valuetext",
+  "placeholder",
+  "title",
+]);
 
 describe("core UI i18n coverage", () => {
   it("does not leave obvious user-facing JSX text outside translation resources", async () => {
@@ -25,6 +34,36 @@ describe("core UI i18n coverage", () => {
     ).flat();
 
     expect(violations).toEqual([]);
+  });
+
+  it("flags static user-facing JSX string attributes while ignoring structural attributes", () => {
+    const violations = findHardCodedJsxTextInSource(
+      path.join(webRoot, "src/shared/ui/example.tsx"),
+      `
+        export function Example() {
+          return (
+            <button
+              aria-label="Close dialog"
+              title={"Close sheet"}
+              className="rounded text-sm"
+              id="close-button"
+              type="button"
+              data-state="open"
+            >
+              {translated}
+            </button>
+          );
+        }
+      `,
+    );
+
+    expect(violations).toHaveLength(2);
+    expect(violations).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('aria-label="Close dialog"'),
+        expect.stringContaining('title="Close sheet"'),
+      ]),
+    );
   });
 });
 
@@ -55,6 +94,11 @@ async function listTsxFiles(directory) {
 
 async function findHardCodedJsxText(filePath) {
   const source = await readFile(filePath, "utf8");
+
+  return findHardCodedJsxTextInSource(filePath, source);
+}
+
+function findHardCodedJsxTextInSource(filePath, source) {
   const sourceFile = ts.createSourceFile(
     filePath,
     source,
@@ -68,12 +112,23 @@ async function findHardCodedJsxText(filePath) {
     if (ts.isJsxText(node)) {
       const text = node.getFullText(sourceFile).replace(/\s+/g, " ").trim();
 
-      if (userVisibleTextPattern.test(text)) {
-        const { line, character } = sourceFile.getLineAndCharacterOfPosition(
-          node.getStart(sourceFile),
-        );
-        violations.push(
-          `${path.relative(webRoot, filePath)}:${line + 1}:${character + 1} ${JSON.stringify(text)}`,
+      if (hasUserVisibleText(text)) {
+        addViolation(node, JSON.stringify(text));
+      }
+    }
+
+    if (ts.isJsxAttribute(node)) {
+      const attributeName = node.name.getText(sourceFile);
+      const attributeValue = getStaticStringAttributeValue(node);
+
+      if (
+        userVisibleStringAttributes.has(attributeName) &&
+        attributeValue !== null &&
+        hasUserVisibleText(attributeValue)
+      ) {
+        addViolation(
+          node.name,
+          `${attributeName}=${JSON.stringify(attributeValue)}`,
         );
       }
     }
@@ -81,6 +136,44 @@ async function findHardCodedJsxText(filePath) {
     ts.forEachChild(node, visit);
   }
 
+  function addViolation(node, detail) {
+    const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+      node.getStart(sourceFile),
+    );
+    violations.push(
+      `${path.relative(webRoot, filePath)}:${line + 1}:${character + 1} ${detail}`,
+    );
+  }
+
   visit(sourceFile);
   return violations;
+}
+
+function getStaticStringAttributeValue(attribute) {
+  const initializer = attribute.initializer;
+
+  if (!initializer) {
+    return null;
+  }
+
+  if (ts.isStringLiteral(initializer)) {
+    return initializer.text;
+  }
+
+  if (!ts.isJsxExpression(initializer) || !initializer.expression) {
+    return null;
+  }
+
+  if (
+    ts.isStringLiteral(initializer.expression) ||
+    ts.isNoSubstitutionTemplateLiteral(initializer.expression)
+  ) {
+    return initializer.expression.text;
+  }
+
+  return null;
+}
+
+function hasUserVisibleText(value) {
+  return userVisibleTextPattern.test(value);
 }

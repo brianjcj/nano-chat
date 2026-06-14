@@ -13,6 +13,7 @@ describe("i18n resources", () => {
       expect(translation.im.conversationList.emptyTitle).toBeTruthy();
       expect(translation.errors.invalid_credentials).toBeTruthy();
       expect(translation.common.save).toBeTruthy();
+      expect(translation.common.close).toBeTruthy();
     }
   });
 
