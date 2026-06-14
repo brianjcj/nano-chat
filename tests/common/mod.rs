@@ -74,6 +74,7 @@ pub fn test_config() -> Config {
         jwt_secret: "0123456789abcdef0123456789abcdef".to_string(),
         bind_addr: "127.0.0.1:0".to_string(),
         rust_log: "nano_chat=debug".to_string(),
+        web_dist_dir: "web/dist".to_string(),
         notify_channel: "nano_chat_events".to_string(),
         max_connections_per_user: 10,
         heartbeat_interval_secs: 30,

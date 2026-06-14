@@ -6,6 +6,7 @@ use std::{
 };
 
 const DEFAULT_RUST_LOG: &str = "nano_chat=info,tower_http=info";
+const DEFAULT_WEB_DIST_DIR: &str = "web/dist";
 const MIN_JWT_SECRET_LEN: usize = 32;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -14,6 +15,7 @@ pub struct Config {
     pub jwt_secret: String,
     pub bind_addr: String,
     pub rust_log: String,
+    pub web_dist_dir: String,
     pub notify_channel: String,
     pub max_connections_per_user: usize,
     pub heartbeat_interval_secs: u64,
@@ -29,6 +31,7 @@ impl Config {
             jwt_secret: validate_jwt_secret(required_env("JWT_SECRET")?)?,
             bind_addr: required_env("BIND_ADDR")?,
             rust_log: optional_string_env("RUST_LOG", DEFAULT_RUST_LOG)?,
+            web_dist_dir: optional_string_env("WEB_DIST_DIR", DEFAULT_WEB_DIST_DIR)?,
             notify_channel: env::var("NANO_CHAT_NOTIFY_CHANNEL")
                 .unwrap_or_else(|_| "nano_chat_events".to_string()),
             max_connections_per_user: optional_env("NANO_CHAT_MAX_CONNECTIONS_PER_USER", 10)?,
@@ -47,6 +50,7 @@ impl fmt::Debug for Config {
             .field("jwt_secret", &"<redacted>")
             .field("bind_addr", &self.bind_addr)
             .field("rust_log", &self.rust_log)
+            .field("web_dist_dir", &self.web_dist_dir)
             .field("notify_channel", &self.notify_channel)
             .field("max_connections_per_user", &self.max_connections_per_user)
             .field("heartbeat_interval_secs", &self.heartbeat_interval_secs)
@@ -110,6 +114,7 @@ mod tests {
         "JWT_SECRET",
         "BIND_ADDR",
         "RUST_LOG",
+        "WEB_DIST_DIR",
         "NANO_CHAT_NOTIFY_CHANNEL",
         "NANO_CHAT_MAX_CONNECTIONS_PER_USER",
         "NANO_CHAT_HEARTBEAT_INTERVAL_SECS",
@@ -195,6 +200,29 @@ mod tests {
     }
 
     #[test]
+    fn from_env_defaults_web_dist_dir_when_missing() {
+        with_clean_env(|| {
+            set_required_env();
+
+            let config = Config::from_env().expect("WEB_DIST_DIR should default when absent");
+
+            assert_eq!(config.web_dist_dir, "web/dist");
+        });
+    }
+
+    #[test]
+    fn from_env_parses_custom_web_dist_dir() {
+        with_clean_env(|| {
+            set_required_env();
+            set_env("WEB_DIST_DIR", "/app/web/dist");
+
+            let config = Config::from_env().expect("config should parse WEB_DIST_DIR");
+
+            assert_eq!(config.web_dist_dir, "/app/web/dist");
+        });
+    }
+
+    #[test]
     fn from_env_rejects_too_short_jwt_secret() {
         with_clean_env(|| {
             set_env("DATABASE_URL", "postgres://nano:nano@localhost/nano_chat");
@@ -231,6 +259,7 @@ mod tests {
             jwt_secret: "0123456789abcdef0123456789abcdef".to_string(),
             bind_addr: "127.0.0.1:3000".to_string(),
             rust_log: "nano_chat=debug".to_string(),
+            web_dist_dir: "web/dist".to_string(),
             notify_channel: "nano_chat_events".to_string(),
             max_connections_per_user: 10,
             heartbeat_interval_secs: 30,
@@ -243,6 +272,7 @@ mod tests {
 
         assert!(debug.contains("database_url: \"<redacted>\""));
         assert!(debug.contains("jwt_secret: \"<redacted>\""));
+        assert!(debug.contains("web_dist_dir: \"web/dist\""));
         assert!(!debug.contains("postgres://user:pass"));
         assert!(!debug.contains("0123456789abcdef0123456789abcdef"));
     }

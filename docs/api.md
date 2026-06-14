@@ -2,6 +2,8 @@
 
 Base path for public HTTP APIs: `/api/v1`.
 
+In production, the same Nano Chat Rust service serves the Web SPA static build from `WEB_DIST_DIR` alongside `/api/v1`, `/ws`, `/healthz`, and `/readyz`. Non-backend browser routes fall back to `index.html`; backend routes are not handled by the SPA fallback.
+
 All request and response JSON uses `snake_case`. Authenticated endpoints require:
 
 ```http
@@ -636,6 +638,8 @@ docker compose up -d postgres
 TEST_DATABASE_URL=postgres://nano:nano@localhost:5432/nano_chat_test cargo test --tests -- --nocapture
 ```
 
+For local Web development, run the Vite dev server from `web/` and let Vite proxy API/WebSocket calls to the Rust backend. Production builds use `pnpm build` to create `web/dist`, which the Rust service serves directly.
+
 The Compose Postgres image defaults to `mirror.gcr.io/library/postgres:17` for environments where Docker Hub pulls are unreliable. Operators can use the official Docker Hub image by setting `POSTGRES_IMAGE=postgres:17`.
 
 For an application deployment:
@@ -669,6 +673,7 @@ Configuration variables:
 | `JWT_SECRET` | `change-me-development-secret-at-least-32-bytes` | JWT signing secret; must be changed outside local development. |
 | `BIND_ADDR` | `0.0.0.0:3000` | Address the HTTP/WebSocket server binds to. |
 | `RUST_LOG` | `nano_chat=debug,tower_http=info` | Tracing filter. |
+| `WEB_DIST_DIR` | `web/dist` | Directory containing the built Web SPA assets. Docker images set this to `/app/web/dist`. |
 | `NANO_CHAT_NOTIFY_CHANNEL` | `nano_chat_events` | Postgres `LISTEN/NOTIFY` channel for cross-instance fan-out. |
 | `NANO_CHAT_MAX_CONNECTIONS_PER_USER` | `10` | Per-instance WebSocket connection limit per user. |
 | `NANO_CHAT_HEARTBEAT_INTERVAL_SECS` | `30` | Recommended heartbeat interval for clients. |

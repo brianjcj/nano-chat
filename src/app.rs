@@ -1,10 +1,14 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
+use std::{
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use axum::{Router, extract::State, http::StatusCode, routing::get};
 use sqlx::PgPool;
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
     auth,
@@ -123,11 +127,18 @@ impl AppState {
 }
 
 pub fn build_router(state: AppState) -> Router {
+    let web_dist_dir = PathBuf::from(&state.config.web_dist_dir);
+    let spa_index = web_dist_dir.join("index.html");
+    let spa_fallback = ServeDir::new(&web_dist_dir).fallback(ServeFile::new(spa_index));
+    let assets_dir = web_dist_dir.join("assets");
+
     Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
         .merge(ws::router())
         .nest("/api/v1", api_router())
+        .nest_service("/assets", ServeDir::new(assets_dir))
+        .fallback_service(spa_fallback)
         .with_state(state)
 }
 
@@ -136,6 +147,11 @@ fn api_router() -> Router<AppState> {
         .merge(auth::http::router())
         .merge(users::http::router())
         .merge(conversations::http::router())
+        .fallback(api_not_found)
+}
+
+async fn api_not_found() -> StatusCode {
+    StatusCode::NOT_FOUND
 }
 
 async fn healthz() -> StatusCode {
