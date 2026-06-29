@@ -30,14 +30,14 @@ expectDirectMessageSendPayload({
 });
 
 expectDirectMessageSendPayload({
-  target_user_id: "user-1",
+  target_user_id: "1001",
   client_msg_id: "client-message-3",
   body: "hello",
 });
 
 // @ts-expect-error direct_message.send requires client_msg_id.
 expectDirectMessageSendPayload({
-  target_user_id: "user-1",
+  target_user_id: "1001",
   body: "hello",
 });
 
@@ -50,7 +50,7 @@ expectDirectMessageSendPayload({
 // @ts-expect-error direct_message.send rejects both target fields.
 expectDirectMessageSendPayload({
   target_username: "alice",
-  target_user_id: "user-1",
+  target_user_id: "1001",
   client_msg_id: "client-message-5",
   body: "hello",
 });

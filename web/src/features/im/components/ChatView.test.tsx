@@ -30,13 +30,13 @@ import type {
 import type { ChatMessage } from "@/shared/utils/message";
 
 const localUser: UserSummary = {
-  user_id: "user-1",
+  user_id: "1001",
   username: "alice",
   display_name: "Alice",
 };
 
 const remoteUser: UserSummary = {
-  user_id: "user-2",
+  user_id: "1002",
   username: "bob",
   display_name: "Bob",
 };

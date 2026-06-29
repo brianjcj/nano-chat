@@ -21,19 +21,19 @@ import { RealtimeClientProvider } from "@/shared/realtime/RealtimeClientContext"
 import type { RealtimeClient } from "@/shared/realtime/realtimeClient";
 
 const localUser: UserSummary = {
-  user_id: "user-local",
+  user_id: "1001",
   username: "alice",
   display_name: "Alice",
 };
 
 const bob: UserSummary = {
-  user_id: "user-bob",
+  user_id: "1002",
   username: "bob",
   display_name: "Bob",
 };
 
 const charlie: UserSummary = {
-  user_id: "user-charlie",
+  user_id: "1003",
   username: "charlie",
   display_name: "Charlie",
 };
@@ -237,7 +237,7 @@ describe("group creation and member actions", () => {
     await waitFor(() => {
       expect(createGroup).toHaveBeenCalledWith({
         name: "Launch Room",
-        member_ids: ["user-bob"],
+        member_ids: ["1002"],
       });
     });
     await waitFor(() => {
@@ -303,7 +303,7 @@ describe("group creation and member actions", () => {
     });
     await waitFor(() => {
       expect(addMember).toHaveBeenCalledWith("group-1", {
-        user_id: "user-charlie",
+        user_id: "1003",
       });
     });
     expect(await within(panel).findByText("Charlie")).toBeInTheDocument();

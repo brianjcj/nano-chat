@@ -42,7 +42,7 @@ const session: Session = {
   client_id: "client-1",
   expires_at: "2999-01-01T00:00:00.000Z",
   user: {
-    user_id: "user-1",
+    user_id: "1001",
     username: "alice",
     display_name: "Alice",
   },

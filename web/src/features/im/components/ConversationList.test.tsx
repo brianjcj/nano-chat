@@ -20,13 +20,13 @@ import type { ConversationSummary, Message, UserSummary } from "@/shared/api/typ
 import { createAppI18n } from "@/shared/i18n/i18n";
 
 const localUser: UserSummary = {
-  user_id: "user-local",
+  user_id: "1000",
   username: "local",
   display_name: "Local User",
 };
 
 const directUser: UserSummary = {
-  user_id: "user-alice",
+  user_id: "1002",
   username: "alice",
   display_name: "Alice A.",
 };
@@ -227,7 +227,7 @@ describe("ConversationList", () => {
       applyRealtimeEvent({
         queryClient,
         store: useImStore,
-        currentUserId: "user-local",
+        currentUserId: "1001",
         event: {
           type: "message.created",
           payload: {
@@ -355,7 +355,7 @@ describe("ConversationList", () => {
       applyRealtimeEvent({
         queryClient,
         store: useImStore,
-        currentUserId: "user-local",
+        currentUserId: "1001",
         event: {
           type: "message.created",
           payload: {
@@ -455,12 +455,12 @@ describe("ConversationList", () => {
       applyRealtimeEvent({
         queryClient,
         store: useImStore,
-        currentUserId: "user-local",
+        currentUserId: "1001",
         event: {
           type: "conversation.read_updated",
           payload: {
             conversation_id: "direct-1",
-            user_id: "user-local",
+            user_id: "1001",
             read_seq: 5,
           },
         },
@@ -615,7 +615,7 @@ describe("ConversationList", () => {
       applyRealtimeEvent({
         queryClient,
         store: useImStore,
-        currentUserId: "user-local",
+        currentUserId: "1001",
         event: {
           type: "message.created",
           payload: {
@@ -722,7 +722,7 @@ describe("ConversationList", () => {
       applyRealtimeEvent({
         queryClient,
         store: useImStore,
-        currentUserId: "user-local",
+        currentUserId: "1001",
         event: {
           type: "message.created",
           payload: {

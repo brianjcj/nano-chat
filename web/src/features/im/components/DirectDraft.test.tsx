@@ -25,13 +25,13 @@ import type { RealtimeClient } from "@/shared/realtime/realtimeClient";
 import type { ChatMessage } from "@/shared/utils/message";
 
 const localUser: UserSummary = {
-  user_id: "user-local",
+  user_id: "1001",
   username: "alice",
   display_name: "Alice",
 };
 
 const directUser: UserSummary = {
-  user_id: "user-bob",
+  user_id: "1002",
   username: "bob",
   display_name: "Bob",
 };
@@ -266,7 +266,7 @@ describe("direct draft flow", () => {
     });
     expect(useImStore.getState().directDraft).toMatchObject({
       target_username: "bob",
-      target_user_id: "user-bob",
+      target_user_id: "1002",
     });
     expect(useImStore.getState().currentConversationId).toBeNull();
     expect(useImStore.getState().mobilePanel).toBe("chat");
@@ -315,7 +315,7 @@ describe("direct draft flow", () => {
     });
     useImStore.getState().setDirectDraft({
       target_username: "bob",
-      target_user_id: "user-bob",
+      target_user_id: "1002",
       target_display_name: "Bob",
     });
     const queryClient = createQueryClient();
@@ -339,7 +339,7 @@ describe("direct draft flow", () => {
       expect(sendCommand).toHaveBeenCalledWith(
         "direct_message.send",
         expect.objectContaining({
-          target_user_id: "user-bob",
+          target_user_id: "1002",
           body: "Hello Bob",
           client_msg_id: expect.any(String),
         }),
@@ -394,7 +394,7 @@ describe("direct draft flow", () => {
     });
     useImStore.getState().setDirectDraft({
       target_username: "bob",
-      target_user_id: "user-bob",
+      target_user_id: "1002",
       target_display_name: "Bob",
     });
     const queryClient = createQueryClient();
@@ -454,7 +454,7 @@ describe("direct draft flow", () => {
       });
     useImStore.getState().setDirectDraft({
       target_username: "bob",
-      target_user_id: "user-bob",
+      target_user_id: "1002",
       target_display_name: "Bob",
     });
     const { router, user } = await renderDirectDraftRoute({ sendCommand });

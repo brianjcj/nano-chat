@@ -7,7 +7,7 @@ import { useImStore } from "./imStore";
 import type { ConversationSummary, Message, UserSummary } from "@/shared/api/types";
 
 const sender: UserSummary = {
-  user_id: "user-1",
+  user_id: "1001",
   username: "alice",
   display_name: "Alice",
 };
@@ -208,7 +208,7 @@ describe("IM realtime cache updates", () => {
     applyRealtimeEvent({
       queryClient,
       store: useImStore,
-      currentUserId: "user-local",
+      currentUserId: "1000",
       event: messageCreated(incomingMessage),
     });
 
@@ -325,7 +325,7 @@ describe("IM realtime cache updates", () => {
   it("does not increment unread correction for the current user's message.created in a non-current conversation", () => {
     const queryClient = createQueryClient();
     const localSender: UserSummary = {
-      user_id: "user-local",
+      user_id: "1000",
       username: "local",
       display_name: "Local User",
     };
@@ -334,7 +334,7 @@ describe("IM realtime cache updates", () => {
     applyRealtimeEvent({
       queryClient,
       store: useImStore,
-      currentUserId: "user-local",
+      currentUserId: "1000",
       event: messageCreated(makeMessage(1, "conversation-2", localSender)),
     });
 
@@ -396,8 +396,8 @@ describe("IM realtime cache updates", () => {
     applyRealtimeEvent({
       queryClient,
       store: useImStore,
-      currentUserId: "user-local",
-      event: readUpdated("conversation-1", "user-local", 4),
+      currentUserId: "1001",
+      event: readUpdated("conversation-1", "1001", 4),
     });
 
     const conversations = queryClient.getQueryData<ConversationSummary[]>(
@@ -428,8 +428,8 @@ describe("IM realtime cache updates", () => {
     applyRealtimeEvent({
       queryClient,
       store: useImStore,
-      currentUserId: "user-local",
-      event: readUpdated("conversation-1", "user-local", 4),
+      currentUserId: "1001",
+      event: readUpdated("conversation-1", "1001", 4),
     });
 
     expect(useImStore.getState().unreadCorrections).not.toHaveProperty(
@@ -453,8 +453,8 @@ describe("IM realtime cache updates", () => {
     applyRealtimeEvent({
       queryClient,
       store: useImStore,
-      currentUserId: "user-local",
-      event: readUpdated("conversation-1", "user-other", 5),
+      currentUserId: "1001",
+      event: readUpdated("conversation-1", "1002", 5),
     });
 
     const conversations = queryClient.getQueryData<ConversationSummary[]>(

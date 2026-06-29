@@ -94,7 +94,7 @@ export function createMemorySessionStore(
 }
 
 export function makeAuthResponse({
-  userId = "user-1",
+  userId = "1001",
   username = "alice",
   displayName = "Alice",
   clientId = "client-1",

@@ -98,7 +98,7 @@ describe("AppProviders", () => {
     const nextSession = makeSession({
       accessToken: "access-token-2",
       clientId: "client-2",
-      userId: "user-2",
+      userId: "1002",
       username: "bob",
     });
     const sessionStore = createMemorySessionStore(initialSession);
@@ -155,7 +155,7 @@ function makeSession({
   clientId = "client-1",
   displayName = "Alice",
   expiresAt = "2999-01-01T00:00:00.000Z",
-  userId = "user-1",
+  userId = "1001",
   username = "alice",
 }: {
   accessToken?: string;

@@ -32,7 +32,7 @@ describe("AppShell", () => {
 
   it("renders the chat workspace when loading an authenticated conversation route", async () => {
     const remoteUser: UserSummary = {
-      user_id: "user-2",
+      user_id: "1002",
       username: "bob",
       display_name: "Bob",
     };
@@ -242,7 +242,7 @@ describe("AppShell", () => {
   it("edits display name from the user menu, saves the returned user into session, and updates visible name", async () => {
     const user = userEvent.setup();
     const updatedUser: UserSummary = {
-      user_id: "user-1",
+      user_id: "1001",
       username: "alice",
       display_name: "Alicia Keys",
     };
