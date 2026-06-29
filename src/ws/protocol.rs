@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::error::ErrorCode;
+use crate::{error::ErrorCode, ids::UserId};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ClientEnvelope {
@@ -75,7 +75,7 @@ pub struct MessageSendPayload {
 #[derive(Debug, Clone, Deserialize)]
 pub struct DirectMessageSendPayload {
     #[serde(default)]
-    pub target_user_id: Option<Uuid>,
+    pub target_user_id: Option<UserId>,
     #[serde(default)]
     pub target_username: Option<String>,
     pub client_msg_id: String,

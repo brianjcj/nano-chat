@@ -6,6 +6,7 @@ use nano_chat::{
     app::AppState,
     config::Config,
     db,
+    ids::UserId,
     messages::types::MessageDto,
     realtime::{
         connection_registry::ConnectionRegistry,
@@ -271,7 +272,7 @@ async fn assert_message_created_for(
 async fn assert_conversation_dissolved_for(
     receiver: &mut mpsc::Receiver<nano_chat::ws::protocol::ServerEnvelope>,
     conversation_id: Uuid,
-    user_id: Uuid,
+    user_id: UserId,
 ) {
     let envelope = tokio::time::timeout(Duration::from_secs(2), receiver.recv())
         .await
@@ -292,7 +293,7 @@ fn test_message() -> MessageDto {
         conversation_id: Uuid::now_v7(),
         message_seq: 1,
         sender: UserSummary {
-            user_id: Uuid::now_v7(),
+            user_id: UserId::new(1).unwrap(),
             username: "alice".to_string(),
             display_name: Some("Alice".to_string()),
         },
@@ -342,7 +343,7 @@ impl RealtimeTestContext {
         &self,
         user: &common::TestUser,
         name: &str,
-        member_ids: &[Uuid],
+        member_ids: &[UserId],
     ) -> common::TestConversation {
         self.inner.create_group(user, name, member_ids).await
     }
@@ -351,7 +352,7 @@ impl RealtimeTestContext {
         &self,
         user: &common::TestUser,
         conversation_id: Uuid,
-        member_id: Uuid,
+        member_id: UserId,
     ) -> common::TestMember {
         self.inner
             .add_member(user, conversation_id, member_id)

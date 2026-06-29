@@ -2,12 +2,12 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::users::types::UserSummary;
+use crate::{ids::UserId, users::types::UserSummary};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DirectTarget {
     Username(String),
-    UserId(Uuid),
+    UserId(UserId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -7,6 +7,7 @@ use chrono::{DateTime, Duration, Utc};
 use uuid::Uuid;
 
 use crate::{
+    ids::UserId,
     realtime::types::{ConnectionId, ConnectionSender, RegisteredConnection},
     ws::protocol::ServerEnvelope,
 };
@@ -25,12 +26,12 @@ pub struct ConnectionRegistry {
 #[derive(Default)]
 struct RegistryInner {
     connections: HashMap<ConnectionId, ConnectionEntry>,
-    by_user: HashMap<Uuid, HashSet<ConnectionId>>,
+    by_user: HashMap<UserId, HashSet<ConnectionId>>,
     by_conversation: HashMap<Uuid, HashSet<ConnectionId>>,
 }
 
 struct ConnectionEntry {
-    user_id: Uuid,
+    user_id: UserId,
     client_id: Uuid,
     sender: ConnectionSender,
     connected_at: DateTime<Utc>,
@@ -48,7 +49,7 @@ impl ConnectionRegistry {
 
     pub fn register(
         &self,
-        user_id: Uuid,
+        user_id: UserId,
         client_id: Uuid,
         sender: ConnectionSender,
     ) -> Result<RegisteredConnection, RegistryError> {
@@ -77,14 +78,14 @@ impl ConnectionRegistry {
         self.lock_inner().connections.contains_key(&connection_id)
     }
 
-    pub fn connection_count_for_user(&self, user_id: Uuid) -> usize {
+    pub fn connection_count_for_user(&self, user_id: UserId) -> usize {
         self.lock_inner()
             .by_user
             .get(&user_id)
             .map_or(0, HashSet::len)
     }
 
-    pub fn is_user_at_limit(&self, user_id: Uuid) -> bool {
+    pub fn is_user_at_limit(&self, user_id: UserId) -> bool {
         self.connection_count_for_user(user_id) >= self.max_connections_per_user
     }
 
@@ -119,7 +120,7 @@ impl ConnectionRegistry {
 
     pub fn send_to_users(
         &self,
-        user_ids: impl IntoIterator<Item = Uuid>,
+        user_ids: impl IntoIterator<Item = UserId>,
         envelope: ServerEnvelope,
         skip_connection_id: Option<ConnectionId>,
     ) -> usize {
@@ -222,7 +223,7 @@ impl ConnectionRegistry {
     #[cfg(test)]
     pub fn register_test_connection(
         &self,
-        user_id: Uuid,
+        user_id: UserId,
         client_id: Uuid,
     ) -> Result<RegisteredConnection, RegistryError> {
         let (sender, _receiver) = tokio::sync::mpsc::channel(1);
@@ -232,7 +233,7 @@ impl ConnectionRegistry {
     #[cfg(test)]
     pub fn register_test_connection_with_sender(
         &self,
-        user_id: Uuid,
+        user_id: UserId,
         client_id: Uuid,
         sender: ConnectionSender,
     ) -> Result<RegisteredConnection, RegistryError> {
@@ -242,7 +243,7 @@ impl ConnectionRegistry {
     #[cfg(test)]
     pub fn register_test_connection_seen_at(
         &self,
-        user_id: Uuid,
+        user_id: UserId,
         client_id: Uuid,
         seen_at: DateTime<Utc>,
     ) -> Result<RegisteredConnection, RegistryError> {
@@ -252,7 +253,7 @@ impl ConnectionRegistry {
 
     fn register_seen_at(
         &self,
-        user_id: Uuid,
+        user_id: UserId,
         client_id: Uuid,
         sender: ConnectionSender,
         seen_at: DateTime<Utc>,
@@ -336,7 +337,7 @@ mod tests {
     #[test]
     fn registry_enforces_per_user_connection_limit() {
         let registry = ConnectionRegistry::new(2);
-        let user_id = uuid::Uuid::now_v7();
+        let user_id = UserId::new(1).unwrap();
         let client_id = uuid::Uuid::now_v7();
         assert!(
             registry
@@ -358,7 +359,7 @@ mod tests {
     #[test]
     fn registry_fanout_skips_origin_connection() {
         let registry = ConnectionRegistry::new(10);
-        let user_id = uuid::Uuid::now_v7();
+        let user_id = UserId::new(2).unwrap();
         let client_id = uuid::Uuid::now_v7();
         let (origin_tx, mut origin_rx) = mpsc::channel(1);
         let (other_tx, mut other_rx) = mpsc::channel(1);
@@ -384,7 +385,7 @@ mod tests {
     #[test]
     fn registry_fanout_does_not_count_full_receiver_queue_as_delivered() {
         let registry = ConnectionRegistry::new(10);
-        let user_id = uuid::Uuid::now_v7();
+        let user_id = UserId::new(3).unwrap();
         let client_id = uuid::Uuid::now_v7();
         let (sender, _receiver) = mpsc::channel(1);
         sender
@@ -406,7 +407,7 @@ mod tests {
     #[test]
     fn registry_cleanup_removes_idle_connections() {
         let registry = ConnectionRegistry::new(10);
-        let user_id = uuid::Uuid::now_v7();
+        let user_id = UserId::new(4).unwrap();
         let client_id = uuid::Uuid::now_v7();
         let now = Utc::now();
         let stale = registry

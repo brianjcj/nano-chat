@@ -8,6 +8,7 @@ use crate::{
     app::AppLifecycle,
     conversations::service as conversations_service,
     error::AppError,
+    ids::UserId,
     realtime::{
         connection_registry::ConnectionRegistry,
         types::{RealtimeEvent, RealtimeNotifyPayload, RealtimeNotifyPayloadError},
@@ -238,9 +239,9 @@ pub async fn fanout_notify_payload(
 async fn active_or_specific_member_ids(
     pool: &PgPool,
     conversation_id: Uuid,
-    user_id: Uuid,
-) -> Result<Vec<Uuid>, sqlx::Error> {
-    sqlx::query_scalar::<_, Uuid>(
+    user_id: UserId,
+) -> Result<Vec<UserId>, sqlx::Error> {
+    sqlx::query_scalar::<_, UserId>(
         "select user_id
          from conversation_members
          where conversation_id = $1

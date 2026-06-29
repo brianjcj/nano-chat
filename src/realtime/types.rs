@@ -4,7 +4,7 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::{
-    conversations::types::ConversationMember, messages::types::MessageDto,
+    conversations::types::ConversationMember, ids::UserId, messages::types::MessageDto,
     ws::protocol::ServerEnvelope,
 };
 
@@ -16,7 +16,7 @@ pub type ConnectionSender = mpsc::Sender<ServerEnvelope>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegisteredConnection {
     pub connection_id: ConnectionId,
-    pub user_id: Uuid,
+    pub user_id: UserId,
     pub client_id: Uuid,
     pub connected_at: DateTime<Utc>,
     pub last_seen_at: DateTime<Utc>,
@@ -33,7 +33,7 @@ pub enum RealtimeEvent {
     #[serde(rename = "conversation.read_updated")]
     ConversationReadUpdated {
         conversation_id: Uuid,
-        user_id: Uuid,
+        user_id: UserId,
         read_seq: i64,
     },
     #[serde(rename = "conversation.member_added")]
@@ -44,12 +44,12 @@ pub enum RealtimeEvent {
     #[serde(rename = "conversation.member_left")]
     ConversationMemberLeft {
         conversation_id: Uuid,
-        user_id: Uuid,
+        user_id: UserId,
     },
     #[serde(rename = "conversation.dissolved")]
     ConversationDissolved {
         conversation_id: Uuid,
-        user_id: Uuid,
+        user_id: UserId,
     },
     #[serde(rename = "server.draining")]
     ServerDraining,

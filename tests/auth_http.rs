@@ -25,6 +25,10 @@ async fn register_login_and_reuse_client_id() {
     assert_eq!(response.status(), StatusCode::CREATED);
 
     let body = response_json(response).await;
+    let user_id_value = body["user"]["user_id"].as_str().expect("user_id is string");
+    let numeric_user_id: i64 = user_id_value.parse().expect("user_id parses as integer");
+    assert!(numeric_user_id > 0);
+    assert!(uuid::Uuid::parse_str(user_id_value).is_err());
     let client_id = body["client_id"].as_str().unwrap().to_owned();
     assert!(body["access_token"].as_str().unwrap().len() > 20);
 

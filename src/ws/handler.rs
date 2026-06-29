@@ -15,13 +15,13 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use tokio::sync::mpsc;
-use uuid::Uuid;
 
 use crate::{
     app::AppState,
     auth::{service as auth_service, types::CurrentUser},
     conversations::service as conversations_service,
     error::{AppError, AppResult, ErrorCode},
+    ids::UserId,
     messages::{service as messages_service, types::DirectTarget},
     realtime::{
         notify::fanout_notify_payload,
@@ -458,7 +458,7 @@ fn parse_payload<T: DeserializeOwned>(envelope: &ClientEnvelope) -> Result<T, &'
 }
 
 fn direct_target(
-    target_user_id: Option<Uuid>,
+    target_user_id: Option<UserId>,
     target_username: Option<String>,
 ) -> AppResult<DirectTarget> {
     match (target_user_id, target_username) {
@@ -536,6 +536,7 @@ mod tests {
     use crate::{config::Config, db, realtime::connection_registry::ConnectionRegistry};
     use futures_util::FutureExt;
     use serde_json::json;
+    use uuid::Uuid;
 
     #[tokio::test]
     async fn text_message_for_removed_connection_closes_without_dispatching() {
@@ -733,7 +734,7 @@ mod tests {
 
     fn test_current_user() -> CurrentUser {
         CurrentUser {
-            user_id: Uuid::now_v7(),
+            user_id: UserId::new(1).unwrap(),
             username: "alice".to_string(),
             display_name: Some("Alice".to_string()),
             client_id: Uuid::now_v7(),

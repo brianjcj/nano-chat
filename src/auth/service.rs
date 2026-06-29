@@ -11,7 +11,7 @@ use crate::{
     auth::types::{AuthResponse, Claims, CurrentUser, LoginRequest, RegisterRequest},
     config::Config,
     error::{AppError, AppResult, ErrorCode},
-    ids::new_uuid_v7,
+    ids::{UserId, new_uuid_v7},
     time::{now_utc, to_rfc3339_utc},
     users::{
         service::normalize_display_name,
@@ -23,7 +23,7 @@ const ACCESS_TOKEN_TTL_DAYS: i64 = 7;
 
 #[derive(Debug, sqlx::FromRow)]
 struct AuthUserRow {
-    user_id: Uuid,
+    user_id: UserId,
     username: String,
     display_name: Option<String>,
     password_hash: String,
@@ -31,7 +31,7 @@ struct AuthUserRow {
 
 #[derive(Debug, sqlx::FromRow)]
 struct CurrentUserRow {
-    user_id: Uuid,
+    user_id: UserId,
     username: String,
     display_name: Option<String>,
     client_id: Uuid,
@@ -67,18 +67,16 @@ pub async fn register(
     validate_password(&request.password)?;
     let display_name = normalize_display_name(request.display_name)?;
     let password_hash = hash_password(&request.password)?;
-    let user_id = new_uuid_v7();
     let client_id = new_uuid_v7();
     let now = now_utc();
 
     let mut tx = pool.begin().await.map_err(internal_error)?;
 
     let user = sqlx::query_as::<_, AuthUserRow>(
-        "insert into users (user_id, username, display_name, password_hash, created_at, updated_at)
-         values ($1, $2, $3, $4, $5, $5)
+        "insert into users (username, display_name, password_hash, created_at, updated_at)
+         values ($1, $2, $3, $4, $4)
          returning user_id, username, display_name, password_hash",
     )
-    .bind(user_id)
     .bind(&username)
     .bind(&display_name)
     .bind(&password_hash)
@@ -101,7 +99,7 @@ pub async fn register(
         "insert into clients (client_id, user_id, created_at, last_login_at) values ($1, $2, $3, $3)",
     )
     .bind(client_id)
-    .bind(user_id)
+    .bind(user.user_id)
     .bind(now)
     .execute(&mut *tx)
     .await
@@ -148,7 +146,7 @@ pub async fn authenticate_bearer(
 ) -> AppResult<CurrentUser> {
     let token = bearer_token(authorization)?;
     let claims = decode_access_token(config, token)?;
-    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| invalid_token())?;
+    let user_id = claims.sub.parse::<UserId>().map_err(|_| invalid_token())?;
 
     let current_user = sqlx::query_as::<_, CurrentUserRow>(
         "select u.user_id, u.username, u.display_name, c.client_id
@@ -227,7 +225,7 @@ fn verify_password(password: &str, password_hash: &str) -> AppResult<bool> {
         .is_ok())
 }
 
-async fn create_client(pool: &PgPool, user_id: Uuid, now: DateTime<Utc>) -> AppResult<Uuid> {
+async fn create_client(pool: &PgPool, user_id: UserId, now: DateTime<Utc>) -> AppResult<Uuid> {
     let client_id = new_uuid_v7();
     sqlx::query(
         "insert into clients (client_id, user_id, created_at, last_login_at) values ($1, $2, $3, $3)",
@@ -243,12 +241,12 @@ async fn create_client(pool: &PgPool, user_id: Uuid, now: DateTime<Utc>) -> AppR
 
 async fn reuse_client(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
     client_id: Uuid,
     now: DateTime<Utc>,
 ) -> AppResult<Uuid> {
     let owner_user_id =
-        sqlx::query_scalar::<_, Uuid>("select user_id from clients where client_id = $1")
+        sqlx::query_scalar::<_, UserId>("select user_id from clients where client_id = $1")
             .bind(client_id)
             .fetch_optional(pool)
             .await
@@ -297,7 +295,7 @@ fn auth_response(
 
 fn issue_access_token(
     config: &Config,
-    user_id: Uuid,
+    user_id: UserId,
     client_id: Uuid,
     issued_at: DateTime<Utc>,
     expires_at: DateTime<Utc>,

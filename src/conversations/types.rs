@@ -2,18 +2,18 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::users::types::UserSummary;
+use crate::{ids::UserId, users::types::UserSummary};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateGroupRequest {
     pub name: String,
     #[serde(default)]
-    pub member_ids: Vec<Uuid>,
+    pub member_ids: Vec<UserId>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct AddMemberRequest {
-    pub user_id: Uuid,
+    pub user_id: UserId,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -42,7 +42,7 @@ pub struct LatestMessageSummary {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConversationMember {
-    pub user_id: Uuid,
+    pub user_id: UserId,
     pub username: String,
     pub display_name: Option<String>,
 }

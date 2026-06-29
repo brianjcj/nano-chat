@@ -13,6 +13,7 @@ use nano_chat::{
     auth::types::CurrentUser,
     config::Config,
     conversations::service as conversations_service,
+    ids::UserId,
     messages::{
         service as messages_service,
         types::{DirectTarget, SendMessageResult},
@@ -132,7 +133,7 @@ impl TestContext {
         &self,
         user: &TestUser,
         name: &str,
-        member_ids: &[Uuid],
+        member_ids: &[UserId],
     ) -> TestConversation {
         let response = self.create_group_raw(user, name, member_ids).await;
         assert_eq!(response.status(), StatusCode::CREATED);
@@ -143,7 +144,7 @@ impl TestContext {
         &self,
         user: &TestUser,
         name: &str,
-        member_ids: &[Uuid],
+        member_ids: &[UserId],
     ) -> Response {
         let request = authed_json_request(
             "POST",
@@ -169,7 +170,7 @@ impl TestContext {
         &self,
         user: &TestUser,
         conversation_id: Uuid,
-        member_id: Uuid,
+        member_id: UserId,
     ) -> TestMember {
         let response = self.add_member_raw(user, conversation_id, member_id).await;
         assert_eq!(response.status(), StatusCode::OK);
@@ -180,7 +181,7 @@ impl TestContext {
         &self,
         user: &TestUser,
         conversation_id: Uuid,
-        member_id: Uuid,
+        member_id: UserId,
     ) -> Response {
         let request = authed_json_request(
             "POST",
@@ -334,7 +335,7 @@ impl TestContext {
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct TestUser {
-    pub user_id: Uuid,
+    pub user_id: UserId,
     pub username: String,
     pub display_name: Option<String>,
     pub client_id: Uuid,
@@ -372,7 +373,7 @@ pub struct TestConversation {
 #[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct TestMember {
-    pub user_id: Uuid,
+    pub user_id: UserId,
     pub username: String,
     pub display_name: Option<String>,
 }
@@ -409,7 +410,7 @@ struct AuthResponse {
 
 #[derive(Debug, Deserialize)]
 struct AuthUser {
-    user_id: Uuid,
+    user_id: UserId,
     username: String,
     display_name: Option<String>,
 }

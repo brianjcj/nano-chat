@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::users::types::UserSummary;
+use crate::{ids::UserId, users::types::UserSummary};
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterRequest {
@@ -27,7 +27,7 @@ pub struct AuthResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CurrentUser {
-    pub user_id: Uuid,
+    pub user_id: UserId,
     pub username: String,
     pub display_name: Option<String>,
     pub client_id: Uuid,

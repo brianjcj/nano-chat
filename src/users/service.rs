@@ -1,16 +1,16 @@
 use axum::http::StatusCode;
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use crate::{
     error::{AppError, AppResult, ErrorCode},
+    ids::UserId,
     time::now_utc,
     users::types::{UserSummary, validate_username},
 };
 
 #[derive(Debug, sqlx::FromRow)]
 struct UserSummaryRow {
-    user_id: Uuid,
+    user_id: UserId,
     username: String,
     display_name: Option<String>,
 }
@@ -43,7 +43,7 @@ pub fn normalize_display_name(display_name: Option<String>) -> AppResult<Option<
         .transpose()
 }
 
-pub async fn get_user_by_id(pool: &PgPool, user_id: Uuid) -> AppResult<UserSummary> {
+pub async fn get_user_by_id(pool: &PgPool, user_id: UserId) -> AppResult<UserSummary> {
     let user = sqlx::query_as::<_, UserSummaryRow>(
         "select user_id, username, display_name from users where user_id = $1",
     )
@@ -92,7 +92,7 @@ pub async fn get_user_by_username(pool: &PgPool, username: &str) -> AppResult<Us
 
 pub async fn update_display_name(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
     display_name: Option<String>,
 ) -> AppResult<UserSummary> {
     let display_name = normalize_display_name(display_name)?;

@@ -10,7 +10,7 @@ use crate::{
         ConversationMember, ConversationSummary, CreateGroupRequest, LatestMessageSummary,
     },
     error::{AppError, AppResult, ErrorCode},
-    ids::new_uuid_v7,
+    ids::{UserId, new_uuid_v7},
     time::now_utc,
     users::types::UserSummary,
 };
@@ -27,12 +27,12 @@ struct ConversationSummaryRow {
     read_seq: i64,
     unread_count: i64,
     active_member_count: i64,
-    direct_user_id: Option<Uuid>,
+    direct_user_id: Option<UserId>,
     direct_username: Option<String>,
     direct_display_name: Option<String>,
     latest_message_id: Option<Uuid>,
     latest_message_message_seq: Option<i64>,
-    latest_sender_user_id: Option<Uuid>,
+    latest_sender_user_id: Option<UserId>,
     latest_sender_username: Option<String>,
     latest_sender_display_name: Option<String>,
     latest_message_body: Option<String>,
@@ -48,7 +48,7 @@ struct ConversationRow {
 
 #[derive(Debug, sqlx::FromRow)]
 struct MemberRow {
-    user_id: Uuid,
+    user_id: UserId,
     username: String,
     display_name: Option<String>,
 }
@@ -147,7 +147,7 @@ impl From<MemberRow> for ConversationMember {
 
 pub async fn list_conversations(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> AppResult<Vec<ConversationSummary>> {
     let rows = sqlx::query_as::<_, ConversationSummaryRow>(
         "select c.conversation_id,
@@ -221,7 +221,7 @@ pub async fn list_conversations(
 
 pub async fn create_group(
     pool: &PgPool,
-    creator_user_id: Uuid,
+    creator_user_id: UserId,
     request: CreateGroupRequest,
 ) -> AppResult<ConversationSummary> {
     let name = normalize_group_name(request.name)?;
@@ -287,7 +287,7 @@ pub async fn create_group(
 
 pub async fn list_members(
     pool: &PgPool,
-    requester_user_id: Uuid,
+    requester_user_id: UserId,
     conversation_id: Uuid,
 ) -> AppResult<Vec<ConversationMember>> {
     let conversation = get_conversation(pool, conversation_id).await?;
@@ -312,9 +312,9 @@ pub async fn list_members(
 
 pub async fn add_member(
     pool: &PgPool,
-    requester_user_id: Uuid,
+    requester_user_id: UserId,
     conversation_id: Uuid,
-    member_user_id: Uuid,
+    member_user_id: UserId,
 ) -> AppResult<ConversationMember> {
     Ok(
         add_member_with_status(pool, requester_user_id, conversation_id, member_user_id)
@@ -325,9 +325,9 @@ pub async fn add_member(
 
 pub async fn add_member_with_status(
     pool: &PgPool,
-    requester_user_id: Uuid,
+    requester_user_id: UserId,
     conversation_id: Uuid,
-    member_user_id: Uuid,
+    member_user_id: UserId,
 ) -> AppResult<AddMemberResult> {
     let mut tx = pool.begin().await.map_err(internal_error)?;
     let conversation = lock_conversation(&mut tx, conversation_id).await?;
@@ -426,14 +426,14 @@ pub async fn add_member_with_status(
     })
 }
 
-pub async fn leave_group(pool: &PgPool, user_id: Uuid, conversation_id: Uuid) -> AppResult<()> {
+pub async fn leave_group(pool: &PgPool, user_id: UserId, conversation_id: Uuid) -> AppResult<()> {
     leave_group_with_status(pool, user_id, conversation_id).await?;
     Ok(())
 }
 
 pub async fn leave_group_with_status(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
     conversation_id: Uuid,
 ) -> AppResult<LeaveGroupResult> {
     let mut tx = pool.begin().await.map_err(internal_error)?;
@@ -497,11 +497,11 @@ pub async fn leave_group_with_status(
     Ok(LeaveGroupResult { dissolved })
 }
 
-pub async fn active_member_ids(pool: &PgPool, conversation_id: Uuid) -> AppResult<Vec<Uuid>> {
+pub async fn active_member_ids(pool: &PgPool, conversation_id: Uuid) -> AppResult<Vec<UserId>> {
     let conversation = get_conversation(pool, conversation_id).await?;
     ensure_not_dissolved(&conversation)?;
 
-    sqlx::query_scalar::<_, Uuid>(
+    sqlx::query_scalar::<_, UserId>(
         "select user_id
          from conversation_members
          where conversation_id = $1
@@ -517,10 +517,10 @@ pub async fn visible_user_ids_for_message(
     pool: &PgPool,
     conversation_id: Uuid,
     message_seq: i64,
-) -> AppResult<Vec<Uuid>> {
+) -> AppResult<Vec<UserId>> {
     get_conversation(pool, conversation_id).await?;
 
-    sqlx::query_scalar::<_, Uuid>(
+    sqlx::query_scalar::<_, UserId>(
         "select distinct user_id
          from conversation_member_spans
          where conversation_id = $1
@@ -537,7 +537,7 @@ pub async fn visible_user_ids_for_message(
 
 pub async fn mark_read(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
     conversation_id: Uuid,
     read_seq: i64,
 ) -> AppResult<i64> {
@@ -550,7 +550,7 @@ pub async fn mark_read(
 
 pub async fn mark_read_with_status(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
     conversation_id: Uuid,
     read_seq: i64,
 ) -> AppResult<MarkReadResult> {
@@ -636,9 +636,9 @@ fn normalize_group_name(name: String) -> AppResult<String> {
 }
 
 fn normalize_group_member_ids(
-    creator_user_id: Uuid,
-    requested_member_ids: Vec<Uuid>,
-) -> AppResult<Vec<Uuid>> {
+    creator_user_id: UserId,
+    requested_member_ids: Vec<UserId>,
+) -> AppResult<Vec<UserId>> {
     let mut seen = HashSet::new();
     let mut member_ids = Vec::with_capacity(requested_member_ids.len() + 1);
     seen.insert(creator_user_id);
@@ -665,15 +665,19 @@ fn normalize_group_member_ids(
 
 async fn ensure_users_exist(
     tx: &mut Transaction<'_, Postgres>,
-    user_ids: &[Uuid],
+    user_ids: &[UserId],
 ) -> AppResult<()> {
     if user_ids.is_empty() {
         return Ok(());
     }
 
+    let user_id_values = user_ids
+        .iter()
+        .map(|user_id| user_id.get())
+        .collect::<Vec<_>>();
     let existing_count: i64 =
         sqlx::query_scalar("select count(*) from users where user_id = any($1)")
-            .bind(user_ids)
+            .bind(&user_id_values)
             .fetch_one(&mut **tx)
             .await
             .map_err(internal_error)?;
@@ -685,7 +689,7 @@ async fn ensure_users_exist(
     }
 }
 
-async fn get_user_tx(tx: &mut Transaction<'_, Postgres>, user_id: Uuid) -> AppResult<MemberRow> {
+async fn get_user_tx(tx: &mut Transaction<'_, Postgres>, user_id: UserId) -> AppResult<MemberRow> {
     sqlx::query_as::<_, MemberRow>(
         "select user_id, username, display_name from users where user_id = $1",
     )
@@ -728,7 +732,7 @@ async fn lock_conversation(
 
 async fn conversation_summary_for_user_tx(
     tx: &mut Transaction<'_, Postgres>,
-    user_id: Uuid,
+    user_id: UserId,
     conversation_id: Uuid,
 ) -> AppResult<ConversationSummary> {
     let row = sqlx::query_as::<_, ConversationSummaryRow>(
@@ -801,7 +805,7 @@ async fn conversation_summary_for_user_tx(
 async fn ensure_active_member_pool(
     pool: &PgPool,
     conversation_id: Uuid,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> AppResult<()> {
     let is_active: Option<i32> = sqlx::query_scalar(
         "select 1
@@ -826,7 +830,7 @@ async fn ensure_active_member_pool(
 async fn ensure_active_member_tx(
     tx: &mut Transaction<'_, Postgres>,
     conversation_id: Uuid,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> AppResult<()> {
     let is_active: Option<i32> = sqlx::query_scalar(
         "select 1

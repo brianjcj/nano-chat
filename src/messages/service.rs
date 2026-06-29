@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{
     auth::types::CurrentUser,
     error::{AppError, AppResult, ErrorCode},
-    ids::new_uuid_v7,
+    ids::{UserId, new_uuid_v7},
     messages::types::{DirectTarget, MessageCursor, MessageDto, SendMessageResult},
     time::now_utc,
     users::types::UserSummary,
@@ -34,7 +34,7 @@ struct ConversationRow {
 
 #[derive(Debug, sqlx::FromRow)]
 struct TargetUserRow {
-    user_id: Uuid,
+    user_id: UserId,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -53,7 +53,7 @@ struct MessageDtoRow {
     message_id: Uuid,
     conversation_id: Uuid,
     message_seq: i64,
-    sender_user_id: Uuid,
+    sender_user_id: UserId,
     sender_username: String,
     sender_display_name: Option<String>,
     body: String,
@@ -442,8 +442,8 @@ async fn lock_conversation(
 
 async fn find_direct_conversation(
     tx: &mut Transaction<'_, Postgres>,
-    user_low: Uuid,
-    user_high: Uuid,
+    user_low: UserId,
+    user_high: UserId,
 ) -> AppResult<Option<ConversationRow>> {
     sqlx::query_as::<_, ConversationRow>(
         "select c.conversation_id, c.type as conversation_type, c.state, c.last_message_seq
@@ -461,8 +461,8 @@ async fn find_direct_conversation(
 
 async fn create_direct_conversation(
     tx: &mut Transaction<'_, Postgres>,
-    sender_user_id: Uuid,
-    target_user_id: Uuid,
+    sender_user_id: UserId,
+    target_user_id: UserId,
 ) -> AppResult<ConversationRow> {
     let conversation_id = new_uuid_v7();
     let now = now_utc();
@@ -553,8 +553,8 @@ async fn resolve_direct_target(
 
 async fn lock_direct_pair(
     tx: &mut Transaction<'_, Postgres>,
-    user_low: Uuid,
-    user_high: Uuid,
+    user_low: UserId,
+    user_high: UserId,
 ) -> AppResult<()> {
     let pair_key = format!("direct:{user_low}:{user_high}");
     sqlx::query("select pg_advisory_xact_lock(hashtext($1)::bigint)")
@@ -568,7 +568,7 @@ async fn lock_direct_pair(
 async fn ensure_can_send(
     tx: &mut Transaction<'_, Postgres>,
     conversation: &ConversationRow,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> AppResult<()> {
     if conversation.state == "dissolved" {
         return Err(conversation_dissolved());
@@ -616,7 +616,7 @@ async fn ensure_conversation_exists(pool: &PgPool, conversation_id: Uuid) -> App
 async fn ensure_has_visibility_span(
     pool: &PgPool,
     conversation_id: Uuid,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> AppResult<()> {
     let exists: Option<i32> = sqlx::query_scalar(
         "select 1
@@ -691,7 +691,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-fn ordered_user_pair(a: Uuid, b: Uuid) -> (Uuid, Uuid) {
+fn ordered_user_pair(a: UserId, b: UserId) -> (UserId, UserId) {
     if a < b { (a, b) } else { (b, a) }
 }
 

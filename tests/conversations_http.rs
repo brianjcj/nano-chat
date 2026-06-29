@@ -38,6 +38,25 @@ async fn group_creation_requires_creator_plus_one_member() {
 
 #[tokio::test]
 #[serial_test::serial]
+async fn group_creation_rejects_malformed_member_id_json() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let request = common::authed_json_request(
+        "POST",
+        "/api/v1/conversations/groups",
+        &alice,
+        serde_json::json!({"name": "project", "member_ids": ["not-a-number"]}),
+    );
+
+    let response = ctx.app.clone().oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = common::response_json(response).await;
+    assert_eq!(body["error"]["code"], "invalid_request");
+}
+
+#[tokio::test]
+#[serial_test::serial]
 async fn malformed_conversation_id_path_uses_invalid_request_error_envelope() {
     let ctx = common::TestContext::new().await;
     let alice = ctx.register("alice").await;
