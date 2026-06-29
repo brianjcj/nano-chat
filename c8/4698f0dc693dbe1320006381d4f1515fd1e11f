@@ -1,0 +1,43 @@
+web/src/features/im/components/DirectDraft.test.tsx
+  s_7d4bbc984c91b1::t_827e59ba0a6a6a 28,34,269,318,342,397,457
+web/src/app/AppProviders.test.tsx
+  s_7d4bbc984c91b1::t_3c9c76eb025568 101,158
+web/src/features/im/components/ChatView.test.tsx
+  s_7d4bbc984c91b1::t_827e59ba0a6a6a 33,39
+web/src/features/im/components/ConversationList.test.tsx
+  s_7d4bbc984c91b1::t_7115fa973c2d46 23
+  s_7d4bbc984c91b1::t_827e59ba0a6a6a 29,230,358,458,463,618,725
+web/src/shared/session/sessionStore.test.ts
+  s_7d4bbc984c91b1::t_827e59ba0a6a6a 45
+web/src/features/im/state/cacheUpdates.test.ts
+  s_7d4bbc984c91b1::t_432a16518910fb 211,337,457
+  s_7d4bbc984c91b1::t_7115fa973c2d46 328
+  s_7d4bbc984c91b1::t_827e59ba0a6a6a 10,399-400,431-432,456
+web/src/shared/realtime/protocol.type-test.ts
+  s_7d4bbc984c91b1::t_827e59ba0a6a6a 33,40,53
+web/src/app/test-utils.tsx
+  s_7d4bbc984c91b1::t_3c9c76eb025568 97
+web/src/features/im/components/GroupActions.test.tsx
+  s_7d4bbc984c91b1::t_827e59ba0a6a6a 24,30,36,240,306
+web/src/features/im/components/MessageList.test.tsx
+  s_7d4bbc984c91b1::t_827e59ba0a6a6a 13,19
+web/src/features/shell/AppShell.test.tsx
+  s_7d4bbc984c91b1::t_827e59ba0a6a6a 35,245
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "c84698f0dc693dbe1320006381d4f1515fd1e11f",
+  "prompts": {},
+  "logical_commit_id": "c84698f0dc693dbe1320006381d4f1515fd1e11f",
+  "sessions": {
+    "s_7d4bbc984c91b1": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f117f-17a5-7e9f-b993-d2bce88b336a",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
