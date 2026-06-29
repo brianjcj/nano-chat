@@ -1,0 +1,20 @@
+docs/superpowers/specs/2026-06-29-numeric-user-id-design.md
+  s_7d4bbc984c91b1::t_bfeec9aadc1b21 1-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "a6400c0d6c8bd7fdaa3f4ee154d0a18b3f18df80",
+  "prompts": {},
+  "logical_commit_id": "a6400c0d6c8bd7fdaa3f4ee154d0a18b3f18df80",
+  "sessions": {
+    "s_7d4bbc984c91b1": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f117f-17a5-7e9f-b993-d2bce88b336a",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
