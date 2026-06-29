@@ -9,7 +9,7 @@ import {
 import type { UserSummary } from "@/shared/api/types";
 
 const sender: UserSummary = {
-  user_id: "user-1",
+  user_id: "1001",
   username: "alice",
   display_name: "Alice",
 };

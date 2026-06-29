@@ -5,7 +5,7 @@ import type { UserSummary } from "@/shared/api/types";
 
 function user(overrides: Partial<UserSummary> = {}): UserSummary {
   return {
-    user_id: "user-1",
+    user_id: "1001",
     username: "alice_wonder",
     display_name: "Alice Wonder",
     ...overrides,
@@ -19,10 +19,10 @@ describe("avatar helpers", () => {
   });
 
   it("returns the same soft-social gradient token and class for the same user id", () => {
-    const first = getAvatarVisual(user({ user_id: "018f-avatar-same" }));
+    const first = getAvatarVisual(user({ user_id: "1001" }));
     const second = getAvatarVisual(
       user({
-        user_id: "018f-avatar-same",
+        user_id: "1001",
         username: "renamed_user",
         display_name: "Renamed User",
       }),

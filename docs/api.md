@@ -39,7 +39,7 @@ Success: `201 Created`
 ```json
 {
   "user": {
-    "user_id": "018f0000-0000-7000-8000-000000000001",
+    "user_id": "1001",
     "username": "alice",
     "display_name": "Alice"
   },
@@ -79,7 +79,7 @@ Success: `200 OK`
 
 ```json
 {
-  "user_id": "018f0000-0000-7000-8000-000000000001",
+  "user_id": "1001",
   "username": "alice",
   "display_name": "Alice"
 }
@@ -115,7 +115,7 @@ Success: `200 OK`
 
 ```json
 {
-  "user_id": "018f0000-0000-7000-8000-000000000001",
+  "user_id": "1001",
   "username": "alice",
   "display_name": "Alice"
 }
@@ -149,7 +149,7 @@ Success: `200 OK`
       "message_id": "018f0000-0000-7000-8000-000000000020",
       "message_seq": 12,
       "sender": {
-        "user_id": "018f0000-0000-7000-8000-000000000001",
+        "user_id": "1001",
         "username": "alice",
         "display_name": "Alice"
       },
@@ -167,7 +167,7 @@ Success: `200 OK`
     "unread_count": 0,
     "active_member_count": 2,
     "direct_user": {
-      "user_id": "018f0000-0000-7000-8000-000000000002",
+      "user_id": "1002",
       "username": "bob",
       "display_name": "Bob"
     },
@@ -175,7 +175,7 @@ Success: `200 OK`
       "message_id": "018f0000-0000-7000-8000-000000000021",
       "message_seq": 1,
       "sender": {
-        "user_id": "018f0000-0000-7000-8000-000000000002",
+        "user_id": "1002",
         "username": "bob",
         "display_name": "Bob"
       },
@@ -197,7 +197,7 @@ Request:
 ```json
 {
   "name": "project",
-  "member_ids": ["018f0000-0000-7000-8000-000000000002"]
+  "member_ids": ["1002"]
 }
 ```
 
@@ -227,7 +227,7 @@ Success: `200 OK`
 ```json
 [
   {
-    "user_id": "018f0000-0000-7000-8000-000000000001",
+    "user_id": "1001",
     "username": "alice",
     "display_name": "Alice"
   }
@@ -242,7 +242,7 @@ Request:
 
 ```json
 {
-  "user_id": "018f0000-0000-7000-8000-000000000003"
+  "user_id": "1003"
 }
 ```
 
@@ -293,7 +293,7 @@ Success: `200 OK`
     "conversation_id": "018f0000-0000-7000-8000-000000000010",
     "message_seq": 1,
     "sender": {
-      "user_id": "018f0000-0000-7000-8000-000000000001",
+      "user_id": "1001",
       "username": "alice",
       "display_name": "Alice"
     },
@@ -416,7 +416,7 @@ The success payload is the same shape as `SendMessageResult`:
     "conversation_id": "018f0000-0000-7000-8000-000000000010",
     "message_seq": 1,
     "sender": {
-      "user_id": "018f0000-0000-7000-8000-000000000001",
+      "user_id": "1001",
       "username": "alice",
       "display_name": "Alice"
     },
@@ -518,7 +518,7 @@ After successful state changes, the server fans out WebSocket events locally and
       "conversation_id": "018f0000-0000-7000-8000-000000000010",
       "message_seq": 12,
       "sender": {
-        "user_id": "018f0000-0000-7000-8000-000000000001",
+        "user_id": "1001",
         "username": "alice",
         "display_name": "Alice"
       },
@@ -536,7 +536,7 @@ Other events use the same server envelope shape:
   "type": "conversation.read_updated",
   "payload": {
     "conversation_id": "018f0000-0000-7000-8000-000000000010",
-    "user_id": "018f0000-0000-7000-8000-000000000001",
+    "user_id": "1001",
     "read_seq": 12
   }
 }
@@ -548,7 +548,7 @@ Other events use the same server envelope shape:
   "payload": {
     "conversation_id": "018f0000-0000-7000-8000-000000000010",
     "member": {
-      "user_id": "018f0000-0000-7000-8000-000000000003",
+      "user_id": "1003",
       "username": "carol",
       "display_name": "Carol"
     }
@@ -561,7 +561,7 @@ Other events use the same server envelope shape:
   "type": "conversation.member_left",
   "payload": {
     "conversation_id": "018f0000-0000-7000-8000-000000000010",
-    "user_id": "018f0000-0000-7000-8000-000000000003"
+    "user_id": "1003"
   }
 }
 ```
@@ -571,7 +571,7 @@ Other events use the same server envelope shape:
   "type": "conversation.dissolved",
   "payload": {
     "conversation_id": "018f0000-0000-7000-8000-000000000010",
-    "user_id": "018f0000-0000-7000-8000-000000000001"
+    "user_id": "1001"
   }
 }
 ```

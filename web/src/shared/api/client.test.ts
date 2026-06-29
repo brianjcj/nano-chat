@@ -9,7 +9,7 @@ type FetchCall = {
 };
 
 const user: UserSummary = {
-  user_id: "018f0000-0000-7000-8000-000000000001",
+  user_id: "1001",
   username: "alice",
   display_name: "Alice",
 };
