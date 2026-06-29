@@ -1,0 +1,21 @@
+docs/superpowers/plans/2026-06-29-numeric-user-id.md
+  s_7d4bbc984c91b1::t_fd7c6e49fea47b 1-537,539-560
+  s_7d4bbc984c91b1::t_2da9690295170a 538
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "80c13141e5c51804d046e225be5b194fdce5b874",
+  "prompts": {},
+  "logical_commit_id": "80c13141e5c51804d046e225be5b194fdce5b874",
+  "sessions": {
+    "s_7d4bbc984c91b1": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f117f-17a5-7e9f-b993-d2bce88b336a",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
