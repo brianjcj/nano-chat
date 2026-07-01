@@ -15,7 +15,8 @@ use crate::{
 };
 
 use super::types::{
-    CallCommandResult, CallEndReason, CallMediaType, CallSignalTarget, CallState, CallSummary,
+    CallCommandResult, CallEndReason, CallInviteOutcome, CallMediaType, CallSignalTarget,
+    CallState, CallSummary,
 };
 
 #[derive(Debug, sqlx::FromRow)]
@@ -92,6 +93,19 @@ pub async fn invite(
     conversation_id: Uuid,
     media_type: CallMediaType,
 ) -> AppResult<CallCommandResult> {
+    match invite_with_outcome(pool, registry, caller, conversation_id, media_type).await? {
+        CallInviteOutcome::Started(result) => Ok(result),
+        CallInviteOutcome::Busy(_) => Err(call_busy()),
+    }
+}
+
+pub async fn invite_with_outcome(
+    pool: &PgPool,
+    registry: &ConnectionRegistry,
+    caller: CurrentUser,
+    conversation_id: Uuid,
+    media_type: CallMediaType,
+) -> AppResult<CallInviteOutcome> {
     let mut tx = pool.begin().await.map_err(internal_error)?;
     let conversation = messages_service::lock_conversation(&mut tx, conversation_id).await?;
     ensure_active_direct_conversation(&mut tx, conversation_id).await?;
@@ -158,7 +172,7 @@ pub async fn invite(
         let is_busy = is_unique_violation(&error);
         tx.rollback().await.map_err(internal_error)?;
         if is_busy {
-            insert_ended_call_attempt(
+            let busy = insert_ended_call_attempt(
                 pool,
                 &caller,
                 &participants,
@@ -168,14 +182,14 @@ pub async fn invite(
                 CallEndReason::Busy,
             )
             .await?;
-            return Err(call_busy());
+            return Ok(CallInviteOutcome::Busy(busy));
         }
         return Err(internal_error(error));
     }
 
     let call = call_summary_by_id(&mut tx, call_id).await?;
     tx.commit().await.map_err(internal_error)?;
-    Ok(CallCommandResult { call })
+    Ok(CallInviteOutcome::Started(CallCommandResult { call }))
 }
 
 pub async fn accept(
@@ -324,6 +338,13 @@ pub async fn signal_target(
     }
 
     if participant.user_id == row.caller_user_id {
+        if participant.client_id != row.caller_client_id {
+            return Err(AppError::new(
+                StatusCode::FORBIDDEN,
+                ErrorCode::NotCallParticipant,
+                "Only the originating caller client can signal this call",
+            ));
+        }
         let target_client_id = row
             .accepted_client_id
             .ok_or_else(|| AppError::invalid_request("Call has no accepted client"))?;
@@ -570,7 +591,7 @@ async fn insert_ended_call_attempt(
     conversation_id: Uuid,
     media_type: CallMediaType,
     reason: CallEndReason,
-) -> AppResult<()> {
+) -> AppResult<CallCommandResult> {
     let mut tx = pool.begin().await.map_err(internal_error)?;
     let conversation = messages_service::lock_conversation(&mut tx, conversation_id).await?;
     insert_ended_call_attempt_in_locked_conversation(
@@ -585,7 +606,9 @@ async fn insert_ended_call_attempt(
         now_utc(),
     )
     .await?;
-    tx.commit().await.map_err(internal_error)
+    let call = call_summary_by_id(&mut tx, call_id).await?;
+    tx.commit().await.map_err(internal_error)?;
+    Ok(CallCommandResult { call })
 }
 
 async fn insert_ended_call_attempt_in_locked_conversation(

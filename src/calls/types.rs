@@ -87,6 +87,12 @@ pub struct CallCommandResult {
     pub call: CallSummary,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CallInviteOutcome {
+    Started(CallCommandResult),
+    Busy(CallCommandResult),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CallSignalTarget {
     pub target_user_id: UserId,

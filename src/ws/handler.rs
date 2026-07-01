@@ -19,7 +19,10 @@ use tokio::sync::mpsc;
 use crate::{
     app::AppState,
     auth::{service as auth_service, types::CurrentUser},
-    calls::{service as calls_service, types::CallEndReason},
+    calls::{
+        service as calls_service,
+        types::{CallEndReason, CallInviteOutcome},
+    },
     conversations::service as conversations_service,
     error::{AppError, AppResult, ErrorCode},
     ids::UserId,
@@ -449,7 +452,7 @@ async fn handle_call_invite(
         }
     };
 
-    match calls_service::invite(
+    match calls_service::invite_with_outcome(
         &state.pool,
         &state.registry,
         current_user.clone(),
@@ -458,7 +461,8 @@ async fn handle_call_invite(
     )
     .await
     {
-        Ok(result) => {
+        Ok(CallInviteOutcome::Started(result)) => {
+            let keep_processing = send_ok(outbound_tx, id, "call.invite.ok", json!(result)).await;
             publish_realtime_event_to_local_users(
                 state,
                 Some(connection_id),
@@ -468,7 +472,38 @@ async fn handle_call_invite(
                 [result.call.callee.user_id],
             )
             .await;
-            send_ok(outbound_tx, id, "call.invite.ok", json!(result)).await
+            publish_realtime_event_to_local_users(
+                state,
+                None,
+                RealtimeEvent::CallRinging {
+                    call: result.call.clone(),
+                },
+                [result.call.caller.user_id],
+            )
+            .await;
+            keep_processing
+        }
+        Ok(CallInviteOutcome::Busy(result)) => {
+            let keep_processing = send_app_error(
+                outbound_tx,
+                id,
+                AppError::new(
+                    StatusCode::CONFLICT,
+                    ErrorCode::CallBusy,
+                    "User is already in a call",
+                ),
+            )
+            .await;
+            publish_realtime_event_to_local_users(
+                state,
+                None,
+                RealtimeEvent::CallBusy {
+                    call: result.call.clone(),
+                },
+                [result.call.caller.user_id],
+            )
+            .await;
+            keep_processing
         }
         Err(error) => send_app_error(outbound_tx, id, error).await,
     }
@@ -491,13 +526,12 @@ async fn handle_call_accept(
 
     match calls_service::accept(&state.pool, current_user.clone(), payload.call_id).await {
         Ok(result) => {
-            publish_realtime_event_to_local_users(
+            publish_realtime_event(
                 state,
                 Some(connection_id),
                 RealtimeEvent::CallAccepted {
                     call: result.call.clone(),
                 },
-                [result.call.callee.user_id],
             )
             .await;
             send_ok(outbound_tx, id, "call.accept.ok", json!(result)).await

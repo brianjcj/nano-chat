@@ -3,7 +3,7 @@ mod common;
 use nano_chat::{
     calls::{
         service as calls_service,
-        types::{CallEndReason, CallMediaType},
+        types::{CallEndReason, CallInviteOutcome, CallMediaType, CallState},
     },
     error::ErrorCode,
 };
@@ -83,6 +83,86 @@ async fn busy_lock_allows_only_one_non_ended_call_per_user() {
     .unwrap();
     assert_eq!(active_rows, 1);
     assert_eq!(first.call.callee.user_id, bob.user_id);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn invite_with_outcome_returns_busy_summary_for_callee_busy() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+    let carol = ctx.register("carol").await;
+    let alice_bob = ctx.send_direct_message(&alice, "bob", "ab", "hello").await;
+    let carol_bob = ctx.send_direct_message(&carol, "bob", "cb", "hello").await;
+    ctx.register_ws_sender_for(&bob);
+
+    calls_service::invite(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        alice_bob.conversation_id,
+        CallMediaType::Audio,
+    )
+    .await
+    .expect("first call should start");
+
+    let outcome = calls_service::invite_with_outcome(
+        &ctx.pool,
+        &ctx.state.registry,
+        carol.current_user(),
+        carol_bob.conversation_id,
+        CallMediaType::Video,
+    )
+    .await
+    .expect("callee-busy attempt should expose the recorded busy call");
+
+    let busy = match outcome {
+        CallInviteOutcome::Busy(result) => result,
+        CallInviteOutcome::Started(_) => panic!("busy callee should not start a call"),
+    };
+    assert_eq!(busy.call.caller.user_id, carol.user_id);
+    assert_eq!(busy.call.callee.user_id, bob.user_id);
+    assert_eq!(busy.call.state, CallState::Ended);
+    assert_eq!(busy.call.end_reason, Some(CallEndReason::Busy));
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn signal_target_rejects_non_origin_caller_client() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let alice_other = ctx.login_existing_client("alice", None).await;
+    let bob = ctx.register("bob").await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+    ctx.register_ws_sender_for(&bob);
+
+    let invited = calls_service::invite(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        direct.conversation_id,
+        CallMediaType::Video,
+    )
+    .await
+    .expect("call should start");
+    calls_service::accept(&ctx.pool, bob.current_user(), invited.call.call_id)
+        .await
+        .expect("callee should accept");
+
+    let rejected =
+        calls_service::signal_target(&ctx.pool, &alice_other.current_user(), invited.call.call_id)
+            .await
+            .expect_err("non-origin caller client must not signal");
+    assert_eq!(rejected.code, ErrorCode::NotCallParticipant);
+
+    let target =
+        calls_service::signal_target(&ctx.pool, &alice.current_user(), invited.call.call_id)
+            .await
+            .expect("origin caller client should signal accepted callee");
+    assert_eq!(target.target_user_id, bob.user_id);
+    assert_eq!(target.target_client_id, bob.client_id);
 }
 
 #[tokio::test]
