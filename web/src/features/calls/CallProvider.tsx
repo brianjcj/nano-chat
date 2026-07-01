@@ -136,6 +136,11 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
         return;
       }
 
+      if (stateRef.current.phase !== "idle") {
+        closeEngine();
+        return;
+      }
+
       localStreamRef.current = localStream;
 
       try {
@@ -146,6 +151,11 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
           conversation_id: conversation.conversation_id,
           media_type: mediaType,
         });
+
+        if (stateRef.current.phase !== "idle") {
+          closeEngine();
+          return;
+        }
 
         if (isCallCommandResult(result)) {
           setState({ phase: "outgoing", call: result.call, localStream });
@@ -168,6 +178,12 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
 
     try {
       const localStream = await engine.prepareLocalMedia(call.media_type);
+
+      if (!isCurrentIncomingCall(stateRef, call.call_id)) {
+        closeEngine();
+        return;
+      }
+
       localStreamRef.current = localStream;
       setState({
         phase: "connecting",
@@ -180,7 +196,11 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
         { call_id: call.call_id },
       );
 
-      if (isCallCommandResult(result)) {
+      if (!isCurrentNonEndedCall(stateRef, call.call_id)) {
+        return;
+      }
+
+      if (isCallCommandResult(result) && result.call.call_id === call.call_id) {
         setState({
           phase: "connecting",
           call: result.call,
@@ -190,7 +210,10 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
       }
     } catch {
       closeEngine();
-      setState({ phase: "incoming", call });
+
+      if (isCurrentNonEndedCall(stateRef, call.call_id)) {
+        setState({ phase: "incoming", call });
+      }
     }
   }, [closeEngine, engine, realtimeClient, setState]);
 
@@ -880,6 +903,15 @@ function isCurrentNonEndedCall(
   callId: string,
 ): boolean {
   return getCurrentNonEndedCall(stateRef, callId) !== null;
+}
+
+function isCurrentIncomingCall(
+  stateRef: MutableRefObject<CallUiState>,
+  callId: string,
+): boolean {
+  const currentState = stateRef.current;
+
+  return currentState.phase === "incoming" && currentState.call.call_id === callId;
 }
 
 function endCurrentCallWithSignalError({

@@ -119,6 +119,93 @@ describe("CallProvider", () => {
     expect(realtimeClient.sendCommand).not.toHaveBeenCalled();
   });
 
+  it("does not invite when another call arrives while media permission is pending", async () => {
+    const realtimeClient = createFakeRealtimeClient();
+    const engine = createFakeCallEngine();
+    const mediaDeferred = createDeferred<MediaStream>();
+    engine.prepareLocalMedia.mockImplementationOnce(() => mediaDeferred.promise);
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <CallActionProbe conversation={directConversation} />
+        <CallStateProbe />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "start" }));
+    await waitFor(() => {
+      expect(engine.prepareLocalMedia).toHaveBeenCalledWith("video");
+    });
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.incoming",
+        payload: { call: createIncomingCallSummary({ call_id: "incoming-call-2" }) },
+      });
+    });
+    await screen.findByText("incoming");
+
+    await act(async () => {
+      mediaDeferred.resolve(new MediaStream());
+      await mediaDeferred.promise;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("call-phase")).toHaveTextContent("incoming");
+    expect(realtimeClient.sendCommand).not.toHaveBeenCalledWith(
+      "call.invite",
+      expect.anything(),
+    );
+  });
+
+  it("does not overwrite a competing call when the invite response resolves", async () => {
+    const realtimeClient = createFakeRealtimeClient();
+    const engine = createFakeCallEngine();
+    const inviteDeferred = createDeferred<{ call: CallSummary }>();
+    realtimeClient.sendCommand.mockImplementation((type: string) => {
+      if (type === "call.invite") {
+        return inviteDeferred.promise;
+      }
+
+      return Promise.resolve({ call: createCallSummary({ state: "connecting" }) });
+    });
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <CallActionProbe conversation={directConversation} />
+        <CallStateProbe />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "start" }));
+    await waitFor(() => {
+      expect(realtimeClient.sendCommand).toHaveBeenCalledWith("call.invite", {
+        conversation_id: directConversation.conversation_id,
+        media_type: "video",
+      });
+    });
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.incoming",
+        payload: { call: createIncomingCallSummary({ call_id: "incoming-call-2" }) },
+      });
+    });
+    await screen.findByText("incoming");
+
+    await act(async () => {
+      inviteDeferred.resolve({
+        call: createCallSummary({ call_id: "outgoing-call-2", state: "ringing" }),
+      });
+      await inviteDeferred.promise;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("call-phase")).toHaveTextContent("incoming");
+  });
+
   it("sends an offer signal when the caller receives call.accepted", async () => {
     const realtimeClient = createFakeRealtimeClient();
     const engine = createFakeCallEngine();
@@ -285,6 +372,186 @@ describe("CallProvider", () => {
       expect(engine.acceptOffer).toHaveBeenCalledWith({ type: "offer", sdp: "v=0" });
       expect(getSignalTypes(realtimeClient)).toEqual(["answer", "ice_candidate"]);
     });
+  });
+
+  it("does not accept when an incoming call ends while media permission is pending", async () => {
+    const realtimeClient = createFakeRealtimeClient();
+    const engine = createFakeCallEngine();
+    const incomingCall = createIncomingCallSummary();
+    const mediaDeferred = createDeferred<MediaStream>();
+    engine.prepareLocalMedia.mockImplementationOnce(() => mediaDeferred.promise);
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <CallActionProbe conversation={directConversation} />
+        <CallStateProbe />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.incoming",
+        payload: { call: incomingCall },
+      });
+    });
+    await screen.findByText("incoming");
+
+    await userEvent.click(screen.getByRole("button", { name: "accept" }));
+    await waitFor(() => {
+      expect(engine.prepareLocalMedia).toHaveBeenCalledWith(incomingCall.media_type);
+    });
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.ended",
+        payload: {
+          call: createIncomingCallSummary({
+            state: "ended",
+            ended_at: "2026-07-01T00:01:00.000Z",
+            end_reason: "completed",
+          }),
+        },
+      });
+    });
+    await screen.findByText("ended");
+
+    await act(async () => {
+      mediaDeferred.resolve(new MediaStream());
+      await mediaDeferred.promise;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("call-phase")).toHaveTextContent("ended");
+    expect(realtimeClient.sendCommand).not.toHaveBeenCalledWith("call.accept", {
+      call_id: incomingCall.call_id,
+    });
+  });
+
+  it("does not overwrite ended state when call.accept resolves after the call ends", async () => {
+    const realtimeClient = createFakeRealtimeClient();
+    const engine = createFakeCallEngine();
+    const incomingCall = createIncomingCallSummary();
+    const acceptDeferred = createDeferred<{ call: CallSummary }>();
+    realtimeClient.sendCommand.mockImplementation((type: string) => {
+      if (type === "call.accept") {
+        return acceptDeferred.promise;
+      }
+
+      return Promise.resolve({ call: createCallSummary({ state: "connecting" }) });
+    });
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <CallActionProbe conversation={directConversation} />
+        <CallStateProbe />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.incoming",
+        payload: { call: incomingCall },
+      });
+    });
+    await screen.findByText("incoming");
+
+    await userEvent.click(screen.getByRole("button", { name: "accept" }));
+    await waitFor(() => {
+      expect(realtimeClient.sendCommand).toHaveBeenCalledWith("call.accept", {
+        call_id: incomingCall.call_id,
+      });
+    });
+    await screen.findByText("connecting");
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.ended",
+        payload: {
+          call: createIncomingCallSummary({
+            state: "ended",
+            ended_at: "2026-07-01T00:01:00.000Z",
+            end_reason: "completed",
+          }),
+        },
+      });
+    });
+    await screen.findByText("ended");
+
+    await act(async () => {
+      acceptDeferred.resolve({
+        call: createIncomingCallSummary({
+          state: "connecting",
+          accepted_client_id: "caller-client-1",
+          accepted_at: "2026-07-01T00:00:15.000Z",
+        }),
+      });
+      await acceptDeferred.promise;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("call-phase")).toHaveTextContent("ended");
+  });
+
+  it("does not restore incoming when call.accept fails after the call ends", async () => {
+    const realtimeClient = createFakeRealtimeClient();
+    const engine = createFakeCallEngine();
+    const incomingCall = createIncomingCallSummary();
+    const acceptDeferred = createDeferred<{ call: CallSummary }>();
+    realtimeClient.sendCommand.mockImplementation((type: string) => {
+      if (type === "call.accept") {
+        return acceptDeferred.promise;
+      }
+
+      return Promise.resolve({ call: createCallSummary({ state: "connecting" }) });
+    });
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <CallActionProbe conversation={directConversation} />
+        <CallStateProbe />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.incoming",
+        payload: { call: incomingCall },
+      });
+    });
+    await screen.findByText("incoming");
+
+    await userEvent.click(screen.getByRole("button", { name: "accept" }));
+    await waitFor(() => {
+      expect(realtimeClient.sendCommand).toHaveBeenCalledWith("call.accept", {
+        call_id: incomingCall.call_id,
+      });
+    });
+    await screen.findByText("connecting");
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.ended",
+        payload: {
+          call: createIncomingCallSummary({
+            state: "ended",
+            ended_at: "2026-07-01T00:01:00.000Z",
+            end_reason: "completed",
+          }),
+        },
+      });
+    });
+    await screen.findByText("ended");
+
+    await act(async () => {
+      acceptDeferred.reject(new Error("call.accept failed"));
+      await acceptDeferred.promise.catch(() => undefined);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("call-phase")).toHaveTextContent("ended");
   });
 
   it("does not answer an offer when the call ends while acceptOffer is pending", async () => {
