@@ -543,6 +543,12 @@ Recommended client heartbeat interval is the configured server interval, default
 
 `call.invite` starts a WebRTC call in an active direct conversation. All online callee clients receive `call.incoming`; the first callee client to accept wins.
 
+Deployment cleanup behavior:
+
+- Ringing calls time out after `NANO_CHAT_CALL_RINGING_TIMEOUT_SECS` seconds, default `60`, and end with `end_reason: "timeout"`.
+- Connecting or active calls get a disconnect grace window of `NANO_CHAT_CALL_DISCONNECT_GRACE_SECS` seconds, default `15`, when a selected caller or accepted callee client disappears from the local registry. If the selected clients are visible again before the grace window elapses, the interruption marker is cleared; otherwise the call ends with `end_reason: "network_error"`.
+- Cleanup runs every `NANO_CHAT_CALL_CLEANUP_INTERVAL_SECS` seconds, default `5`. On service startup, any non-ended calls left by a previous process are ended as `network_error` before the server starts accepting traffic.
+
 ```json
 {
   "id": "call-1",

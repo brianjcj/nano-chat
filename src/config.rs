@@ -22,6 +22,9 @@ pub struct Config {
     pub heartbeat_idle_timeout_secs: u64,
     pub max_ws_payload_bytes: usize,
     pub max_message_bytes: usize,
+    pub call_ringing_timeout_secs: u64,
+    pub call_disconnect_grace_secs: u64,
+    pub call_cleanup_interval_secs: u64,
 }
 
 impl Config {
@@ -39,6 +42,9 @@ impl Config {
             heartbeat_idle_timeout_secs: optional_env("NANO_CHAT_HEARTBEAT_IDLE_TIMEOUT_SECS", 90)?,
             max_ws_payload_bytes: optional_env("NANO_CHAT_MAX_WS_PAYLOAD_BYTES", 64 * 1024)?,
             max_message_bytes: optional_env("NANO_CHAT_MAX_MESSAGE_BYTES", 4096)?,
+            call_ringing_timeout_secs: optional_env("NANO_CHAT_CALL_RINGING_TIMEOUT_SECS", 60)?,
+            call_disconnect_grace_secs: optional_env("NANO_CHAT_CALL_DISCONNECT_GRACE_SECS", 15)?,
+            call_cleanup_interval_secs: optional_env("NANO_CHAT_CALL_CLEANUP_INTERVAL_SECS", 5)?,
         })
     }
 }
@@ -60,6 +66,15 @@ impl fmt::Debug for Config {
             )
             .field("max_ws_payload_bytes", &self.max_ws_payload_bytes)
             .field("max_message_bytes", &self.max_message_bytes)
+            .field("call_ringing_timeout_secs", &self.call_ringing_timeout_secs)
+            .field(
+                "call_disconnect_grace_secs",
+                &self.call_disconnect_grace_secs,
+            )
+            .field(
+                "call_cleanup_interval_secs",
+                &self.call_cleanup_interval_secs,
+            )
             .finish()
     }
 }
@@ -121,6 +136,9 @@ mod tests {
         "NANO_CHAT_HEARTBEAT_IDLE_TIMEOUT_SECS",
         "NANO_CHAT_MAX_WS_PAYLOAD_BYTES",
         "NANO_CHAT_MAX_MESSAGE_BYTES",
+        "NANO_CHAT_CALL_RINGING_TIMEOUT_SECS",
+        "NANO_CHAT_CALL_DISCONNECT_GRACE_SECS",
+        "NANO_CHAT_CALL_CLEANUP_INTERVAL_SECS",
     ];
 
     fn with_clean_env(test: impl FnOnce() + UnwindSafe) {
@@ -253,6 +271,35 @@ mod tests {
     }
 
     #[test]
+    fn from_env_defaults_call_cleanup_values() {
+        with_clean_env(|| {
+            set_required_env();
+
+            let config = Config::from_env().expect("call cleanup config should default");
+
+            assert_eq!(config.call_ringing_timeout_secs, 60);
+            assert_eq!(config.call_disconnect_grace_secs, 15);
+            assert_eq!(config.call_cleanup_interval_secs, 5);
+        });
+    }
+
+    #[test]
+    fn from_env_parses_custom_call_cleanup_values() {
+        with_clean_env(|| {
+            set_required_env();
+            set_env("NANO_CHAT_CALL_RINGING_TIMEOUT_SECS", "45");
+            set_env("NANO_CHAT_CALL_DISCONNECT_GRACE_SECS", "10");
+            set_env("NANO_CHAT_CALL_CLEANUP_INTERVAL_SECS", "2");
+
+            let config = Config::from_env().expect("call cleanup config should parse");
+
+            assert_eq!(config.call_ringing_timeout_secs, 45);
+            assert_eq!(config.call_disconnect_grace_secs, 10);
+            assert_eq!(config.call_cleanup_interval_secs, 2);
+        });
+    }
+
+    #[test]
     fn debug_redacts_sensitive_values() {
         let config = Config {
             database_url: "postgres://user:pass@localhost/nano_chat".to_string(),
@@ -266,6 +313,9 @@ mod tests {
             heartbeat_idle_timeout_secs: 90,
             max_ws_payload_bytes: 64 * 1024,
             max_message_bytes: 4096,
+            call_ringing_timeout_secs: 60,
+            call_disconnect_grace_secs: 15,
+            call_cleanup_interval_secs: 5,
         };
 
         let debug = format!("{config:?}");

@@ -1,6 +1,7 @@
 use anyhow::Context;
 use nano_chat::{
-    app::{AppState, build_router},
+    app::{AppState, build_router, spawn_call_cleanup_task},
+    calls,
     config::Config,
     db,
     realtime::{notify::NotifyListener, types::RealtimeEvent},
@@ -17,6 +18,8 @@ async fn main() -> anyhow::Result<()> {
     let pool = db::create_lazy_pool(&config.database_url)?;
     let bind_addr = config.bind_addr.clone();
     let state = AppState::new(config, pool);
+    let startup_cleaned = calls::service::cleanup_non_ended_calls_on_startup(&state.pool).await?;
+    tracing::info!(startup_cleaned, "startup call cleanup completed");
     let _notify_listener = NotifyListener::start_with_readiness(
         &state.config.database_url,
         state.config.notify_channel.clone(),
@@ -25,6 +28,7 @@ async fn main() -> anyhow::Result<()> {
         state.registry.clone(),
         state.lifecycle(),
     );
+    let _call_cleanup_task = spawn_call_cleanup_task(state.clone());
     let app = build_router(state.clone()).layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind(&bind_addr)

@@ -4,17 +4,24 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
+    time::Duration as StdDuration,
 };
 
 use axum::{Router, extract::State, http::StatusCode, routing::get};
+use chrono::Duration as ChronoDuration;
 use sqlx::PgPool;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
-    auth,
+    auth, calls,
     config::Config,
     conversations,
-    realtime::{connection_registry::ConnectionRegistry, notify::NotifyPublisher},
+    realtime::{
+        connection_registry::ConnectionRegistry,
+        notify::{NotifyPublisher, fanout_notify_payload},
+        types::{RealtimeEvent, RealtimeNotifyPayload},
+    },
+    time::now_utc,
     users, ws,
 };
 
@@ -123,6 +130,68 @@ impl AppState {
 
     pub fn is_notify_listener_ready(&self) -> bool {
         self.lifecycle.is_notify_listener_ready()
+    }
+}
+
+pub fn spawn_call_cleanup_task(state: AppState) -> tokio::task::JoinHandle<()> {
+    let cleanup_interval_secs = state.config.call_cleanup_interval_secs.max(1);
+    let ringing_timeout = chrono_seconds(state.config.call_ringing_timeout_secs);
+    let disconnect_grace = chrono_seconds(state.config.call_disconnect_grace_secs);
+
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(StdDuration::from_secs(cleanup_interval_secs));
+        loop {
+            interval.tick().await;
+            let now = now_utc();
+
+            match calls::service::cleanup_timed_out_calls(&state.pool, now, ringing_timeout).await {
+                Ok(results) => publish_call_cleanup_results(&state, results).await,
+                Err(error) => tracing::warn!(%error, "call ringing timeout cleanup failed"),
+            }
+
+            match calls::service::cleanup_interrupted_calls(
+                &state.pool,
+                &state.registry,
+                now,
+                disconnect_grace,
+            )
+            .await
+            {
+                Ok(results) => publish_call_cleanup_results(&state, results).await,
+                Err(error) => tracing::warn!(%error, "call interruption cleanup failed"),
+            }
+        }
+    })
+}
+
+fn chrono_seconds(seconds: u64) -> ChronoDuration {
+    ChronoDuration::seconds(seconds.min(i64::MAX as u64) as i64)
+}
+
+async fn publish_call_cleanup_results(
+    state: &AppState,
+    results: Vec<calls::types::CallCommandResult>,
+) {
+    for result in results {
+        publish_call_ended(state, result).await;
+    }
+}
+
+async fn publish_call_ended(state: &AppState, result: calls::types::CallCommandResult) {
+    let event = RealtimeEvent::CallEnded { call: result.call };
+    let event_type = event.event_type();
+    let payload = RealtimeNotifyPayload {
+        origin_instance_id: state.instance_id.clone(),
+        origin_connection_id: None,
+        event,
+    };
+
+    if let Err(error) = fanout_notify_payload(&state.pool, &state.registry, &payload).await {
+        tracing::warn!(%error, event_type, "failed to fan out call cleanup event locally");
+    }
+
+    if let Err(error) = state.notify_publisher.publish(&payload).await {
+        tracing::warn!(%error, event_type, "failed to publish call cleanup notify event");
     }
 }
 

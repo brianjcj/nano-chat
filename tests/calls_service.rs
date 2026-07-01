@@ -394,6 +394,91 @@ async fn hangup_and_reinvite_same_direct_conversation_do_not_deadlock() {
     assert_eq!(call_event_count, 1);
 }
 
+#[tokio::test]
+#[serial_test::serial]
+async fn ringing_timeout_ends_call_and_writes_one_timeout_record() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+    ctx.register_ws_sender_for(&bob);
+    let invited = calls_service::invite(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        direct.conversation_id,
+        CallMediaType::Audio,
+    )
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "update call_sessions set started_at = now() - interval '61 seconds' where call_id = $1",
+    )
+    .bind(invited.call.call_id)
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    let ended = calls_service::cleanup_timed_out_calls(
+        &ctx.pool,
+        chrono::Utc::now(),
+        chrono::Duration::seconds(60),
+    )
+    .await
+    .unwrap();
+    assert_eq!(ended.len(), 1);
+    assert_eq!(
+        ended[0].call.end_reason,
+        Some(nano_chat::calls::types::CallEndReason::Timeout)
+    );
+
+    let count: i64 = sqlx::query_scalar(
+        "select count(*) from messages where conversation_id = $1 and message_type = 'call_event'",
+    )
+    .bind(direct.conversation_id)
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+    assert_eq!(count, 1);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn startup_cleanup_marks_non_ended_calls_network_error() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+    ctx.register_ws_sender_for(&bob);
+    let invited = calls_service::invite(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        direct.conversation_id,
+        CallMediaType::Video,
+    )
+    .await
+    .unwrap();
+
+    let cleaned = calls_service::cleanup_non_ended_calls_on_startup(&ctx.pool)
+        .await
+        .unwrap();
+    assert_eq!(cleaned, 1);
+
+    let reason: String =
+        sqlx::query_scalar("select end_reason from call_sessions where call_id = $1")
+            .bind(invited.call.call_id)
+            .fetch_one(&ctx.pool)
+            .await
+            .unwrap();
+    assert_eq!(reason, "network_error");
+}
+
 async fn install_call_participant_sleep_trigger(pool: &sqlx::PgPool) {
     sqlx::query(
         "create or replace function test_sleep_call_participants_end()

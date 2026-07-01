@@ -82,6 +82,9 @@ pub fn test_config() -> Config {
         heartbeat_idle_timeout_secs: 90,
         max_ws_payload_bytes: 64 * 1024,
         max_message_bytes: 4096,
+        call_ringing_timeout_secs: 60,
+        call_disconnect_grace_secs: 15,
+        call_cleanup_interval_secs: 5,
     }
 }
 

@@ -1,5 +1,5 @@
 use axum::http::StatusCode;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde_json::json;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
@@ -64,6 +64,7 @@ struct LockedCallSessionRow {
     conversation_id: Uuid,
     caller_user_id: UserId,
     callee_user_id: UserId,
+    caller_client_id: Uuid,
     media_type: String,
     state: String,
     started_at: DateTime<Utc>,
@@ -77,6 +78,22 @@ struct SignalTargetCallRow {
     caller_client_id: Uuid,
     accepted_client_id: Option<Uuid>,
     state: String,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct InterruptedCallRow {
+    call_id: Uuid,
+    caller_user_id: UserId,
+    callee_user_id: UserId,
+    caller_client_id: Uuid,
+    accepted_client_id: Option<Uuid>,
+    interruption_detected_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct CallActorRow {
+    username: String,
+    display_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -371,6 +388,150 @@ pub async fn signal_target(
     Err(not_call_participant())
 }
 
+pub async fn cleanup_timed_out_calls(
+    pool: &PgPool,
+    now: DateTime<Utc>,
+    ringing_timeout: Duration,
+) -> AppResult<Vec<CallCommandResult>> {
+    let cutoff = now - ringing_timeout;
+    let call_ids = sqlx::query_scalar::<_, Uuid>(
+        "select call_id
+         from call_sessions
+         where state = 'ringing'
+           and started_at < $1
+         order by started_at, call_id",
+    )
+    .bind(cutoff)
+    .fetch_all(pool)
+    .await
+    .map_err(internal_error)?;
+
+    let mut ended = Vec::with_capacity(call_ids.len());
+    for call_id in call_ids {
+        if let Some(result) = end_call_for_cleanup(
+            pool,
+            call_id,
+            CallEndReason::Timeout,
+            &[CallState::Ringing],
+            now,
+        )
+        .await?
+        {
+            ended.push(result);
+        }
+    }
+    Ok(ended)
+}
+
+pub async fn cleanup_interrupted_calls(
+    pool: &PgPool,
+    registry: &ConnectionRegistry,
+    now: DateTime<Utc>,
+    grace: Duration,
+) -> AppResult<Vec<CallCommandResult>> {
+    let rows = sqlx::query_as::<_, InterruptedCallRow>(
+        "select call_id,
+                caller_user_id,
+                callee_user_id,
+                caller_client_id,
+                accepted_client_id,
+                interruption_detected_at
+         from call_sessions
+         where state in ('connecting', 'active')
+         order by started_at, call_id",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(internal_error)?;
+
+    let mut ended = Vec::new();
+    for row in rows {
+        let caller_present = registry.contains_client(row.caller_user_id, row.caller_client_id);
+        let callee_present = row.accepted_client_id.map_or(true, |client_id| {
+            registry.contains_client(row.callee_user_id, client_id)
+        });
+
+        if caller_present && callee_present {
+            if row.interruption_detected_at.is_some() {
+                sqlx::query(
+                    "update call_sessions
+                     set interruption_detected_at = null
+                     where call_id = $1
+                       and state in ('connecting', 'active')",
+                )
+                .bind(row.call_id)
+                .execute(pool)
+                .await
+                .map_err(internal_error)?;
+            }
+            continue;
+        }
+
+        match row.interruption_detected_at {
+            Some(detected_at) if now.signed_duration_since(detected_at) >= grace => {
+                if let Some(result) = end_call_for_cleanup(
+                    pool,
+                    row.call_id,
+                    CallEndReason::NetworkError,
+                    &[CallState::Connecting, CallState::Active],
+                    now,
+                )
+                .await?
+                {
+                    ended.push(result);
+                }
+            }
+            Some(_) => {}
+            None => {
+                sqlx::query(
+                    "update call_sessions
+                     set interruption_detected_at = $2
+                     where call_id = $1
+                       and state in ('connecting', 'active')
+                       and interruption_detected_at is null",
+                )
+                .bind(row.call_id)
+                .bind(now)
+                .execute(pool)
+                .await
+                .map_err(internal_error)?;
+            }
+        }
+    }
+
+    Ok(ended)
+}
+
+pub async fn cleanup_non_ended_calls_on_startup(pool: &PgPool) -> AppResult<u64> {
+    let call_ids = sqlx::query_scalar::<_, Uuid>(
+        "select call_id
+         from call_sessions
+         where state <> 'ended'
+         order by started_at, call_id",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(internal_error)?;
+
+    let now = now_utc();
+    let mut ended = 0;
+    for call_id in call_ids {
+        if end_call_for_cleanup(
+            pool,
+            call_id,
+            CallEndReason::NetworkError,
+            &[CallState::Ringing, CallState::Connecting, CallState::Active],
+            now,
+        )
+        .await?
+        .is_some()
+        {
+            ended += 1;
+        }
+    }
+    Ok(ended)
+}
+
 pub(crate) async fn call_summary_by_id(
     tx: &mut Transaction<'_, Postgres>,
     call_id: Uuid,
@@ -415,6 +576,7 @@ async fn lock_call_session(
                 conversation_id,
                 caller_user_id,
                 callee_user_id,
+                caller_client_id,
                 media_type,
                 state,
                 started_at,
@@ -454,32 +616,87 @@ async fn end_call(
         return Err(AppError::invalid_request("Invalid call state transition"));
     }
 
-    let conversation = messages_service::lock_conversation(&mut tx, call.conversation_id).await?;
-    let now = now_utc();
-    let media_type = call_media_type(&call)?;
-    let duration_seconds = call_duration_seconds(&call, now, reason);
+    let result = finalize_locked_call(&mut tx, &call, &actor, reason, now_utc()).await?;
+    tx.commit().await.map_err(internal_error)?;
+    Ok(result)
+}
+
+async fn end_call_for_cleanup(
+    pool: &PgPool,
+    call_id: Uuid,
+    reason: CallEndReason,
+    allowed_states: &[CallState],
+    ended_at: DateTime<Utc>,
+) -> AppResult<Option<CallCommandResult>> {
+    let mut tx = pool.begin().await.map_err(internal_error)?;
+    let call = lock_call_session(&mut tx, call_id).await?;
+    let current_state = call_state(&call)?;
+    if current_state == CallState::Ended || !allowed_states.contains(&current_state) {
+        tx.commit().await.map_err(internal_error)?;
+        return Ok(None);
+    }
+
+    let actor = caller_actor_for_call(&mut tx, &call).await?;
+    let result = finalize_locked_call(&mut tx, &call, &actor, reason, ended_at).await?;
+    tx.commit().await.map_err(internal_error)?;
+    Ok(Some(result))
+}
+
+async fn caller_actor_for_call(
+    tx: &mut Transaction<'_, Postgres>,
+    call: &LockedCallSessionRow,
+) -> AppResult<CurrentUser> {
+    let row = sqlx::query_as::<_, CallActorRow>(
+        "select username, display_name
+         from users
+         where user_id = $1",
+    )
+    .bind(call.caller_user_id)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(internal_error)?;
+
+    Ok(CurrentUser {
+        user_id: call.caller_user_id,
+        username: row.username,
+        display_name: row.display_name,
+        client_id: call.caller_client_id,
+    })
+}
+
+async fn finalize_locked_call(
+    tx: &mut Transaction<'_, Postgres>,
+    call: &LockedCallSessionRow,
+    actor: &CurrentUser,
+    reason: CallEndReason,
+    ended_at: DateTime<Utc>,
+) -> AppResult<CallCommandResult> {
+    let conversation = messages_service::lock_conversation(tx, call.conversation_id).await?;
+    let media_type = call_media_type(call)?;
+    let duration_seconds = call_duration_seconds(call, ended_at, reason);
 
     sqlx::query(
         "update call_sessions
          set state = $2,
              ended_at = $3,
-             end_reason = $4
+             end_reason = $4,
+             interruption_detected_at = null
          where call_id = $1",
     )
-    .bind(call_id)
+    .bind(call.call_id)
     .bind(CallState::Ended.as_str())
-    .bind(now)
+    .bind(ended_at)
     .bind(reason.as_str())
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await
     .map_err(internal_error)?;
 
-    update_call_participants_state(&mut tx, call_id, CallState::Ended).await?;
+    update_call_participants_state(tx, call.call_id, CallState::Ended).await?;
 
     let message = messages_service::insert_call_event_message_in_locked_conversation(
-        &mut tx,
+        tx,
         &conversation,
-        &actor,
+        actor,
         call_record_body(media_type, reason, Some(duration_seconds)),
         json!({
             "call_id": call.call_id,
@@ -493,14 +710,13 @@ async fn end_call(
     .await?;
 
     sqlx::query("update call_sessions set created_message_id = $2 where call_id = $1")
-        .bind(call_id)
+        .bind(call.call_id)
         .bind(message.message.message_id)
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await
         .map_err(internal_error)?;
 
-    let call = call_summary_by_id(&mut tx, call_id).await?;
-    tx.commit().await.map_err(internal_error)?;
+    let call = call_summary_by_id(tx, call.call_id).await?;
     Ok(CallCommandResult { call })
 }
 
