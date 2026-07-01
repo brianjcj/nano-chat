@@ -134,6 +134,28 @@ impl TestContext {
         }
     }
 
+    pub async fn login_existing_client(&self, username: &str, client_id: Option<Uuid>) -> TestUser {
+        let response = self
+            .app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/api/v1/auth/login",
+                json!({"username": username, "password": "password123", "client_id": client_id}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: AuthResponse = response_json_as(response).await;
+        TestUser {
+            user_id: body.user.user_id,
+            username: body.user.username,
+            display_name: body.user.display_name,
+            client_id: body.client_id,
+            access_token: body.access_token,
+        }
+    }
+
     pub async fn conversations(&self, user: &TestUser) -> Vec<TestConversation> {
         let request = authed_empty_request("GET", "/api/v1/conversations", user);
         let response = self.app.clone().oneshot(request).await.unwrap();

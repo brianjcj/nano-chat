@@ -66,7 +66,7 @@ impl CallEndReason {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CallSummary {
     pub call_id: Uuid,
     pub conversation_id: Uuid,
@@ -82,12 +82,12 @@ pub struct CallSummary {
     pub end_reason: Option<CallEndReason>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CallCommandResult {
     pub call: CallSummary,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CallSignalTarget {
     pub target_user_id: UserId,
     pub target_client_id: Uuid,

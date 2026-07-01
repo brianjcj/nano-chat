@@ -539,6 +539,254 @@ Success type: `heartbeat.pong`.
 
 Recommended client heartbeat interval is the configured server interval, default `30` seconds. Connections that do not send any valid envelope for the idle timeout, default `90` seconds, are removed from the local registry and closed.
 
+#### 1v1 call invite
+
+`call.invite` starts a WebRTC call in an active direct conversation. All online callee clients receive `call.incoming`; the first callee client to accept wins.
+
+```json
+{
+  "id": "call-1",
+  "type": "call.invite",
+  "payload": {
+    "conversation_id": "018f0000-0000-7000-8000-000000000011",
+    "media_type": "video"
+  }
+}
+```
+
+Success type: `call.invite.ok`.
+
+```json
+{
+  "id": "call-1",
+  "type": "call.invite.ok",
+  "payload": {
+    "call": {
+      "call_id": "018f0000-0000-7000-8000-000000000040",
+      "conversation_id": "018f0000-0000-7000-8000-000000000011",
+      "caller": {"user_id": "1001", "username": "alice", "display_name": "Alice"},
+      "callee": {"user_id": "1002", "username": "bob", "display_name": "Bob"},
+      "caller_client_id": "018f0000-0000-7000-8000-000000000002",
+      "accepted_client_id": null,
+      "media_type": "video",
+      "state": "ringing",
+      "started_at": "2026-06-13T00:00:00.000Z",
+      "accepted_at": null,
+      "ended_at": null,
+      "end_reason": null
+    }
+  }
+}
+```
+
+Incoming event:
+
+```json
+{
+  "type": "call.incoming",
+  "payload": {
+    "call": {
+      "call_id": "018f0000-0000-7000-8000-000000000040",
+      "conversation_id": "018f0000-0000-7000-8000-000000000011",
+      "caller": {"user_id": "1001", "username": "alice", "display_name": "Alice"},
+      "callee": {"user_id": "1002", "username": "bob", "display_name": "Bob"},
+      "caller_client_id": "018f0000-0000-7000-8000-000000000002",
+      "accepted_client_id": null,
+      "media_type": "video",
+      "state": "ringing",
+      "started_at": "2026-06-13T00:00:00.000Z",
+      "accepted_at": null,
+      "ended_at": null,
+      "end_reason": null
+    }
+  }
+}
+```
+
+#### 1v1 call accept
+
+`call.accept` may be sent by one callee client while the call is ringing. Other callee clients receive `call.accepted` and should stop ringing.
+
+```json
+{
+  "id": "accept-1",
+  "type": "call.accept",
+  "payload": {
+    "call_id": "018f0000-0000-7000-8000-000000000040"
+  }
+}
+```
+
+Success type: `call.accept.ok`.
+
+Accepted event:
+
+```json
+{
+  "type": "call.accepted",
+  "payload": {
+    "call": {
+      "call_id": "018f0000-0000-7000-8000-000000000040",
+      "conversation_id": "018f0000-0000-7000-8000-000000000011",
+      "caller": {"user_id": "1001", "username": "alice", "display_name": "Alice"},
+      "callee": {"user_id": "1002", "username": "bob", "display_name": "Bob"},
+      "caller_client_id": "018f0000-0000-7000-8000-000000000002",
+      "accepted_client_id": "018f0000-0000-7000-8000-000000000003",
+      "media_type": "video",
+      "state": "connecting",
+      "started_at": "2026-06-13T00:00:00.000Z",
+      "accepted_at": "2026-06-13T00:00:03.000Z",
+      "ended_at": null,
+      "end_reason": null
+    }
+  }
+}
+```
+
+#### 1v1 call connected
+
+`call.connected` marks the accepted call as active after media is established.
+
+```json
+{
+  "id": "connected-1",
+  "type": "call.connected",
+  "payload": {
+    "call_id": "018f0000-0000-7000-8000-000000000040"
+  }
+}
+```
+
+Success type: `call.connected.ok`.
+
+Connected event:
+
+```json
+{
+  "type": "call.connected",
+  "payload": {
+    "call": {
+      "call_id": "018f0000-0000-7000-8000-000000000040",
+      "conversation_id": "018f0000-0000-7000-8000-000000000011",
+      "caller": {"user_id": "1001", "username": "alice", "display_name": "Alice"},
+      "callee": {"user_id": "1002", "username": "bob", "display_name": "Bob"},
+      "caller_client_id": "018f0000-0000-7000-8000-000000000002",
+      "accepted_client_id": "018f0000-0000-7000-8000-000000000003",
+      "media_type": "video",
+      "state": "active",
+      "started_at": "2026-06-13T00:00:00.000Z",
+      "accepted_at": "2026-06-13T00:00:03.000Z",
+      "ended_at": null,
+      "end_reason": null
+    }
+  }
+}
+```
+
+#### 1v1 call hangup
+
+`call.hangup` ends a connecting or active call. `reason` is optional and defaults to `completed`; when supplied it must be `completed` or `network_error`.
+
+```json
+{
+  "id": "hangup-1",
+  "type": "call.hangup",
+  "payload": {
+    "call_id": "018f0000-0000-7000-8000-000000000040",
+    "reason": "completed"
+  }
+}
+```
+
+Success type: `call.hangup.ok`.
+
+Ended event:
+
+```json
+{
+  "type": "call.ended",
+  "payload": {
+    "call": {
+      "call_id": "018f0000-0000-7000-8000-000000000040",
+      "conversation_id": "018f0000-0000-7000-8000-000000000011",
+      "caller": {"user_id": "1001", "username": "alice", "display_name": "Alice"},
+      "callee": {"user_id": "1002", "username": "bob", "display_name": "Bob"},
+      "caller_client_id": "018f0000-0000-7000-8000-000000000002",
+      "accepted_client_id": "018f0000-0000-7000-8000-000000000003",
+      "media_type": "video",
+      "state": "ended",
+      "started_at": "2026-06-13T00:00:00.000Z",
+      "accepted_at": "2026-06-13T00:00:03.000Z",
+      "ended_at": "2026-06-13T00:03:15.000Z",
+      "end_reason": "completed"
+    }
+  }
+}
+```
+
+`call.reject` and `call.cancel` use the same `{ "call_id": "..." }` payload shape and return `call.reject.ok` or `call.cancel.ok`; their state events are `call.rejected` and `call.canceled`.
+
+#### 1v1 call signal
+
+`call.signal` sends WebRTC SDP/ICE data directly to the accepted peer client only. Signal payloads are not published through Postgres `NOTIFY`.
+
+Offer:
+
+```json
+{
+  "id": "signal-offer-1",
+  "type": "call.signal",
+  "payload": {
+    "call_id": "018f0000-0000-7000-8000-000000000040",
+    "signal_type": "offer",
+    "data": {"type": "offer", "sdp": "v=0"}
+  }
+}
+```
+
+Answer:
+
+```json
+{
+  "id": "signal-answer-1",
+  "type": "call.signal",
+  "payload": {
+    "call_id": "018f0000-0000-7000-8000-000000000040",
+    "signal_type": "answer",
+    "data": {"type": "answer", "sdp": "v=0"}
+  }
+}
+```
+
+ICE candidate:
+
+```json
+{
+  "id": "signal-ice-1",
+  "type": "call.signal",
+  "payload": {
+    "call_id": "018f0000-0000-7000-8000-000000000040",
+    "signal_type": "ice_candidate",
+    "data": {"candidate": "candidate:0 1 UDP 2122252543 192.0.2.1 54400 typ host"}
+  }
+}
+```
+
+Success type: `call.signal.ok`.
+
+Signal event delivered to the peer client:
+
+```json
+{
+  "type": "call.signal",
+  "payload": {
+    "call_id": "018f0000-0000-7000-8000-000000000040",
+    "signal_type": "offer",
+    "data": {"type": "offer", "sdp": "v=0"}
+  }
+}
+```
+
 ### Events and realtime fan-out
 
 After successful state changes, the server fans out WebSocket events locally and publishes a small JSON payload on Postgres `LISTEN/NOTIFY` so other Nano Chat instances can fan out to their own local registries. The channel is configured by `NANO_CHAT_NOTIFY_CHANNEL` and defaults to `nano_chat_events`.

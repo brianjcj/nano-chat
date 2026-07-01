@@ -93,3 +93,36 @@ pub struct HeartbeatPingPayload {
     #[serde(default)]
     pub client_time: Option<DateTime<Utc>>,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CallInvitePayload {
+    pub conversation_id: Uuid,
+    pub media_type: crate::calls::types::CallMediaType,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CallIdPayload {
+    pub call_id: Uuid,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CallHangupPayload {
+    pub call_id: Uuid,
+    #[serde(default)]
+    pub reason: Option<crate::calls::types::CallEndReason>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CallSignalType {
+    Offer,
+    Answer,
+    IceCandidate,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CallSignalPayload {
+    pub call_id: Uuid,
+    pub signal_type: CallSignalType,
+    pub data: serde_json::Value,
+}

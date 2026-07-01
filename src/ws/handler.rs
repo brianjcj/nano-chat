@@ -19,6 +19,7 @@ use tokio::sync::mpsc;
 use crate::{
     app::AppState,
     auth::{service as auth_service, types::CurrentUser},
+    calls::{service as calls_service, types::CallEndReason},
     conversations::service as conversations_service,
     error::{AppError, AppResult, ErrorCode},
     ids::UserId,
@@ -29,7 +30,8 @@ use crate::{
     },
     time::{now_utc, to_rfc3339_utc},
     ws::protocol::{
-        ClientEnvelope, ConversationReadPayload, DirectMessageSendPayload, HeartbeatPingPayload,
+        CallHangupPayload, CallIdPayload, CallInvitePayload, CallSignalPayload, ClientEnvelope,
+        ConversationReadPayload, DirectMessageSendPayload, HeartbeatPingPayload,
         MessageSendPayload, ServerEnvelope,
     },
 };
@@ -255,6 +257,27 @@ async fn dispatch_client_envelope(
             handle_conversation_read(state, current_user, connection_id, outbound_tx, envelope)
                 .await
         }
+        "call.invite" => {
+            handle_call_invite(state, current_user, connection_id, outbound_tx, envelope).await
+        }
+        "call.accept" => {
+            handle_call_accept(state, current_user, connection_id, outbound_tx, envelope).await
+        }
+        "call.connected" => {
+            handle_call_connected(state, current_user, connection_id, outbound_tx, envelope).await
+        }
+        "call.reject" => {
+            handle_call_reject(state, current_user, connection_id, outbound_tx, envelope).await
+        }
+        "call.cancel" => {
+            handle_call_cancel(state, current_user, connection_id, outbound_tx, envelope).await
+        }
+        "call.hangup" => {
+            handle_call_hangup(state, current_user, connection_id, outbound_tx, envelope).await
+        }
+        "call.signal" => {
+            handle_call_signal(state, current_user, connection_id, outbound_tx, envelope).await
+        }
         "heartbeat.ping" => handle_heartbeat_ping(outbound_tx, envelope).await,
         _ => {
             send_and_close(
@@ -411,6 +434,244 @@ async fn handle_conversation_read(
     }
 }
 
+async fn handle_call_invite(
+    state: &AppState,
+    current_user: &CurrentUser,
+    connection_id: ConnectionId,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
+    envelope: ClientEnvelope,
+) -> bool {
+    let id = envelope.id.clone();
+    let payload = match parse_payload::<CallInvitePayload>(&envelope) {
+        Ok(payload) => payload,
+        Err(message) => {
+            return send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message).await;
+        }
+    };
+
+    match calls_service::invite(
+        &state.pool,
+        &state.registry,
+        current_user.clone(),
+        payload.conversation_id,
+        payload.media_type,
+    )
+    .await
+    {
+        Ok(result) => {
+            publish_realtime_event_to_local_users(
+                state,
+                Some(connection_id),
+                RealtimeEvent::CallIncoming {
+                    call: result.call.clone(),
+                },
+                [result.call.callee.user_id],
+            )
+            .await;
+            send_ok(outbound_tx, id, "call.invite.ok", json!(result)).await
+        }
+        Err(error) => send_app_error(outbound_tx, id, error).await,
+    }
+}
+
+async fn handle_call_accept(
+    state: &AppState,
+    current_user: &CurrentUser,
+    connection_id: ConnectionId,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
+    envelope: ClientEnvelope,
+) -> bool {
+    let id = envelope.id.clone();
+    let payload = match parse_payload::<CallIdPayload>(&envelope) {
+        Ok(payload) => payload,
+        Err(message) => {
+            return send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message).await;
+        }
+    };
+
+    match calls_service::accept(&state.pool, current_user.clone(), payload.call_id).await {
+        Ok(result) => {
+            publish_realtime_event_to_local_users(
+                state,
+                Some(connection_id),
+                RealtimeEvent::CallAccepted {
+                    call: result.call.clone(),
+                },
+                [result.call.callee.user_id],
+            )
+            .await;
+            send_ok(outbound_tx, id, "call.accept.ok", json!(result)).await
+        }
+        Err(error) => send_app_error(outbound_tx, id, error).await,
+    }
+}
+
+async fn handle_call_connected(
+    state: &AppState,
+    current_user: &CurrentUser,
+    connection_id: ConnectionId,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
+    envelope: ClientEnvelope,
+) -> bool {
+    let id = envelope.id.clone();
+    let payload = match parse_payload::<CallIdPayload>(&envelope) {
+        Ok(payload) => payload,
+        Err(message) => {
+            return send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message).await;
+        }
+    };
+
+    match calls_service::connected(&state.pool, current_user.clone(), payload.call_id).await {
+        Ok(result) => {
+            publish_realtime_event(
+                state,
+                Some(connection_id),
+                RealtimeEvent::CallConnected {
+                    call: result.call.clone(),
+                },
+            )
+            .await;
+            send_ok(outbound_tx, id, "call.connected.ok", json!(result)).await
+        }
+        Err(error) => send_app_error(outbound_tx, id, error).await,
+    }
+}
+
+async fn handle_call_reject(
+    state: &AppState,
+    current_user: &CurrentUser,
+    connection_id: ConnectionId,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
+    envelope: ClientEnvelope,
+) -> bool {
+    let id = envelope.id.clone();
+    let payload = match parse_payload::<CallIdPayload>(&envelope) {
+        Ok(payload) => payload,
+        Err(message) => {
+            return send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message).await;
+        }
+    };
+
+    match calls_service::reject(&state.pool, current_user.clone(), payload.call_id).await {
+        Ok(result) => {
+            publish_realtime_event(
+                state,
+                Some(connection_id),
+                RealtimeEvent::CallRejected {
+                    call: result.call.clone(),
+                },
+            )
+            .await;
+            send_ok(outbound_tx, id, "call.reject.ok", json!(result)).await
+        }
+        Err(error) => send_app_error(outbound_tx, id, error).await,
+    }
+}
+
+async fn handle_call_cancel(
+    state: &AppState,
+    current_user: &CurrentUser,
+    connection_id: ConnectionId,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
+    envelope: ClientEnvelope,
+) -> bool {
+    let id = envelope.id.clone();
+    let payload = match parse_payload::<CallIdPayload>(&envelope) {
+        Ok(payload) => payload,
+        Err(message) => {
+            return send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message).await;
+        }
+    };
+
+    match calls_service::cancel(&state.pool, current_user.clone(), payload.call_id).await {
+        Ok(result) => {
+            publish_realtime_event(
+                state,
+                Some(connection_id),
+                RealtimeEvent::CallCanceled {
+                    call: result.call.clone(),
+                },
+            )
+            .await;
+            send_ok(outbound_tx, id, "call.cancel.ok", json!(result)).await
+        }
+        Err(error) => send_app_error(outbound_tx, id, error).await,
+    }
+}
+
+async fn handle_call_hangup(
+    state: &AppState,
+    current_user: &CurrentUser,
+    connection_id: ConnectionId,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
+    envelope: ClientEnvelope,
+) -> bool {
+    let id = envelope.id.clone();
+    let payload = match parse_payload::<CallHangupPayload>(&envelope) {
+        Ok(payload) => payload,
+        Err(message) => {
+            return send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message).await;
+        }
+    };
+    let reason = payload.reason.unwrap_or(CallEndReason::Completed);
+
+    match calls_service::hangup(&state.pool, current_user.clone(), payload.call_id, reason).await {
+        Ok(result) => {
+            publish_realtime_event(
+                state,
+                Some(connection_id),
+                RealtimeEvent::CallEnded {
+                    call: result.call.clone(),
+                },
+            )
+            .await;
+            send_ok(outbound_tx, id, "call.hangup.ok", json!(result)).await
+        }
+        Err(error) => send_app_error(outbound_tx, id, error).await,
+    }
+}
+
+async fn handle_call_signal(
+    state: &AppState,
+    current_user: &CurrentUser,
+    connection_id: ConnectionId,
+    outbound_tx: &mpsc::Sender<ServerEnvelope>,
+    envelope: ClientEnvelope,
+) -> bool {
+    let id = envelope.id.clone();
+    let payload = match parse_payload::<CallSignalPayload>(&envelope) {
+        Ok(payload) => payload,
+        Err(message) => {
+            return send_and_close(outbound_tx, id, ErrorCode::InvalidWsEnvelope, message).await;
+        }
+    };
+
+    match calls_service::signal_target(&state.pool, current_user, payload.call_id).await {
+        Ok(target) => {
+            let signal_type = payload.signal_type.clone();
+            let signal_payload = json!({
+                "call_id": payload.call_id,
+                "signal_type": signal_type,
+                "data": payload.data,
+            });
+            state.registry.send_to_client(
+                target.target_user_id,
+                target.target_client_id,
+                ServerEnvelope::event("call.signal", signal_payload),
+                Some(connection_id),
+            );
+            send_ok(
+                outbound_tx,
+                id,
+                "call.signal.ok",
+                json!({"call_id": payload.call_id}),
+            )
+            .await
+        }
+        Err(error) => send_app_error(outbound_tx, id, error).await,
+    }
+}
+
 async fn handle_heartbeat_ping(
     outbound_tx: &mpsc::Sender<ServerEnvelope>,
     envelope: ClientEnvelope,
@@ -447,6 +708,30 @@ async fn publish_realtime_event(
     if let Err(error) = fanout_notify_payload(&state.pool, &state.registry, &payload).await {
         tracing::warn!(%error, event_type, "failed to fan out websocket realtime event locally");
     }
+
+    if let Err(error) = state.notify_publisher.publish(&payload).await {
+        tracing::warn!(%error, event_type, "failed to publish websocket realtime notify event");
+    }
+}
+
+async fn publish_realtime_event_to_local_users(
+    state: &AppState,
+    origin_connection_id: Option<ConnectionId>,
+    event: RealtimeEvent,
+    local_user_ids: impl IntoIterator<Item = UserId>,
+) {
+    let event_type = event.event_type();
+    let payload = RealtimeNotifyPayload {
+        origin_instance_id: state.instance_id.clone(),
+        origin_connection_id,
+        event,
+    };
+
+    state.registry.send_to_users(
+        local_user_ids,
+        payload.event.server_envelope(),
+        payload.origin_connection_id,
+    );
 
     if let Err(error) = state.notify_publisher.publish(&payload).await {
         tracing::warn!(%error, event_type, "failed to publish websocket realtime notify event");

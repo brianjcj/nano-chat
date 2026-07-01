@@ -4,8 +4,8 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::{
-    conversations::types::ConversationMember, ids::UserId, messages::types::MessageDto,
-    ws::protocol::ServerEnvelope,
+    calls::types::CallSummary, conversations::types::ConversationMember, ids::UserId,
+    messages::types::MessageDto, ws::protocol::ServerEnvelope,
 };
 
 pub const PG_NOTIFY_PAYLOAD_LIMIT_BYTES: usize = 8_000;
@@ -51,6 +51,22 @@ pub enum RealtimeEvent {
         conversation_id: Uuid,
         user_id: UserId,
     },
+    #[serde(rename = "call.incoming")]
+    CallIncoming { call: CallSummary },
+    #[serde(rename = "call.ringing")]
+    CallRinging { call: CallSummary },
+    #[serde(rename = "call.accepted")]
+    CallAccepted { call: CallSummary },
+    #[serde(rename = "call.connected")]
+    CallConnected { call: CallSummary },
+    #[serde(rename = "call.rejected")]
+    CallRejected { call: CallSummary },
+    #[serde(rename = "call.canceled")]
+    CallCanceled { call: CallSummary },
+    #[serde(rename = "call.ended")]
+    CallEnded { call: CallSummary },
+    #[serde(rename = "call.busy")]
+    CallBusy { call: CallSummary },
     #[serde(rename = "server.draining")]
     ServerDraining,
 }
@@ -63,6 +79,14 @@ impl RealtimeEvent {
             Self::ConversationMemberAdded { .. } => "conversation.member_added",
             Self::ConversationMemberLeft { .. } => "conversation.member_left",
             Self::ConversationDissolved { .. } => "conversation.dissolved",
+            Self::CallIncoming { .. } => "call.incoming",
+            Self::CallRinging { .. } => "call.ringing",
+            Self::CallAccepted { .. } => "call.accepted",
+            Self::CallConnected { .. } => "call.connected",
+            Self::CallRejected { .. } => "call.rejected",
+            Self::CallCanceled { .. } => "call.canceled",
+            Self::CallEnded { .. } => "call.ended",
+            Self::CallBusy { .. } => "call.busy",
             Self::ServerDraining => "server.draining",
         }
     }
@@ -105,6 +129,16 @@ impl RealtimeEvent {
             } => serde_json::json!({
                 "conversation_id": conversation_id,
                 "user_id": user_id,
+            }),
+            Self::CallIncoming { call }
+            | Self::CallRinging { call }
+            | Self::CallAccepted { call }
+            | Self::CallConnected { call }
+            | Self::CallRejected { call }
+            | Self::CallCanceled { call }
+            | Self::CallEnded { call }
+            | Self::CallBusy { call } => serde_json::json!({
+                "call": call,
             }),
             Self::ServerDraining => serde_json::json!({}),
         }

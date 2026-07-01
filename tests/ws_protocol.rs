@@ -2,6 +2,31 @@ use nano_chat::ws::protocol::{ClientEnvelope, ServerEnvelope};
 use serde_json::json;
 
 #[test]
+fn call_invite_payload_deserializes() {
+    let envelope: nano_chat::ws::protocol::ClientEnvelope = serde_json::from_value(json!({
+        "id": "call-1",
+        "type": "call.invite",
+        "payload": {"conversation_id": uuid::Uuid::nil(), "media_type": "video"}
+    }))
+    .unwrap();
+    assert_eq!(envelope.message_type, "call.invite");
+}
+
+#[test]
+fn call_signal_payload_accepts_offer_answer_and_ice() {
+    let payload: nano_chat::ws::protocol::CallSignalPayload = serde_json::from_value(json!({
+        "call_id": uuid::Uuid::nil(),
+        "signal_type": "offer",
+        "data": {"type": "offer", "sdp": "v=0"}
+    }))
+    .unwrap();
+    assert_eq!(
+        payload.signal_type,
+        nano_chat::ws::protocol::CallSignalType::Offer
+    );
+}
+
+#[test]
 fn parses_message_send_envelope_with_snake_case_payload() {
     let raw = json!({
         "id": "req-1",

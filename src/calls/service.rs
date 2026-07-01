@@ -14,7 +14,9 @@ use crate::{
     users::types::UserSummary,
 };
 
-use super::types::{CallCommandResult, CallEndReason, CallMediaType, CallState, CallSummary};
+use super::types::{
+    CallCommandResult, CallEndReason, CallMediaType, CallSignalTarget, CallState, CallSummary,
+};
 
 #[derive(Debug, sqlx::FromRow)]
 struct ConversationKindRow {
@@ -65,6 +67,15 @@ struct LockedCallSessionRow {
     state: String,
     started_at: DateTime<Utc>,
     accepted_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct SignalTargetCallRow {
+    caller_user_id: UserId,
+    callee_user_id: UserId,
+    caller_client_id: Uuid,
+    accepted_client_id: Option<Uuid>,
+    state: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -282,6 +293,61 @@ pub async fn hangup(
         &[CallState::Connecting, CallState::Active],
     )
     .await
+}
+
+pub async fn signal_target(
+    pool: &PgPool,
+    participant: &CurrentUser,
+    call_id: Uuid,
+) -> AppResult<CallSignalTarget> {
+    let row = sqlx::query_as::<_, SignalTargetCallRow>(
+        "select caller_user_id,
+                callee_user_id,
+                caller_client_id,
+                accepted_client_id,
+                state
+         from call_sessions
+         where call_id = $1",
+    )
+    .bind(call_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(internal_error)?
+    .ok_or_else(call_not_found)?;
+
+    let state = parse_call_state(&row.state)?;
+    if state == CallState::Ended {
+        return Err(call_ended());
+    }
+    if !matches!(state, CallState::Connecting | CallState::Active) {
+        return Err(AppError::invalid_request("Call is not ready for signaling"));
+    }
+
+    if participant.user_id == row.caller_user_id {
+        let target_client_id = row
+            .accepted_client_id
+            .ok_or_else(|| AppError::invalid_request("Call has no accepted client"))?;
+        return Ok(CallSignalTarget {
+            target_user_id: row.callee_user_id,
+            target_client_id,
+        });
+    }
+
+    if participant.user_id == row.callee_user_id {
+        if row.accepted_client_id != Some(participant.client_id) {
+            return Err(AppError::new(
+                StatusCode::FORBIDDEN,
+                ErrorCode::NotCallParticipant,
+                "Only the accepted callee client can signal this call",
+            ));
+        }
+        return Ok(CallSignalTarget {
+            target_user_id: row.caller_user_id,
+            target_client_id: row.caller_client_id,
+        });
+    }
+
+    Err(not_call_participant())
 }
 
 pub(crate) async fn call_summary_by_id(
