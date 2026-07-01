@@ -1,0 +1,25 @@
+docs/superpowers/plans/2026-07-01-1v1-webrtc-calls.md
+  s_3183c7873664b5::t_26c0cfda69d0ea 535,538-543,545-553,559,568
+  s_3183c7873664b5::t_f5e32449c12c7d 470,481,504,514
+  s_3183c7873664b5::t_90aa218582d448 1-272,274-440,442-445,447-469,471-480,483-503,505-513,515-534,536-537,544,554-558,560-567,569-928,930-1012,1039-1041,1043-1272,1274-2229
+  s_3183c7873664b5::t_e30177532f58a2 446
+  s_3183c7873664b5::t_250162d6c4043a 273,1273
+  s_3183c7873664b5::t_3a03fad9d23241 441,482,929,1013-1038,1042
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "d8e467abf4f2b458e1c9358ec6f3fba4baddc42b",
+  "prompts": {},
+  "logical_commit_id": "d8e467abf4f2b458e1c9358ec6f3fba4baddc42b",
+  "sessions": {
+    "s_3183c7873664b5": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1cd9-d0ab-7e1d-9a4e-3e09bb2a5595",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
