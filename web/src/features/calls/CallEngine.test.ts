@@ -71,6 +71,54 @@ describe("signaling", () => {
       candidate: { candidate: "candidate:0" },
     });
   });
+
+  it("buffers inbound ICE candidates until the remote description is applied", async () => {
+    const peer = createFakePeerConnection();
+    const engine = new CallEngine({
+      createPeerConnection: () => peer as unknown as RTCPeerConnection,
+      getUserMedia: vi.fn().mockResolvedValue(new MediaStream()),
+      getIceServers: vi.fn().mockResolvedValue([]),
+    });
+    const earlyCandidate = { candidate: "candidate:early" };
+    const offer = { type: "offer", sdp: "v=0" } satisfies RTCSessionDescriptionInit;
+
+    await engine.addIceCandidate(earlyCandidate);
+
+    expect(peer.addIceCandidate).not.toHaveBeenCalled();
+
+    await engine.acceptOffer(offer);
+
+    expect(peer.setRemoteDescription).toHaveBeenCalledWith(offer);
+    expect(peer.addIceCandidate).toHaveBeenCalledWith(earlyCandidate);
+  });
+
+  it("treats disconnected as transient and only emits failed for failed state", async () => {
+    const peer = createFakePeerConnection();
+    const engine = new CallEngine({
+      createPeerConnection: () => peer as unknown as RTCPeerConnection,
+      getUserMedia: vi.fn().mockResolvedValue(new MediaStream()),
+      getIceServers: vi.fn().mockResolvedValue([]),
+    });
+    const listener = vi.fn();
+    engine.subscribe(listener);
+
+    await engine.prepareLocalMedia("audio");
+    peer.connectionState = "disconnected";
+    peer.onconnectionstatechange?.call(
+      peer as unknown as RTCPeerConnection,
+      new Event("connectionstatechange"),
+    );
+
+    expect(listener).not.toHaveBeenCalledWith({ type: "failed" });
+
+    peer.connectionState = "failed";
+    peer.onconnectionstatechange?.call(
+      peer as unknown as RTCPeerConnection,
+      new Event("connectionstatechange"),
+    );
+
+    expect(listener).toHaveBeenCalledWith({ type: "failed" });
+  });
 });
 
 function createFakePeerConnection() {

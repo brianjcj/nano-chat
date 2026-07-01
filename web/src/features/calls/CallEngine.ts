@@ -22,6 +22,8 @@ export class CallEngine {
   private localStream: MediaStream | null = null;
   private muted = false;
   private cameraOff = false;
+  private remoteDescriptionApplied = false;
+  private readonly pendingRemoteIceCandidates: RTCIceCandidateInit[] = [];
 
   constructor(deps: CallEngineDeps) {
     this.createPeerConnection =
@@ -60,6 +62,8 @@ export class CallEngine {
   ): Promise<RTCSessionDescriptionInit> {
     const peerConnection = await this.ensurePeerConnection();
     await peerConnection.setRemoteDescription(offer);
+    this.remoteDescriptionApplied = true;
+    await this.flushPendingRemoteIceCandidates(peerConnection);
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
 
@@ -69,10 +73,18 @@ export class CallEngine {
   async acceptAnswer(answer: RTCSessionDescriptionInit): Promise<void> {
     const peerConnection = await this.ensurePeerConnection();
     await peerConnection.setRemoteDescription(answer);
+    this.remoteDescriptionApplied = true;
+    await this.flushPendingRemoteIceCandidates(peerConnection);
   }
 
   async addIceCandidate(candidate: RTCIceCandidateInit): Promise<void> {
     const peerConnection = await this.ensurePeerConnection();
+
+    if (!this.remoteDescriptionApplied) {
+      this.pendingRemoteIceCandidates.push(candidate);
+      return;
+    }
+
     await peerConnection.addIceCandidate(candidate);
   }
 
@@ -102,6 +114,8 @@ export class CallEngine {
     }
 
     this.localStream = null;
+    this.remoteDescriptionApplied = false;
+    this.pendingRemoteIceCandidates.length = 0;
     this.addedLocalTracks.clear();
     this.peerConnection?.close();
     this.peerConnection = null;
@@ -148,7 +162,6 @@ export class CallEngine {
           this.emit({ type: "connected" });
           break;
         case "failed":
-        case "disconnected":
           this.emit({ type: "failed" });
           break;
         case "closed":
@@ -176,6 +189,16 @@ export class CallEngine {
 
       peerConnection.addTrack(track, this.localStream);
       this.addedLocalTracks.add(track);
+    }
+  }
+
+  private async flushPendingRemoteIceCandidates(
+    peerConnection: RTCPeerConnection,
+  ): Promise<void> {
+    const candidates = this.pendingRemoteIceCandidates.splice(0);
+
+    for (const candidate of candidates) {
+      await peerConnection.addIceCandidate(candidate);
     }
   }
 

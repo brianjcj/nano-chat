@@ -20,8 +20,8 @@ export function CallOverlay() {
   const summary = state.call;
   const peerUser =
     summary.caller.user_id === session?.user.user_id ? summary.callee : summary.caller;
-  const localStream = hasStreams(state) ? state.localStream : null;
-  const remoteStream = hasStreams(state) ? state.remoteStream : null;
+  const localStream = hasLocalStream(state) ? state.localStream : null;
+  const remoteStream = hasRemoteStream(state) ? state.remoteStream : null;
   const isActive = state.phase === "active";
   const muted = isActive ? state.muted : false;
   const cameraOff = isActive ? state.cameraOff : false;
@@ -48,13 +48,22 @@ export function CallOverlay() {
         {summary.media_type === "video" ? (
           <>
             {remoteStream ? (
-              <CallVideo label="Remote video" stream={remoteStream} />
+              <CallVideo
+                label={t("calls.video.remote", { defaultValue: "Remote video" })}
+                stream={remoteStream}
+              />
             ) : (
               <CallAvatar label={displayUserName(peerUser)} />
             )}
             {localStream ? (
               <div className="absolute bottom-5 right-5 h-32 w-24 overflow-hidden rounded-[var(--radius)] border border-white/20 bg-black/40 shadow-2xl">
-                <CallVideo label="Local video" muted stream={localStream} />
+                <CallVideo
+                  label={t("calls.video.localPreview", {
+                    defaultValue: "Local video preview",
+                  })}
+                  muted
+                  stream={localStream}
+                />
               </div>
             ) : null}
           </>
@@ -102,7 +111,17 @@ function CallAvatar({ label }: { label: string }) {
   );
 }
 
-function hasStreams(
+function hasLocalStream(
+  state: CallUiState,
+): state is Extract<CallUiState, { phase: "outgoing" | "connecting" | "active" }> {
+  return (
+    state.phase === "outgoing" ||
+    state.phase === "connecting" ||
+    state.phase === "active"
+  );
+}
+
+function hasRemoteStream(
   state: CallUiState,
 ): state is Extract<CallUiState, { phase: "connecting" | "active" }> {
   return state.phase === "connecting" || state.phase === "active";

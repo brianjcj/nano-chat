@@ -22,7 +22,7 @@ import type {
 
 export type CallUiState =
   | { phase: "idle" }
-  | { phase: "outgoing"; call: CallSummary }
+  | { phase: "outgoing"; call: CallSummary; localStream: MediaStream | null }
   | { phase: "incoming"; call: CallSummary }
   | {
       phase: "connecting";
@@ -95,6 +95,8 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
   const mutedRef = useRef(false);
   const cameraOffRef = useRef(false);
   const connectedSentCallIdRef = useRef<string | null>(null);
+  const localSignalSentCallIdRef = useRef<string | null>(null);
+  const outboundIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
 
   const setState = useCallback(
     (next: CallUiState | ((current: CallUiState) => CallUiState)) => {
@@ -115,6 +117,8 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
     mutedRef.current = false;
     cameraOffRef.current = false;
     connectedSentCallIdRef.current = null;
+    localSignalSentCallIdRef.current = null;
+    outboundIceCandidatesRef.current = [];
   }, [engine]);
 
   const startCall = useCallback<CallContextValue["startCall"]>(
@@ -128,6 +132,7 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
       try {
         localStream = await engine.prepareLocalMedia(mediaType);
       } catch {
+        closeEngine();
         return;
       }
 
@@ -143,7 +148,7 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
         });
 
         if (isCallCommandResult(result)) {
-          setState({ phase: "outgoing", call: result.call });
+          setState({ phase: "outgoing", call: result.call, localStream });
         }
       } catch {
         closeEngine();
@@ -197,11 +202,18 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
     }
 
     const { call } = currentState;
-    await realtimeClient.sendCommand<"call.reject", CallCommandResult>("call.reject", {
-      call_id: call.call_id,
-    });
-    closeEngine();
-    setState({ phase: "ended", call: withEndedCallState(call), reason: "rejected" });
+
+    try {
+      await realtimeClient.sendCommand<"call.reject", CallCommandResult>(
+        "call.reject",
+        { call_id: call.call_id },
+      );
+    } catch {
+      // Local cleanup must still happen if the realtime command cannot be sent.
+    } finally {
+      closeEngine();
+      setState({ phase: "ended", call: withEndedCallState(call), reason: "rejected" });
+    }
   }, [closeEngine, realtimeClient, setState]);
 
   const cancelOutgoing = useCallback<CallContextValue["cancelOutgoing"]>(async () => {
@@ -212,11 +224,18 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
     }
 
     const { call } = currentState;
-    await realtimeClient.sendCommand<"call.cancel", CallCommandResult>("call.cancel", {
-      call_id: call.call_id,
-    });
-    closeEngine();
-    setState({ phase: "ended", call: withEndedCallState(call), reason: "canceled" });
+
+    try {
+      await realtimeClient.sendCommand<"call.cancel", CallCommandResult>(
+        "call.cancel",
+        { call_id: call.call_id },
+      );
+    } catch {
+      // Local cleanup must still happen if the realtime command cannot be sent.
+    } finally {
+      closeEngine();
+      setState({ phase: "ended", call: withEndedCallState(call), reason: "canceled" });
+    }
   }, [closeEngine, realtimeClient, setState]);
 
   const hangUp = useCallback<CallContextValue["hangUp"]>(
@@ -227,16 +246,24 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
         return;
       }
 
-      await realtimeClient.sendCommand<"call.hangup", CallCommandResult>("call.hangup", {
-        call_id: currentCall.call_id,
-        reason,
-      });
-      closeEngine();
-      setState({
-        phase: "ended",
-        call: withEndedCallState(currentCall, reason),
-        reason,
-      });
+      try {
+        await realtimeClient.sendCommand<"call.hangup", CallCommandResult>(
+          "call.hangup",
+          {
+            call_id: currentCall.call_id,
+            reason,
+          },
+        );
+      } catch {
+        // Local cleanup must still happen if the realtime command cannot be sent.
+      } finally {
+        closeEngine();
+        setState({
+          phase: "ended",
+          call: withEndedCallState(currentCall, reason),
+          reason,
+        });
+      }
     },
     [closeEngine, realtimeClient, setState],
   );
@@ -271,9 +298,17 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
     return () => window.clearTimeout(timeoutId);
   }, [setState, state]);
 
+  useEffect(() => () => closeEngine(), [closeEngine]);
+
   useEffect(() => {
     const unsubscribe = engine.subscribe((event) => {
-      const currentCall = getStateCall(stateRef.current);
+      const currentState = stateRef.current;
+
+      if (currentState.phase === "ended") {
+        return;
+      }
+
+      const currentCall = getStateCall(currentState);
 
       if (!currentCall) {
         return;
@@ -281,10 +316,12 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
 
       switch (event.type) {
         case "ice_candidate":
-          void realtimeClient.sendCommand<"call.signal", unknown>("call.signal", {
-            call_id: currentCall.call_id,
-            signal_type: "ice_candidate",
-            data: event.candidate,
+          sendOrQueueIceCandidate({
+            candidate: event.candidate,
+            callId: currentCall.call_id,
+            localSignalSentCallIdRef,
+            outboundIceCandidatesRef,
+            realtimeClient,
           });
           break;
         case "remote_stream":
@@ -345,6 +382,8 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
         remoteStreamRef,
         mutedRef,
         cameraOffRef,
+        localSignalSentCallIdRef,
+        outboundIceCandidatesRef,
         closeEngine,
       });
     });
@@ -403,6 +442,8 @@ type HandleRealtimeEventOptions = {
   remoteStreamRef: MutableRefObject<MediaStream | null>;
   mutedRef: MutableRefObject<boolean>;
   cameraOffRef: MutableRefObject<boolean>;
+  localSignalSentCallIdRef: MutableRefObject<string | null>;
+  outboundIceCandidatesRef: MutableRefObject<RTCIceCandidateInit[]>;
   closeEngine: () => void;
 };
 
@@ -417,8 +458,23 @@ async function handleRealtimeEvent({
   remoteStreamRef,
   mutedRef,
   cameraOffRef,
+  localSignalSentCallIdRef,
+  outboundIceCandidatesRef,
   closeEngine,
 }: HandleRealtimeEventOptions) {
+  if (stateRef.current.phase === "ended") {
+    if (isTerminalCallStateEvent(event) && isSameCurrentCall(stateRef.current, event.payload.call)) {
+      closeEngine();
+      setState({
+        phase: "ended",
+        call: event.payload.call,
+        reason: event.payload.call.end_reason ?? reasonFromEventType(event.type),
+      });
+    }
+
+    return;
+  }
+
   switch (event.type) {
     case "call.incoming":
       if (stateRef.current.phase === "idle") {
@@ -427,7 +483,11 @@ async function handleRealtimeEvent({
       return;
     case "call.ringing":
       if (isSameCurrentCall(stateRef.current, event.payload.call)) {
-        setState({ phase: "outgoing", call: event.payload.call });
+        setState({
+          phase: "outgoing",
+          call: event.payload.call,
+          localStream: localStreamRef.current,
+        });
       }
       return;
     case "call.accepted":
@@ -442,6 +502,8 @@ async function handleRealtimeEvent({
         remoteStreamRef,
         mutedRef,
         cameraOffRef,
+        localSignalSentCallIdRef,
+        outboundIceCandidatesRef,
         closeEngine,
       });
       return;
@@ -478,6 +540,8 @@ async function handleRealtimeEvent({
         stateRef,
         localStreamRef,
         remoteStreamRef,
+        localSignalSentCallIdRef,
+        outboundIceCandidatesRef,
         setState,
       });
       return;
@@ -501,6 +565,8 @@ async function handleAcceptedEvent({
   remoteStreamRef,
   mutedRef,
   cameraOffRef,
+  localSignalSentCallIdRef,
+  outboundIceCandidatesRef,
   closeEngine,
 }: AcceptedEventOptions) {
   const currentState = stateRef.current;
@@ -527,10 +593,13 @@ async function handleAcceptedEvent({
       remoteStream: remoteStreamRef.current,
     });
     const offer = await engine.createOffer();
-    await realtimeClient.sendCommand<"call.signal", unknown>("call.signal", {
-      call_id: call.call_id,
-      signal_type: "offer",
+    await sendLocalDescriptionSignal({
+      callId: call.call_id,
       data: offer,
+      localSignalSentCallIdRef,
+      outboundIceCandidatesRef,
+      realtimeClient,
+      signalType: "offer",
     });
     return;
   }
@@ -562,6 +631,8 @@ type SignalEventOptions = {
   stateRef: MutableRefObject<CallUiState>;
   localStreamRef: MutableRefObject<MediaStream | null>;
   remoteStreamRef: MutableRefObject<MediaStream | null>;
+  localSignalSentCallIdRef: MutableRefObject<string | null>;
+  outboundIceCandidatesRef: MutableRefObject<RTCIceCandidateInit[]>;
   setState: (next: CallUiState | ((current: CallUiState) => CallUiState)) => void;
 };
 
@@ -572,6 +643,8 @@ async function handleSignalEvent({
   stateRef,
   localStreamRef,
   remoteStreamRef,
+  localSignalSentCallIdRef,
+  outboundIceCandidatesRef,
   setState,
 }: SignalEventOptions) {
   const currentCall = getStateCall(stateRef.current);
@@ -588,10 +661,13 @@ async function handleSignalEvent({
       localStream: localStreamRef.current,
       remoteStream: remoteStreamRef.current,
     });
-    await realtimeClient.sendCommand<"call.signal", unknown>("call.signal", {
-      call_id: payload.call_id,
-      signal_type: "answer",
+    await sendLocalDescriptionSignal({
+      callId: payload.call_id,
       data: answer,
+      localSignalSentCallIdRef,
+      outboundIceCandidatesRef,
+      realtimeClient,
+      signalType: "answer",
     });
     return;
   }
@@ -602,6 +678,90 @@ async function handleSignalEvent({
   }
 
   await engine.addIceCandidate(payload.data as RTCIceCandidateInit);
+}
+
+type TerminalCallStateEvent = {
+  type: "call.rejected" | "call.canceled" | "call.ended" | "call.busy";
+  payload: { call: CallSummary };
+};
+
+function isTerminalCallStateEvent(
+  event: RealtimeIncoming,
+): event is TerminalCallStateEvent {
+  return (
+    event.type === "call.rejected" ||
+    event.type === "call.canceled" ||
+    event.type === "call.ended" ||
+    event.type === "call.busy"
+  );
+}
+
+function sendOrQueueIceCandidate({
+  candidate,
+  callId,
+  localSignalSentCallIdRef,
+  outboundIceCandidatesRef,
+  realtimeClient,
+}: {
+  candidate: RTCIceCandidateInit;
+  callId: string;
+  localSignalSentCallIdRef: MutableRefObject<string | null>;
+  outboundIceCandidatesRef: MutableRefObject<RTCIceCandidateInit[]>;
+  realtimeClient: ReturnType<typeof useRealtimeClient>;
+}) {
+  if (localSignalSentCallIdRef.current === callId) {
+    void sendIceCandidate({ candidate, callId, realtimeClient }).catch(() => undefined);
+    return;
+  }
+
+  outboundIceCandidatesRef.current.push(candidate);
+}
+
+async function sendLocalDescriptionSignal({
+  callId,
+  data,
+  localSignalSentCallIdRef,
+  outboundIceCandidatesRef,
+  realtimeClient,
+  signalType,
+}: {
+  callId: string;
+  data: RTCSessionDescriptionInit;
+  localSignalSentCallIdRef: MutableRefObject<string | null>;
+  outboundIceCandidatesRef: MutableRefObject<RTCIceCandidateInit[]>;
+  realtimeClient: ReturnType<typeof useRealtimeClient>;
+  signalType: "offer" | "answer";
+}) {
+  await realtimeClient.sendCommand<"call.signal", unknown>("call.signal", {
+    call_id: callId,
+    signal_type: signalType,
+    data,
+  });
+  localSignalSentCallIdRef.current = callId;
+
+  const queuedCandidates = outboundIceCandidatesRef.current;
+  outboundIceCandidatesRef.current = [];
+  await Promise.all(
+    queuedCandidates.map((candidate) =>
+      sendIceCandidate({ candidate, callId, realtimeClient }).catch(() => undefined),
+    ),
+  );
+}
+
+function sendIceCandidate({
+  candidate,
+  callId,
+  realtimeClient,
+}: {
+  candidate: RTCIceCandidateInit;
+  callId: string;
+  realtimeClient: ReturnType<typeof useRealtimeClient>;
+}) {
+  return realtimeClient.sendCommand<"call.signal", unknown>("call.signal", {
+    call_id: callId,
+    signal_type: "ice_candidate",
+    data: candidate,
+  });
 }
 
 function getStateCall(state: CallUiState): CallSummary | null {

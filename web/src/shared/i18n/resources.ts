@@ -208,6 +208,10 @@ export const appResources = {
           active: "通话中",
           ended: "通话已结束",
         },
+        video: {
+          localPreview: "本地视频预览",
+          remote: "对方视频",
+        },
         errors: {
           permissionDenied: "无法访问麦克风或摄像头。",
           busy: "对方正在通话中。",
@@ -450,6 +454,10 @@ export const appResources = {
           connecting: "Connecting…",
           active: "Connected",
           ended: "Call ended",
+        },
+        video: {
+          localPreview: "Local video preview",
+          remote: "Remote video",
         },
         errors: {
           permissionDenied: "Microphone or camera access was denied.",
