@@ -447,6 +447,267 @@ async fn ringing_timeout_ends_call_and_writes_one_timeout_record() {
 
 #[tokio::test]
 #[serial_test::serial]
+async fn interrupted_cleanup_first_missing_selected_client_marks_detection_without_ending() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+    ctx.register_ws_sender_for(&bob);
+    let invited = calls_service::invite(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        direct.conversation_id,
+        CallMediaType::Audio,
+    )
+    .await
+    .unwrap();
+    calls_service::accept(&ctx.pool, bob.current_user(), invited.call.call_id)
+        .await
+        .unwrap();
+
+    let ended = calls_service::cleanup_interrupted_calls(
+        &ctx.pool,
+        &ctx.state.registry,
+        chrono::Utc::now(),
+        chrono::Duration::seconds(15),
+    )
+    .await
+    .unwrap();
+    assert_eq!(ended.len(), 0);
+
+    let (state, end_reason, detected_at): (
+        String,
+        Option<String>,
+        Option<chrono::DateTime<chrono::Utc>>,
+    ) = sqlx::query_as(
+        "select state, end_reason, interruption_detected_at
+         from call_sessions
+         where call_id = $1",
+    )
+    .bind(invited.call.call_id)
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+    assert_eq!(state, "connecting");
+    assert_eq!(end_reason, None);
+    assert!(detected_at.is_some());
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn interrupted_cleanup_ends_still_missing_selected_client_after_grace() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+    ctx.register_ws_sender_for(&bob);
+    let invited = calls_service::invite(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        direct.conversation_id,
+        CallMediaType::Audio,
+    )
+    .await
+    .unwrap();
+    calls_service::accept(&ctx.pool, bob.current_user(), invited.call.call_id)
+        .await
+        .unwrap();
+
+    let detected_at = chrono::Utc::now();
+    let first_pass = calls_service::cleanup_interrupted_calls(
+        &ctx.pool,
+        &ctx.state.registry,
+        detected_at,
+        chrono::Duration::seconds(15),
+    )
+    .await
+    .unwrap();
+    assert_eq!(first_pass.len(), 0);
+
+    let ended = calls_service::cleanup_interrupted_calls(
+        &ctx.pool,
+        &ctx.state.registry,
+        detected_at + chrono::Duration::seconds(16),
+        chrono::Duration::seconds(15),
+    )
+    .await
+    .unwrap();
+    assert_eq!(ended.len(), 1);
+    assert_eq!(ended[0].call.end_reason, Some(CallEndReason::NetworkError));
+
+    let (state, end_reason): (String, Option<String>) = sqlx::query_as(
+        "select state, end_reason
+         from call_sessions
+         where call_id = $1",
+    )
+    .bind(invited.call.call_id)
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+    assert_eq!(state, "ended");
+    assert_eq!(end_reason.as_deref(), Some("network_error"));
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn interrupted_cleanup_clears_detection_when_selected_clients_return() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+    ctx.register_ws_sender_for(&bob);
+    let invited = calls_service::invite(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        direct.conversation_id,
+        CallMediaType::Video,
+    )
+    .await
+    .unwrap();
+    calls_service::accept(&ctx.pool, bob.current_user(), invited.call.call_id)
+        .await
+        .unwrap();
+
+    let detected_at = chrono::Utc::now();
+    let first_pass = calls_service::cleanup_interrupted_calls(
+        &ctx.pool,
+        &ctx.state.registry,
+        detected_at,
+        chrono::Duration::seconds(15),
+    )
+    .await
+    .unwrap();
+    assert_eq!(first_pass.len(), 0);
+
+    let stored_detected_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+        "select interruption_detected_at
+         from call_sessions
+         where call_id = $1",
+    )
+    .bind(invited.call.call_id)
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+    assert!(stored_detected_at.is_some());
+
+    ctx.register_ws_sender_for(&alice);
+    let second_pass = calls_service::cleanup_interrupted_calls(
+        &ctx.pool,
+        &ctx.state.registry,
+        detected_at + chrono::Duration::seconds(5),
+        chrono::Duration::seconds(15),
+    )
+    .await
+    .unwrap();
+    assert_eq!(second_pass.len(), 0);
+
+    let (state, cleared_detected_at): (String, Option<chrono::DateTime<chrono::Utc>>) =
+        sqlx::query_as(
+            "select state, interruption_detected_at
+             from call_sessions
+             where call_id = $1",
+        )
+        .bind(invited.call.call_id)
+        .fetch_one(&ctx.pool)
+        .await
+        .unwrap();
+    assert_eq!(state, "connecting");
+    assert!(cleared_detected_at.is_none());
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn interrupted_cleanup_only_considers_selected_caller_and_accepted_callee_clients() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+    let alice_other = ctx.login_existing_client("alice", None).await;
+    let bob_other = ctx.login_existing_client("bob", None).await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+    ctx.register_ws_sender_for(&alice_other);
+    ctx.register_ws_sender_for(&bob_other);
+    assert!(
+        ctx.state
+            .registry
+            .contains_client(alice.user_id, alice_other.client_id)
+    );
+    assert!(
+        ctx.state
+            .registry
+            .contains_client(bob.user_id, bob_other.client_id)
+    );
+    assert!(
+        !ctx.state
+            .registry
+            .contains_client(alice.user_id, alice.client_id)
+    );
+    assert!(
+        !ctx.state
+            .registry
+            .contains_client(bob.user_id, bob.client_id)
+    );
+
+    let invited = calls_service::invite(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        direct.conversation_id,
+        CallMediaType::Audio,
+    )
+    .await
+    .unwrap();
+    let accepted = calls_service::accept(&ctx.pool, bob.current_user(), invited.call.call_id)
+        .await
+        .unwrap();
+    assert_eq!(accepted.call.accepted_client_id, Some(bob.client_id));
+
+    let detected_at = chrono::Utc::now();
+    let first_pass = calls_service::cleanup_interrupted_calls(
+        &ctx.pool,
+        &ctx.state.registry,
+        detected_at,
+        chrono::Duration::seconds(15),
+    )
+    .await
+    .unwrap();
+    assert_eq!(first_pass.len(), 0);
+
+    let stored_detected_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+        "select interruption_detected_at
+         from call_sessions
+         where call_id = $1",
+    )
+    .bind(invited.call.call_id)
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+    assert!(stored_detected_at.is_some());
+
+    let ended = calls_service::cleanup_interrupted_calls(
+        &ctx.pool,
+        &ctx.state.registry,
+        detected_at + chrono::Duration::seconds(16),
+        chrono::Duration::seconds(15),
+    )
+    .await
+    .unwrap();
+    assert_eq!(ended.len(), 1);
+    assert_eq!(ended[0].call.end_reason, Some(CallEndReason::NetworkError));
+}
+
+#[tokio::test]
+#[serial_test::serial]
 async fn startup_cleanup_marks_non_ended_calls_network_error() {
     let ctx = common::TestContext::new().await;
     let alice = ctx.register("alice").await;
@@ -477,6 +738,47 @@ async fn startup_cleanup_marks_non_ended_calls_network_error() {
             .await
             .unwrap();
     assert_eq!(reason, "network_error");
+
+    let busy_lock_count: i64 = sqlx::query_scalar(
+        "select count(*)
+         from call_participants
+         where call_id = $1
+           and state in ('ringing', 'connecting', 'active')",
+    )
+    .bind(invited.call.call_id)
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+    assert_eq!(busy_lock_count, 0);
+
+    let call_event_count: i64 = sqlx::query_scalar(
+        "select count(*)
+         from messages
+         where conversation_id = $1
+           and message_type = 'call_event'",
+    )
+    .bind(direct.conversation_id)
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+    assert_eq!(call_event_count, 1);
+
+    let cleaned_again = calls_service::cleanup_non_ended_calls_on_startup(&ctx.pool)
+        .await
+        .unwrap();
+    assert_eq!(cleaned_again, 0);
+
+    let call_event_count_after_rerun: i64 = sqlx::query_scalar(
+        "select count(*)
+         from messages
+         where conversation_id = $1
+           and message_type = 'call_event'",
+    )
+    .bind(direct.conversation_id)
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+    assert_eq!(call_event_count_after_rerun, 1);
 }
 
 async fn install_call_participant_sleep_trigger(pool: &sqlx::PgPool) {
