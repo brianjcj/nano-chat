@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useSession } from "@/app/AppProviders";
+import { ChatHeaderCallButtons } from "@/features/calls/components/ChatHeaderCallButtons";
 import { useConversationsQuery } from "@/features/im/api/imQueries";
 import { MemberPanel } from "@/features/im/components/MemberPanel";
 import { MessageInput } from "@/features/im/components/MessageInput";
@@ -78,6 +79,7 @@ function LoadedChatView({ conversation }: { conversation: ConversationSummary })
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2 pr-14 md:pr-0">
+          <ChatHeaderCallButtons conversation={conversation} disabled={disabled} />
           {conversation.type === "group" ? (
             <Button
               aria-label={t("im.memberPanel.title")}
