@@ -543,6 +543,7 @@ async function handleRealtimeEvent({
         localSignalSentCallIdRef,
         outboundIceCandidatesRef,
         setState,
+        closeEngine,
       });
       return;
     default:
@@ -592,15 +593,43 @@ async function handleAcceptedEvent({
       localStream: localStreamRef.current,
       remoteStream: remoteStreamRef.current,
     });
-    const offer = await engine.createOffer();
-    await sendLocalDescriptionSignal({
-      callId: call.call_id,
-      data: offer,
-      localSignalSentCallIdRef,
-      outboundIceCandidatesRef,
-      realtimeClient,
-      signalType: "offer",
-    });
+
+    let offer: RTCSessionDescriptionInit;
+
+    try {
+      offer = await engine.createOffer();
+    } catch {
+      endCurrentCallWithSignalError({
+        callId: call.call_id,
+        closeEngine,
+        setState,
+        stateRef,
+      });
+      return;
+    }
+
+    if (!isCurrentNonEndedCall(stateRef, call.call_id)) {
+      return;
+    }
+
+    try {
+      await sendLocalDescriptionSignal({
+        callId: call.call_id,
+        data: offer,
+        localSignalSentCallIdRef,
+        outboundIceCandidatesRef,
+        realtimeClient,
+        signalType: "offer",
+        shouldContinue: () => isCurrentNonEndedCall(stateRef, call.call_id),
+      });
+    } catch {
+      endCurrentCallWithSignalError({
+        callId: call.call_id,
+        closeEngine,
+        setState,
+        stateRef,
+      });
+    }
     return;
   }
 
@@ -634,6 +663,7 @@ type SignalEventOptions = {
   localSignalSentCallIdRef: MutableRefObject<string | null>;
   outboundIceCandidatesRef: MutableRefObject<RTCIceCandidateInit[]>;
   setState: (next: CallUiState | ((current: CallUiState) => CallUiState)) => void;
+  closeEngine: () => void;
 };
 
 async function handleSignalEvent({
@@ -646,34 +676,74 @@ async function handleSignalEvent({
   localSignalSentCallIdRef,
   outboundIceCandidatesRef,
   setState,
+  closeEngine,
 }: SignalEventOptions) {
-  const currentCall = getStateCall(stateRef.current);
+  const currentCall = getCurrentNonEndedCall(stateRef, payload.call_id);
 
-  if (!currentCall || currentCall.call_id !== payload.call_id) {
+  if (!currentCall) {
     return;
   }
 
   if (payload.signal_type === "offer") {
-    const answer = await engine.acceptOffer(payload.data as RTCSessionDescriptionInit);
+    let answer: RTCSessionDescriptionInit;
+
+    try {
+      answer = await engine.acceptOffer(payload.data as RTCSessionDescriptionInit);
+    } catch {
+      endCurrentCallWithSignalError({
+        callId: payload.call_id,
+        closeEngine,
+        setState,
+        stateRef,
+      });
+      return;
+    }
+
+    const latestCall = getCurrentNonEndedCall(stateRef, payload.call_id);
+
+    if (!latestCall) {
+      return;
+    }
+
     setState({
       phase: "connecting",
-      call: { ...currentCall, state: "connecting" },
+      call: { ...latestCall, state: "connecting" },
       localStream: localStreamRef.current,
       remoteStream: remoteStreamRef.current,
     });
-    await sendLocalDescriptionSignal({
-      callId: payload.call_id,
-      data: answer,
-      localSignalSentCallIdRef,
-      outboundIceCandidatesRef,
-      realtimeClient,
-      signalType: "answer",
-    });
+
+    try {
+      await sendLocalDescriptionSignal({
+        callId: payload.call_id,
+        data: answer,
+        localSignalSentCallIdRef,
+        outboundIceCandidatesRef,
+        realtimeClient,
+        signalType: "answer",
+        shouldContinue: () => isCurrentNonEndedCall(stateRef, payload.call_id),
+      });
+    } catch {
+      endCurrentCallWithSignalError({
+        callId: payload.call_id,
+        closeEngine,
+        setState,
+        stateRef,
+      });
+    }
     return;
   }
 
   if (payload.signal_type === "answer") {
-    await engine.acceptAnswer(payload.data as RTCSessionDescriptionInit);
+    try {
+      await engine.acceptAnswer(payload.data as RTCSessionDescriptionInit);
+    } catch {
+      endCurrentCallWithSignalError({
+        callId: payload.call_id,
+        closeEngine,
+        setState,
+        stateRef,
+      });
+    }
     return;
   }
 
@@ -724,6 +794,7 @@ async function sendLocalDescriptionSignal({
   outboundIceCandidatesRef,
   realtimeClient,
   signalType,
+  shouldContinue = () => true,
 }: {
   callId: string;
   data: RTCSessionDescriptionInit;
@@ -731,21 +802,36 @@ async function sendLocalDescriptionSignal({
   outboundIceCandidatesRef: MutableRefObject<RTCIceCandidateInit[]>;
   realtimeClient: ReturnType<typeof useRealtimeClient>;
   signalType: "offer" | "answer";
-}) {
+  shouldContinue?: () => boolean;
+}): Promise<boolean> {
+  if (!shouldContinue()) {
+    return false;
+  }
+
   await realtimeClient.sendCommand<"call.signal", unknown>("call.signal", {
     call_id: callId,
     signal_type: signalType,
     data,
   });
+
+  if (!shouldContinue()) {
+    return false;
+  }
+
   localSignalSentCallIdRef.current = callId;
 
   const queuedCandidates = outboundIceCandidatesRef.current;
   outboundIceCandidatesRef.current = [];
-  await Promise.all(
-    queuedCandidates.map((candidate) =>
-      sendIceCandidate({ candidate, callId, realtimeClient }).catch(() => undefined),
-    ),
-  );
+
+  for (const candidate of queuedCandidates) {
+    if (!shouldContinue()) {
+      return false;
+    }
+
+    await sendIceCandidate({ candidate, callId, realtimeClient }).catch(() => undefined);
+  }
+
+  return true;
 }
 
 function sendIceCandidate({
@@ -772,6 +858,53 @@ function isSameCurrentCall(state: CallUiState, call: CallSummary): boolean {
   const currentCall = getStateCall(state);
 
   return Boolean(currentCall && currentCall.call_id === call.call_id);
+}
+
+function getCurrentNonEndedCall(
+  stateRef: MutableRefObject<CallUiState>,
+  callId: string,
+): CallSummary | null {
+  const currentState = stateRef.current;
+
+  if (currentState.phase === "idle" || currentState.phase === "ended") {
+    return null;
+  }
+
+  const currentCall = getStateCall(currentState);
+
+  return currentCall?.call_id === callId ? currentCall : null;
+}
+
+function isCurrentNonEndedCall(
+  stateRef: MutableRefObject<CallUiState>,
+  callId: string,
+): boolean {
+  return getCurrentNonEndedCall(stateRef, callId) !== null;
+}
+
+function endCurrentCallWithSignalError({
+  callId,
+  closeEngine,
+  setState,
+  stateRef,
+}: {
+  callId: string;
+  closeEngine: () => void;
+  setState: (next: CallUiState | ((current: CallUiState) => CallUiState)) => void;
+  stateRef: MutableRefObject<CallUiState>;
+}) {
+  const currentCall = getCurrentNonEndedCall(stateRef, callId);
+
+  if (!currentCall) {
+    return;
+  }
+
+  closeEngine();
+  setState({
+    phase: "ended",
+    call: withEndedCallState(currentCall, "network_error"),
+    reason: "network_error",
+  });
 }
 
 function withEndedCallState(

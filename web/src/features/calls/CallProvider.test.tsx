@@ -287,6 +287,192 @@ describe("CallProvider", () => {
     });
   });
 
+  it("does not answer an offer when the call ends while acceptOffer is pending", async () => {
+    const realtimeClient = createFakeRealtimeClient();
+    const engine = createFakeCallEngine();
+    const incomingCall = createIncomingCallSummary();
+    const answerDeferred = createDeferred<RTCSessionDescriptionInit>();
+    engine.acceptOffer.mockImplementationOnce(() => answerDeferred.promise);
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <CallActionProbe conversation={directConversation} />
+        <CallStateProbe />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.incoming",
+        payload: { call: incomingCall },
+      });
+    });
+    await screen.findByText("incoming");
+    await userEvent.click(screen.getByRole("button", { name: "accept" }));
+    await screen.findByText("connecting");
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.signal",
+        payload: {
+          call_id: incomingCall.call_id,
+          signal_type: "offer",
+          data: { type: "offer", sdp: "v=0" },
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(engine.acceptOffer).toHaveBeenCalled();
+    });
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.ended",
+        payload: {
+          call: createIncomingCallSummary({
+            state: "ended",
+            ended_at: "2026-07-01T00:01:00.000Z",
+            end_reason: "completed",
+          }),
+        },
+      });
+    });
+    await screen.findByText("ended");
+
+    await act(async () => {
+      answerDeferred.resolve({ type: "answer", sdp: "v=0" });
+      await answerDeferred.promise;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("call-phase")).toHaveTextContent("ended");
+    expect(realtimeClient.sendCommand).not.toHaveBeenCalledWith(
+      "call.signal",
+      expect.objectContaining({ signal_type: "answer" }),
+    );
+  });
+
+  it("does not send a caller offer when the call ends while createOffer is pending", async () => {
+    const realtimeClient = createFakeRealtimeClient();
+    const engine = createFakeCallEngine();
+    const offerDeferred = createDeferred<RTCSessionDescriptionInit>();
+    engine.createOffer.mockImplementationOnce(() => offerDeferred.promise);
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <CallActionProbe conversation={directConversation} />
+        <CallStateProbe />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "start" }));
+    await screen.findByText("outgoing");
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.accepted",
+        payload: { call: createCallSummary({ state: "connecting" }) },
+      });
+    });
+    await waitFor(() => {
+      expect(engine.createOffer).toHaveBeenCalled();
+    });
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.ended",
+        payload: {
+          call: createCallSummary({
+            state: "ended",
+            ended_at: "2026-07-01T00:01:00.000Z",
+            end_reason: "completed",
+          }),
+        },
+      });
+    });
+    await screen.findByText("ended");
+
+    await act(async () => {
+      offerDeferred.resolve({ type: "offer", sdp: "v=0" });
+      await offerDeferred.promise;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("call-phase")).toHaveTextContent("ended");
+    expect(realtimeClient.sendCommand).not.toHaveBeenCalledWith(
+      "call.signal",
+      expect.objectContaining({ signal_type: "offer" }),
+    );
+  });
+
+  it("cleans up and ends when sending the caller offer signal fails", async () => {
+    const realtimeClient = createFakeRealtimeClient({ rejectCommands: ["call.signal"] });
+    const engine = createFakeCallEngine();
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <CallActionProbe conversation={directConversation} />
+        <CallStateProbe />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "start" }));
+    await screen.findByText("outgoing");
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.accepted",
+        payload: { call: createCallSummary({ state: "connecting" }) },
+      });
+    });
+
+    await waitFor(() => {
+      expect(engine.close).toHaveBeenCalled();
+      expect(screen.getByTestId("call-phase")).toHaveTextContent("ended");
+    });
+  });
+
+  it("cleans up and ends when sending the callee answer signal fails", async () => {
+    const realtimeClient = createFakeRealtimeClient({ rejectCommands: ["call.signal"] });
+    const engine = createFakeCallEngine();
+    const incomingCall = createIncomingCallSummary();
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <CallActionProbe conversation={directConversation} />
+        <CallStateProbe />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.incoming",
+        payload: { call: incomingCall },
+      });
+    });
+    await screen.findByText("incoming");
+    await userEvent.click(screen.getByRole("button", { name: "accept" }));
+    await screen.findByText("connecting");
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.signal",
+        payload: {
+          call_id: incomingCall.call_id,
+          signal_type: "offer",
+          data: { type: "offer", sdp: "v=0" },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(engine.close).toHaveBeenCalled();
+      expect(screen.getByTestId("call-phase")).toHaveTextContent("ended");
+    });
+  });
+
   it("cleans up active call state even when hangup command rejects", async () => {
     const realtimeClient = createFakeRealtimeClient({ rejectCommands: ["call.hangup"] });
     const engine = createFakeCallEngine();
@@ -510,6 +696,17 @@ function createFakeCallEngine() {
       }
     },
   } satisfies CallEnginePort & { emit(event: CallEngineEvent): void };
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, reject, resolve };
 }
 
 function createFakeRealtimeClient({
