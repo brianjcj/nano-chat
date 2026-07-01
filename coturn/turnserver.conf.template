@@ -2,9 +2,10 @@ listening-port=3478
 fingerprint
 lt-cred-mech
 use-auth-secret
-static-auth-secret=${TURN_SHARED_SECRET}
-realm=${TURN_REALM}
-server-name=${TURN_REALM}
+static-auth-secret=__TURN_SHARED_SECRET__
+realm=__TURN_REALM__
+server-name=__TURN_REALM__
+__TURN_EXTERNAL_IP_CONFIG__
 no-multicast-peers
 no-cli
 no-tls

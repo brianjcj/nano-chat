@@ -963,7 +963,7 @@ The Compose Postgres image defaults to `mirror.gcr.io/library/postgres:17` for e
 
 For an application deployment, see also `docs/deployment-webrtc.md` for the single-VPS Caddy and coturn firewall checklist:
 
-1. Copy `.env.example` to `.env`, replace `JWT_SECRET` and `TURN_SHARED_SECRET` with strong secrets of at least 32 characters, set `NANO_CHAT_DOMAIN` to the HTTPS app host, set `TURN_PUBLIC_HOST` and `TURN_REALM` to the TURN host, and set `NANO_CHAT_IMAGE` if you want Compose to run a prebuilt image instead of `nano-chat:local`.
+1. Copy `.env.example` to `.env`, replace `JWT_SECRET` and `TURN_SHARED_SECRET` with strong secrets of at least 32 characters, set `NANO_CHAT_DOMAIN` to the HTTPS app host, set `TURN_PUBLIC_HOST` and `TURN_REALM` to the TURN host, set `TURN_EXTERNAL_IP` to the VPS public IP for real deployments, and set `NANO_CHAT_IMAGE` if you want Compose to run a prebuilt image instead of `nano-chat:local`.
 2. Start Postgres: `docker compose up -d postgres`.
 3. Run migrations from the host or CI against the target database before starting the app, for example:
 
@@ -1002,6 +1002,7 @@ Configuration variables:
 | `NANO_CHAT_MAX_MESSAGE_BYTES` | `4096` | Maximum message body size in UTF-8 bytes. |
 | `TURN_PUBLIC_HOST` | `turn.example.com` | Public TURN host used for local defaults and deployment alignment. |
 | `TURN_REALM` | `turn.example.com` | TURN realm configured in coturn. |
+| `TURN_EXTERNAL_IP` | empty | Optional coturn `external-ip`; set to the VPS public IP in real deployments so relayed candidates advertise a reachable address. |
 | `TURN_SHARED_SECRET` | `change-me-turn-shared-secret-at-least-32-bytes` | Coturn shared-secret key for generating short-lived TURN credentials; must be at least 32 characters. |
 | `TURN_CREDENTIAL_TTL_SECS` | `600` | Lifetime for generated TURN credentials. |
 | `TURN_STUN_URL` | `stun:turn.example.com:3478` | STUN URL returned by `GET /api/v1/calls/ice-servers`. |
