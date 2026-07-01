@@ -298,6 +298,8 @@ fn test_message() -> MessageDto {
             display_name: Some("Alice".to_string()),
         },
         body: "hello".to_string(),
+        message_type: "text".to_string(),
+        metadata: serde_json::json!({}),
         created_at: chrono::DateTime::parse_from_rfc3339("2026-06-13T00:00:00Z")
             .unwrap()
             .with_timezone(&chrono::Utc),

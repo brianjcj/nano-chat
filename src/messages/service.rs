@@ -25,7 +25,7 @@ struct ValidatedMessageInput {
 }
 
 #[derive(Debug, sqlx::FromRow)]
-pub struct ConversationRow {
+pub(crate) struct ConversationRow {
     conversation_id: Uuid,
     conversation_type: String,
     state: String,
@@ -344,7 +344,8 @@ async fn send_message_in_locked_conversation(
     })
 }
 
-pub async fn insert_call_event_message_in_locked_conversation(
+#[allow(dead_code)]
+pub(crate) async fn insert_call_event_message_in_locked_conversation(
     tx: &mut Transaction<'_, Postgres>,
     conversation: &ConversationRow,
     sender: &CurrentUser,
@@ -507,7 +508,7 @@ pub(crate) async fn message_dto_by_id(
     Ok(row.into())
 }
 
-async fn lock_conversation(
+pub(crate) async fn lock_conversation(
     tx: &mut Transaction<'_, Postgres>,
     conversation_id: Uuid,
 ) -> AppResult<ConversationRow> {

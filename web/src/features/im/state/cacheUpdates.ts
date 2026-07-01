@@ -385,6 +385,8 @@ function toLatestMessage(message: Message): ConversationSummary["latest_message"
     message_seq: message.message_seq,
     sender: message.sender,
     body: message.body,
+    message_type: message.message_type,
+    metadata: message.metadata,
     created_at: message.created_at,
   };
 }

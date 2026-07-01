@@ -51,6 +51,8 @@ describe("AppShell", () => {
         message_seq: 1,
         sender: remoteUser,
         body: "Hi from the routed conversation",
+        message_type: "text",
+        metadata: {},
         created_at: "2026-06-14T00:00:00.000Z",
       },
     };
@@ -60,6 +62,8 @@ describe("AppShell", () => {
       message_seq: 1,
       sender: remoteUser,
       body: "Hi from the routed conversation",
+      message_type: "text",
+      metadata: {},
       created_at: "2026-06-14T00:00:00.000Z",
     };
     const listConversations = vi.fn().mockResolvedValue([conversation]);

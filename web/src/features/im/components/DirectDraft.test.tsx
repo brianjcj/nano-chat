@@ -43,6 +43,8 @@ function message(overrides: Partial<Message> = {}): Message {
     message_seq: 1,
     sender: localUser,
     body: "Hello Bob",
+    message_type: "text",
+    metadata: {},
     created_at: "2026-06-14T00:00:00.000Z",
     ...overrides,
   };

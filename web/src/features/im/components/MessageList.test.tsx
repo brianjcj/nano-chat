@@ -28,6 +28,8 @@ function message(seq: number): Message {
     message_seq: seq,
     sender: seq % 2 === 0 ? localUser : remoteUser,
     body: `Message ${seq}`,
+    message_type: "text",
+    metadata: {},
     created_at: `2026-06-14T00:00:${String(seq).padStart(2, "0")}.000Z`,
   };
 }

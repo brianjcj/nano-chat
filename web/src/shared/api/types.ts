@@ -15,11 +15,15 @@ export type ConversationType = "direct" | "group";
 
 export type ConversationState = "active" | "dissolved";
 
+export type MessageMetadata = Record<string, unknown>;
+
 export type LatestMessageSummary = {
   message_id: string;
   message_seq: number;
   sender: UserSummary;
   body: string;
+  message_type: string;
+  metadata: MessageMetadata;
   created_at: string;
 };
 
@@ -42,6 +46,8 @@ export type Message = {
   message_seq: number;
   sender: UserSummary;
   body: string;
+  message_type: string;
+  metadata: MessageMetadata;
   created_at: string;
 };
 

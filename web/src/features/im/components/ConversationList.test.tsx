@@ -31,9 +31,25 @@ const directUser: UserSummary = {
   display_name: "Alice A.",
 };
 
-function conversation(
-  overrides: Partial<ConversationSummary> = {},
-): ConversationSummary {
+type LatestMessage = NonNullable<ConversationSummary["latest_message"]>;
+type ConversationOverrides = Partial<Omit<ConversationSummary, "latest_message">> & {
+  latest_message?: Partial<LatestMessage> | null;
+};
+
+function conversation(overrides: ConversationOverrides = {}): ConversationSummary {
+  const { latest_message: latestMessageOverride, ...conversationOverrides } =
+    overrides;
+  const latestMessage: LatestMessage = {
+    message_id: "message-1",
+    message_seq: 1,
+    sender: localUser,
+    body: "Sprint note",
+    message_type: "text",
+    metadata: {},
+    created_at: "2026-06-14T00:00:00.000Z",
+    ...(latestMessageOverride ?? {}),
+  };
+
   return {
     conversation_id: "conversation-1",
     type: "group",
@@ -44,14 +60,8 @@ function conversation(
     unread_count: 0,
     active_member_count: 2,
     direct_user: null,
-    latest_message: {
-      message_id: "message-1",
-      message_seq: 1,
-      sender: localUser,
-      body: "Sprint note",
-      created_at: "2026-06-14T00:00:00.000Z",
-    },
-    ...overrides,
+    latest_message: latestMessageOverride === null ? null : latestMessage,
+    ...conversationOverrides,
   };
 }
 
@@ -203,6 +213,8 @@ describe("ConversationList", () => {
       message_seq: 2,
       sender: directUser,
       body: "Realtime ping",
+      message_type: "text",
+      metadata: {},
       created_at: "2026-06-14T00:03:00.000Z",
     };
     const staleFetch = deferred<ConversationSummary[]>();
@@ -327,6 +339,8 @@ describe("ConversationList", () => {
       message_seq: 4,
       sender: directUser,
       body: "Realtime top message",
+      message_type: "text",
+      metadata: {},
       created_at: "2026-06-14T00:04:00.000Z",
     };
     const staleFetch = deferred<ConversationSummary[]>();
@@ -592,6 +606,8 @@ describe("ConversationList", () => {
       message_seq: 2,
       sender: directUser,
       body: "Realtime ping",
+      message_type: "text",
+      metadata: {},
       created_at: "2026-06-14T00:03:00.000Z",
     };
     const authoritativeFetch = deferred<ConversationSummary[]>();
@@ -682,6 +698,8 @@ describe("ConversationList", () => {
       message_seq: 2,
       sender: directUser,
       body: "Realtime ping",
+      message_type: "text",
+      metadata: {},
       created_at: "2026-06-14T00:03:00.000Z",
     };
     const listConversations = vi

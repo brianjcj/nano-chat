@@ -73,6 +73,8 @@ function message(
     message_seq: seq,
     sender: seq % 2 === 0 ? localUser : remoteUser,
     body,
+    message_type: "text",
+    metadata: {},
     created_at: `2026-06-14T00:00:${String(seq).padStart(2, "0")}.000Z`,
   };
 }
@@ -85,6 +87,8 @@ function latestMessageSummary(
     message_seq: serverMessage.message_seq,
     sender: serverMessage.sender,
     body: serverMessage.body,
+    message_type: serverMessage.message_type,
+    metadata: serverMessage.metadata,
     created_at: serverMessage.created_at,
   };
 }

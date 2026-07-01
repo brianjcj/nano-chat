@@ -21,6 +21,8 @@ function message(seq: number, body = `message-${seq}`): ChatMessage {
     message_seq: seq,
     sender,
     body,
+    message_type: "text",
+    metadata: {},
     created_at: `2026-06-14T00:00:0${seq}.000Z`,
   };
 }

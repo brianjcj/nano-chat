@@ -23,6 +23,8 @@ function makeMessage(
     message_seq,
     sender: messageSender,
     body: `message ${message_seq}`,
+    message_type: "text",
+    metadata: {},
     created_at: `2026-06-13T00:00:0${message_seq}.000Z`,
   };
 }
@@ -33,6 +35,8 @@ function latestMessage(message: Message): ConversationSummary["latest_message"] 
     message_seq: message.message_seq,
     sender: message.sender,
     body: message.body,
+    message_type: message.message_type,
+    metadata: message.metadata,
     created_at: message.created_at,
   };
 }
@@ -88,7 +92,15 @@ describe("IM realtime cache updates", () => {
   it("updates the matching conversation latest message and inserts message.created into cache without duplicates", () => {
     const queryClient = createQueryClient();
     const existingMessage = makeMessage(1);
-    const incomingMessage = makeMessage(2);
+    const incomingMessage: Message = {
+      ...makeMessage(2),
+      message_type: "call_event",
+      metadata: {
+        call_id: "018f0000-0000-7000-8000-000000000040",
+        media_type: "video",
+        outcome: "completed",
+      },
+    };
     queryClient.setQueryData(imQueryKeys.conversations(), [
       makeConversation("conversation-1", existingMessage),
     ]);
@@ -118,6 +130,8 @@ describe("IM realtime cache updates", () => {
         message_id: incomingMessage.message_id,
         message_seq: 2,
         body: "message 2",
+        message_type: "call_event",
+        metadata: incomingMessage.metadata,
       },
     });
 
@@ -225,6 +239,8 @@ describe("IM realtime cache updates", () => {
           body: "message 1",
           message_id: incomingMessage.message_id,
           message_seq: 1,
+          message_type: incomingMessage.message_type,
+          metadata: incomingMessage.metadata,
         }),
         latest_message_seq: 1,
         name: null,
