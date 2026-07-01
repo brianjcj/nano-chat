@@ -7,7 +7,15 @@ use std::{
 
 const DEFAULT_RUST_LOG: &str = "nano_chat=info,tower_http=info";
 const DEFAULT_WEB_DIST_DIR: &str = "web/dist";
+const DEFAULT_TURN_PUBLIC_HOST: &str = "turn.example.com";
+const DEFAULT_TURN_REALM: &str = "turn.example.com";
+const DEFAULT_TURN_SHARED_SECRET: &str = "change-me-turn-shared-secret-at-least-32-bytes";
+const DEFAULT_TURN_CREDENTIAL_TTL_SECS: u64 = 600;
+const DEFAULT_TURN_STUN_URL: &str = "stun:turn.example.com:3478";
+const DEFAULT_TURN_UDP_URL: &str = "turn:turn.example.com:3478?transport=udp";
+const DEFAULT_TURN_TCP_URL: &str = "turn:turn.example.com:3478?transport=tcp";
 const MIN_JWT_SECRET_LEN: usize = 32;
+const MIN_TURN_SHARED_SECRET_LEN: usize = 32;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Config {
@@ -25,6 +33,13 @@ pub struct Config {
     pub call_ringing_timeout_secs: u64,
     pub call_disconnect_grace_secs: u64,
     pub call_cleanup_interval_secs: u64,
+    pub turn_public_host: String,
+    pub turn_realm: String,
+    pub turn_shared_secret: String,
+    pub turn_credential_ttl_secs: u64,
+    pub turn_udp_url: String,
+    pub turn_tcp_url: String,
+    pub stun_url: String,
 }
 
 impl Config {
@@ -45,6 +60,19 @@ impl Config {
             call_ringing_timeout_secs: optional_env("NANO_CHAT_CALL_RINGING_TIMEOUT_SECS", 60)?,
             call_disconnect_grace_secs: optional_env("NANO_CHAT_CALL_DISCONNECT_GRACE_SECS", 15)?,
             call_cleanup_interval_secs: optional_env("NANO_CHAT_CALL_CLEANUP_INTERVAL_SECS", 5)?,
+            turn_public_host: optional_string_env("TURN_PUBLIC_HOST", DEFAULT_TURN_PUBLIC_HOST)?,
+            turn_realm: optional_string_env("TURN_REALM", DEFAULT_TURN_REALM)?,
+            turn_shared_secret: validate_turn_shared_secret(optional_string_env(
+                "TURN_SHARED_SECRET",
+                DEFAULT_TURN_SHARED_SECRET,
+            )?)?,
+            turn_credential_ttl_secs: optional_env(
+                "TURN_CREDENTIAL_TTL_SECS",
+                DEFAULT_TURN_CREDENTIAL_TTL_SECS,
+            )?,
+            turn_udp_url: optional_string_env("TURN_UDP_URL", DEFAULT_TURN_UDP_URL)?,
+            turn_tcp_url: optional_string_env("TURN_TCP_URL", DEFAULT_TURN_TCP_URL)?,
+            stun_url: optional_string_env("TURN_STUN_URL", DEFAULT_TURN_STUN_URL)?,
         })
     }
 }
@@ -75,6 +103,13 @@ impl fmt::Debug for Config {
                 "call_cleanup_interval_secs",
                 &self.call_cleanup_interval_secs,
             )
+            .field("turn_public_host", &self.turn_public_host)
+            .field("turn_realm", &self.turn_realm)
+            .field("turn_shared_secret", &"<redacted>")
+            .field("turn_credential_ttl_secs", &self.turn_credential_ttl_secs)
+            .field("turn_udp_url", &self.turn_udp_url)
+            .field("turn_tcp_url", &self.turn_tcp_url)
+            .field("stun_url", &self.stun_url)
             .finish()
     }
 }
@@ -95,6 +130,14 @@ fn validate_jwt_secret(secret: String) -> Result<String> {
     anyhow::ensure!(
         secret.chars().count() >= MIN_JWT_SECRET_LEN,
         "JWT_SECRET must be at least {MIN_JWT_SECRET_LEN} characters"
+    );
+    Ok(secret)
+}
+
+fn validate_turn_shared_secret(secret: String) -> Result<String> {
+    anyhow::ensure!(
+        secret.chars().count() >= MIN_TURN_SHARED_SECRET_LEN,
+        "TURN_SHARED_SECRET must be at least {MIN_TURN_SHARED_SECRET_LEN} characters"
     );
     Ok(secret)
 }
@@ -139,6 +182,13 @@ mod tests {
         "NANO_CHAT_CALL_RINGING_TIMEOUT_SECS",
         "NANO_CHAT_CALL_DISCONNECT_GRACE_SECS",
         "NANO_CHAT_CALL_CLEANUP_INTERVAL_SECS",
+        "TURN_PUBLIC_HOST",
+        "TURN_REALM",
+        "TURN_SHARED_SECRET",
+        "TURN_CREDENTIAL_TTL_SECS",
+        "TURN_STUN_URL",
+        "TURN_UDP_URL",
+        "TURN_TCP_URL",
     ];
 
     fn with_clean_env(test: impl FnOnce() + UnwindSafe) {
@@ -300,6 +350,49 @@ mod tests {
     }
 
     #[test]
+    fn from_env_defaults_turn_config() {
+        with_clean_env(|| {
+            set_required_env();
+
+            let config = Config::from_env().expect("turn config should default");
+
+            assert_eq!(config.turn_public_host, "turn.example.com");
+            assert_eq!(config.turn_realm, "turn.example.com");
+            assert_eq!(
+                config.turn_shared_secret,
+                "change-me-turn-shared-secret-at-least-32-bytes"
+            );
+            assert_eq!(config.turn_credential_ttl_secs, 600);
+            assert_eq!(config.stun_url, "stun:turn.example.com:3478");
+            assert_eq!(
+                config.turn_udp_url,
+                "turn:turn.example.com:3478?transport=udp"
+            );
+            assert_eq!(
+                config.turn_tcp_url,
+                "turn:turn.example.com:3478?transport=tcp"
+            );
+        });
+    }
+
+    #[test]
+    fn from_env_rejects_too_short_turn_shared_secret() {
+        with_clean_env(|| {
+            set_required_env();
+            set_env("TURN_SHARED_SECRET", "too-short");
+
+            let error =
+                Config::from_env().expect_err("short TURN_SHARED_SECRET should be rejected");
+
+            assert!(
+                error
+                    .to_string()
+                    .contains("TURN_SHARED_SECRET must be at least 32 characters")
+            );
+        });
+    }
+
+    #[test]
     fn debug_redacts_sensitive_values() {
         let config = Config {
             database_url: "postgres://user:pass@localhost/nano_chat".to_string(),
@@ -316,6 +409,13 @@ mod tests {
             call_ringing_timeout_secs: 60,
             call_disconnect_grace_secs: 15,
             call_cleanup_interval_secs: 5,
+            turn_public_host: "turn.example.com".to_string(),
+            turn_realm: "turn.example.com".to_string(),
+            turn_shared_secret: "change-me-turn-shared-secret-at-least-32-bytes".to_string(),
+            turn_credential_ttl_secs: 600,
+            turn_udp_url: "turn:turn.example.com:3478?transport=udp".to_string(),
+            turn_tcp_url: "turn:turn.example.com:3478?transport=tcp".to_string(),
+            stun_url: "stun:turn.example.com:3478".to_string(),
         };
 
         let debug = format!("{config:?}");
@@ -323,7 +423,10 @@ mod tests {
         assert!(debug.contains("database_url: \"<redacted>\""));
         assert!(debug.contains("jwt_secret: \"<redacted>\""));
         assert!(debug.contains("web_dist_dir: \"web/dist\""));
+        assert!(debug.contains("turn_shared_secret: \"<redacted>\""));
+        assert!(debug.contains("stun_url: \"stun:turn.example.com:3478\""));
         assert!(!debug.contains("postgres://user:pass"));
         assert!(!debug.contains("0123456789abcdef0123456789abcdef"));
+        assert!(!debug.contains("change-me-turn-shared-secret-at-least-32-bytes"));
     }
 }

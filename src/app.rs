@@ -216,6 +216,7 @@ fn api_router() -> Router<AppState> {
         .merge(auth::http::router())
         .merge(users::http::router())
         .merge(conversations::http::router())
+        .merge(calls::http::router())
         .fallback(api_not_found)
 }
 

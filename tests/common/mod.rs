@@ -85,6 +85,13 @@ pub fn test_config() -> Config {
         call_ringing_timeout_secs: 60,
         call_disconnect_grace_secs: 15,
         call_cleanup_interval_secs: 5,
+        turn_public_host: "turn.example.com".to_string(),
+        turn_realm: "turn.example.com".to_string(),
+        turn_shared_secret: "change-me-turn-shared-secret-at-least-32-bytes".to_string(),
+        turn_credential_ttl_secs: 600,
+        turn_udp_url: "turn:turn.example.com:3478?transport=udp".to_string(),
+        turn_tcp_url: "turn:turn.example.com:3478?transport=tcp".to_string(),
+        stun_url: "stun:turn.example.com:3478".to_string(),
     }
 }
 

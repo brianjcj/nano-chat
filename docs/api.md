@@ -359,6 +359,30 @@ Rules:
 
 Direct sends target a user by username or user id. The first direct message creates the direct conversation, inserts both direct members, creates visibility spans from sequence `1`, allocates message sequence `1`, and commits all of that atomically. Later direct sends reuse the same direct conversation. Empty direct conversations are not exposed in conversation lists.
 
+## Calls HTTP
+
+### ICE servers
+
+`GET /api/v1/calls/ice-servers`
+
+Requires authentication. Returns STUN/TURN ICE server configuration for WebRTC clients. TURN credentials are generated per authenticated user/client using coturn shared-secret authentication and are short-lived; clients must refresh before `expires_at`.
+
+Success: `200 OK`
+
+```json
+{
+  "ice_servers": [
+    {"urls": ["stun:turn.example.com:3478"]},
+    {
+      "urls": ["turn:turn.example.com:3478?transport=udp", "turn:turn.example.com:3478?transport=tcp"],
+      "username": "1782864600:1001:018f0000-0000-7000-8000-000000000002",
+      "credential": "<hmac-sha1-base64>"
+    }
+  ],
+  "expires_at": "2026-07-01T00:10:00.000Z"
+}
+```
+
 ## WebSocket Envelope
 
 Connect to `GET /ws?version=1`.
@@ -975,3 +999,10 @@ Configuration variables:
 | `NANO_CHAT_HEARTBEAT_IDLE_TIMEOUT_SECS` | `90` | Idle timeout before a WebSocket is closed. |
 | `NANO_CHAT_MAX_WS_PAYLOAD_BYTES` | `65536` | Maximum inbound WebSocket frame payload size. |
 | `NANO_CHAT_MAX_MESSAGE_BYTES` | `4096` | Maximum message body size in UTF-8 bytes. |
+| `TURN_PUBLIC_HOST` | `turn.example.com` | Public TURN host used for local defaults and deployment alignment. |
+| `TURN_REALM` | `turn.example.com` | TURN realm configured in coturn. |
+| `TURN_SHARED_SECRET` | `change-me-turn-shared-secret-at-least-32-bytes` | Coturn shared-secret key for generating short-lived TURN credentials; must be at least 32 characters. |
+| `TURN_CREDENTIAL_TTL_SECS` | `600` | Lifetime for generated TURN credentials. |
+| `TURN_STUN_URL` | `stun:turn.example.com:3478` | STUN URL returned by `GET /api/v1/calls/ice-servers`. |
+| `TURN_UDP_URL` | `turn:turn.example.com:3478?transport=udp` | TURN UDP URL returned by `GET /api/v1/calls/ice-servers`. |
+| `TURN_TCP_URL` | `turn:turn.example.com:3478?transport=tcp` | TURN TCP URL returned by `GET /api/v1/calls/ice-servers`. |
