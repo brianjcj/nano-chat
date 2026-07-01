@@ -326,14 +326,12 @@ impl RealtimeTestContext {
         db::run_migrations(&pool)
             .await
             .expect("run test migrations");
-        let app = nano_chat::app::build_router(nano_chat::app::AppState::new(
-            config.clone(),
-            pool.clone(),
-        ));
+        let state = nano_chat::app::AppState::new(config.clone(), pool.clone());
+        let app = nano_chat::app::build_router(state.clone());
         Self {
             config,
             pool: pool.clone(),
-            inner: common::TestContext { app, pool },
+            inner: common::TestContext { app, pool, state },
         }
     }
 

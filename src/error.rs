@@ -29,6 +29,11 @@ pub enum ErrorCode {
     WsPayloadTooLarge,
     HeartbeatTimeout,
     UserNotFound,
+    CallBusy,
+    CalleeOffline,
+    CallNotFound,
+    CallEnded,
+    NotCallParticipant,
     Internal,
 }
 
@@ -56,6 +61,11 @@ impl ErrorCode {
             Self::WsPayloadTooLarge => "ws_payload_too_large",
             Self::HeartbeatTimeout => "heartbeat_timeout",
             Self::UserNotFound => "user_not_found",
+            Self::CallBusy => "call_busy",
+            Self::CalleeOffline => "callee_offline",
+            Self::CallNotFound => "call_not_found",
+            Self::CallEnded => "call_ended",
+            Self::NotCallParticipant => "not_call_participant",
             Self::Internal => "internal",
         }
     }

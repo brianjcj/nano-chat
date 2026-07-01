@@ -1,5 +1,6 @@
 pub mod app;
 pub mod auth;
+pub mod calls;
 pub mod config;
 pub mod conversations;
 pub mod db;

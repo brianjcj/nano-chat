@@ -85,6 +85,22 @@ impl ConnectionRegistry {
             .map_or(0, HashSet::len)
     }
 
+    pub fn is_user_online(&self, user_id: UserId) -> bool {
+        self.connection_count_for_user(user_id) > 0
+    }
+
+    pub fn contains_client(&self, user_id: UserId, client_id: Uuid) -> bool {
+        let inner = self.lock_inner();
+        inner.by_user.get(&user_id).is_some_and(|connection_ids| {
+            connection_ids.iter().any(|connection_id| {
+                inner
+                    .connections
+                    .get(connection_id)
+                    .is_some_and(|connection| connection.client_id == client_id)
+            })
+        })
+    }
+
     pub fn is_user_at_limit(&self, user_id: UserId) -> bool {
         self.connection_count_for_user(user_id) >= self.max_connections_per_user
     }
@@ -116,6 +132,33 @@ impl ConnectionRegistry {
             }
         }
         true
+    }
+
+    pub fn send_to_client(
+        &self,
+        user_id: UserId,
+        client_id: Uuid,
+        envelope: ServerEnvelope,
+        skip_connection_id: Option<ConnectionId>,
+    ) -> usize {
+        let targets = {
+            let inner = self.lock_inner();
+            inner
+                .by_user
+                .get(&user_id)
+                .into_iter()
+                .flat_map(|ids| ids.iter())
+                .filter(|connection_id| Some(**connection_id) != skip_connection_id)
+                .filter_map(|connection_id| inner.connections.get(connection_id))
+                .filter(|connection| connection.client_id == client_id)
+                .map(|connection| connection.sender.clone())
+                .collect::<Vec<_>>()
+        };
+
+        targets
+            .into_iter()
+            .filter(|sender| sender.try_send(envelope.clone()).is_ok())
+            .count()
     }
 
     pub fn send_to_users(
@@ -402,6 +445,65 @@ mod tests {
         );
 
         assert_eq!(sent, 0);
+    }
+
+    #[test]
+    fn registry_online_and_client_helpers_track_registered_connections() {
+        let registry = ConnectionRegistry::new(10);
+        let user_id = UserId::new(4).unwrap();
+        let other_user_id = UserId::new(5).unwrap();
+        let client_id = uuid::Uuid::now_v7();
+        let other_client_id = uuid::Uuid::now_v7();
+
+        assert!(!registry.is_user_online(user_id));
+        assert!(!registry.contains_client(user_id, client_id));
+
+        let connection = registry
+            .register_test_connection(user_id, client_id)
+            .unwrap();
+
+        assert!(registry.is_user_online(user_id));
+        assert!(registry.contains_client(user_id, client_id));
+        assert!(!registry.contains_client(user_id, other_client_id));
+        assert!(!registry.contains_client(other_user_id, client_id));
+
+        registry.unregister(connection.connection_id);
+
+        assert!(!registry.is_user_online(user_id));
+        assert!(!registry.contains_client(user_id, client_id));
+    }
+
+    #[test]
+    fn registry_send_to_client_targets_matching_client_and_respects_skip() {
+        let registry = ConnectionRegistry::new(10);
+        let user_id = UserId::new(6).unwrap();
+        let target_client_id = uuid::Uuid::now_v7();
+        let other_client_id = uuid::Uuid::now_v7();
+        let (skipped_tx, mut skipped_rx) = mpsc::channel(1);
+        let (target_tx, mut target_rx) = mpsc::channel(1);
+        let (other_tx, mut other_rx) = mpsc::channel(1);
+        let skipped = registry
+            .register_test_connection_with_sender(user_id, target_client_id, skipped_tx)
+            .unwrap();
+        registry
+            .register_test_connection_with_sender(user_id, target_client_id, target_tx)
+            .unwrap();
+        registry
+            .register_test_connection_with_sender(user_id, other_client_id, other_tx)
+            .unwrap();
+
+        let sent = registry.send_to_client(
+            user_id,
+            target_client_id,
+            ServerEnvelope::event("call.incoming", json!({"call_id": "c1"})),
+            Some(skipped.connection_id),
+        );
+
+        assert_eq!(sent, 1);
+        assert!(skipped_rx.try_recv().is_err());
+        assert!(other_rx.try_recv().is_err());
+        let delivered = target_rx.try_recv().unwrap();
+        assert_eq!(delivered.message_type, "call.incoming");
     }
 
     #[test]

@@ -89,6 +89,7 @@ pub fn test_config() -> Config {
 pub struct TestContext {
     pub app: Router,
     pub pool: PgPool,
+    pub state: AppState,
 }
 
 #[allow(dead_code)]
@@ -99,8 +100,19 @@ impl TestContext {
         nano_chat::db::run_migrations(&pool)
             .await
             .expect("run test migrations");
-        let app = build_router(AppState::new(test_config(), pool.clone()));
-        Self { app, pool }
+        let state = AppState::new(test_config(), pool.clone());
+        let app = build_router(state.clone());
+        Self { app, pool, state }
+    }
+
+    pub fn register_ws_sender_for(&self, user: &TestUser) -> uuid::Uuid {
+        let (sender, _receiver) = tokio::sync::mpsc::channel(8);
+        let registered = self
+            .state
+            .registry
+            .register(user.user_id, user.client_id, sender)
+            .expect("test websocket sender registers");
+        registered.connection_id
     }
 
     pub async fn register(&self, username: &str) -> TestUser {
