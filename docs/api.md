@@ -961,9 +961,9 @@ Production builds use `pnpm build` to create `web/dist`. The Rust service serves
 
 The Compose Postgres image defaults to `mirror.gcr.io/library/postgres:17` for environments where Docker Hub pulls are unreliable. Operators can use the official Docker Hub image by setting `POSTGRES_IMAGE=postgres:17`.
 
-For an application deployment:
+For an application deployment, see also `docs/deployment-webrtc.md` for the single-VPS Caddy and coturn firewall checklist:
 
-1. Copy `.env.example` to `.env`, replace `JWT_SECRET` with a strong secret of at least 32 characters, and set `NANO_CHAT_IMAGE` if you want Compose to run a prebuilt image instead of `nano-chat:local`.
+1. Copy `.env.example` to `.env`, replace `JWT_SECRET` and `TURN_SHARED_SECRET` with strong secrets of at least 32 characters, set `NANO_CHAT_DOMAIN` to the HTTPS app host, set `TURN_PUBLIC_HOST` and `TURN_REALM` to the TURN host, and set `NANO_CHAT_IMAGE` if you want Compose to run a prebuilt image instead of `nano-chat:local`.
 2. Start Postgres: `docker compose up -d postgres`.
 3. Run migrations from the host or CI against the target database before starting the app, for example:
 
@@ -973,9 +973,9 @@ For an application deployment:
 
    If you changed `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, or `POSTGRES_PORT`, update this host-side URL to match.
 
-4. Start the optional app service: `docker compose --profile app up -d app`.
+4. Open inbound TCP 80 and 443, UDP/TCP 3478, and UDP 49160-49200 on the VPS firewall, then start the app, Caddy, and coturn: `docker compose --profile app up -d --build`.
 
-The app container derives its default `DATABASE_URL` from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` so it can reach the Compose Postgres service by service name. Leave `DATABASE_URL` unset/commented to use that derived default, or set it explicitly when connecting to a different database. If set explicitly, it must match the Postgres credentials and database name you intend the app to use. Host-side tools generally use `localhost` and the published Postgres port instead.
+The app container derives its default `DATABASE_URL` from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` so it can reach the Compose Postgres service by service name. Leave `DATABASE_URL` unset/commented to use that derived default, or set it explicitly when connecting to a different database. If set explicitly, it must match the Postgres credentials and database name you intend the app to use. Host-side tools generally use `localhost` and the published Postgres port instead. The app service exposes port 3000 only inside the Docker network; Caddy publishes HTTPS on host ports 80 and 443.
 
 Configuration variables:
 
@@ -986,8 +986,9 @@ Configuration variables:
 | `POSTGRES_PASSWORD` | `nano` | Official Postgres image password. |
 | `POSTGRES_DB` | `nano_chat_test` | Official Postgres image database name. |
 | `POSTGRES_PORT` | `5432` | Host port published by Compose Postgres. |
-| `APP_PORT` | `3000` | Host port published by the optional app service. |
+| `APP_PORT` | `3000` | Legacy local app port setting; the single-VPS app profile is reached through Caddy instead of publishing the app port directly. |
 | `NANO_CHAT_IMAGE` | `nano-chat:local` | Compose image name for the optional app service. |
+| `NANO_CHAT_DOMAIN` | `chat.example.com` | HTTPS host served by Caddy for the app. |
 | `DATABASE_URL` | Derived from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` | Application database URL; may be set explicitly and should match the Postgres settings. |
 | `JWT_SECRET` | `change-me-development-secret-at-least-32-bytes` | JWT signing secret; must be changed outside local development. |
 | `BIND_ADDR` | `0.0.0.0:3000` | Address the HTTP/WebSocket server binds to. |
@@ -1006,3 +1007,5 @@ Configuration variables:
 | `TURN_STUN_URL` | `stun:turn.example.com:3478` | STUN URL returned by `GET /api/v1/calls/ice-servers`. |
 | `TURN_UDP_URL` | `turn:turn.example.com:3478?transport=udp` | TURN UDP URL returned by `GET /api/v1/calls/ice-servers`. |
 | `TURN_TCP_URL` | `turn:turn.example.com:3478?transport=tcp` | TURN TCP URL returned by `GET /api/v1/calls/ice-servers`. |
+| `TURN_RELAY_MIN_PORT` | `49160` | Lower bound of the UDP TURN relay port range opened on the VPS. |
+| `TURN_RELAY_MAX_PORT` | `49200` | Upper bound of the UDP TURN relay port range opened on the VPS. |

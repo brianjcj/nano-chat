@@ -33,5 +33,45 @@ services:
       NANO_CHAT_HEARTBEAT_IDLE_TIMEOUT_SECS: ${NANO_CHAT_HEARTBEAT_IDLE_TIMEOUT_SECS:-90}
       NANO_CHAT_MAX_WS_PAYLOAD_BYTES: ${NANO_CHAT_MAX_WS_PAYLOAD_BYTES:-65536}
       NANO_CHAT_MAX_MESSAGE_BYTES: ${NANO_CHAT_MAX_MESSAGE_BYTES:-4096}
+      TURN_PUBLIC_HOST: ${TURN_PUBLIC_HOST:-turn.example.com}
+      TURN_REALM: ${TURN_REALM:-turn.example.com}
+      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-change-me-turn-shared-secret-at-least-32-bytes}
+      TURN_CREDENTIAL_TTL_SECS: ${TURN_CREDENTIAL_TTL_SECS:-600}
+      TURN_STUN_URL: ${TURN_STUN_URL:-stun:turn.example.com:3478}
+      TURN_UDP_URL: ${TURN_UDP_URL:-turn:turn.example.com:3478?transport=udp}
+      TURN_TCP_URL: ${TURN_TCP_URL:-turn:turn.example.com:3478?transport=tcp}
+    expose:
+      - "3000"
+
+  caddy:
+    profiles: ["app"]
+    image: caddy:2
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      NANO_CHAT_DOMAIN: ${NANO_CHAT_DOMAIN:-chat.example.com}
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  coturn:
+    image: coturn/coturn:4
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+    environment:
+      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-change-me-turn-shared-secret-at-least-32-bytes}
+      TURN_REALM: ${TURN_REALM:-turn.example.com}
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "49160-49200:49160-49200/udp"
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+
+volumes:
+  caddy_data:
+  caddy_config:
