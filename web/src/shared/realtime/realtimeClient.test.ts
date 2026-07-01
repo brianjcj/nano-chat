@@ -107,4 +107,36 @@ describe("RealtimeClient", () => {
     expect(client.getStatus()).toBe("draining");
     expect(observedStatuses).toContain("draining");
   });
+
+  it("serializes call signaling command envelopes with snake_case payload", async () => {
+    const client = createClient("wss://chat.example/ws?version=1");
+    client.connect({ access_token: "token-123" });
+    const socket = MockWebSocket.instances[0];
+    socket?.open();
+
+    const result = client.sendCommand("call.signal", {
+      call_id: "call-1",
+      signal_type: "offer",
+      data: { type: "offer", sdp: "v=0" },
+    });
+
+    const sentEnvelope = JSON.parse(socket?.sent[0] ?? "{}");
+    expect(sentEnvelope).toMatchObject({
+      id: expect.any(String),
+      type: "call.signal",
+      payload: {
+        call_id: "call-1",
+        signal_type: "offer",
+        data: { type: "offer", sdp: "v=0" },
+      },
+    });
+
+    socket?.emitMessage({
+      id: sentEnvelope.id,
+      type: "call.signal.ok",
+      payload: { accepted: true },
+    });
+
+    await expect(result).resolves.toEqual({ accepted: true });
+  });
 });

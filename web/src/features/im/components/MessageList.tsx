@@ -128,14 +128,18 @@ export function MessageList({
           <MessageListNotice>{t("im.messageList.empty")}</MessageListNotice>
         ) : (
           <ol className="mt-auto space-y-3">
-            {messages.map((message) => (
-              <MessageBubble
-                key={message.message_id}
-                currentUserId={currentUserId}
-                message={message}
-                onRetry={onRetry}
-              />
-            ))}
+            {messages.map((message) =>
+              "message_type" in message && message.message_type === "call_event" ? (
+                <CallEventMessage key={message.message_id} message={message} />
+              ) : (
+                <MessageBubble
+                  key={message.message_id}
+                  currentUserId={currentUserId}
+                  message={message}
+                  onRetry={onRetry}
+                />
+              ),
+            )}
           </ol>
         )}
       </div>
@@ -168,6 +172,16 @@ type PendingHistoryPrepend = {
   scrollHeight: number;
   scrollTop: number;
 };
+
+function CallEventMessage({ message }: { message: ChatMessage }) {
+  return (
+    <li className="flex justify-center">
+      <div className="max-w-[78%] rounded-full border border-white/70 bg-white/72 px-4 py-2 text-center text-xs font-black text-[var(--muted-foreground)] shadow-[0_10px_24px_var(--shadow-color)]">
+        {message.body}
+      </div>
+    </li>
+  );
+}
 
 function MessageBubble({
   currentUserId,

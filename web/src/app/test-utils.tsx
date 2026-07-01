@@ -133,6 +133,7 @@ export function createFakeApiClient(overrides: Partial<ApiClient> = {}): ApiClie
     addMember: notConfigured("addMember"),
     leaveGroup: notConfigured("leaveGroup"),
     listMessages: notConfigured("listMessages"),
+    getIceServers: notConfigured("getIceServers"),
     ...overrides,
   };
 }

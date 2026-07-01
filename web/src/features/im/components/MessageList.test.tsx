@@ -108,4 +108,37 @@ describe("MessageList", () => {
       expect(scrollTop).toBe(300);
     });
   });
+
+  it("renders completed video call event messages", () => {
+    render(
+      <MessageList
+        currentUserId="1001"
+        hasLoadedAllKnownHistory
+        isFetchingOlder={false}
+        isLoading={false}
+        isNearBottom
+        loadOlder={vi.fn()}
+        messages={[
+          {
+            message_id: "m1",
+            conversation_id: "c1",
+            message_seq: 1,
+            sender: { user_id: "1001", username: "alice", display_name: "Alice" },
+            body: "视频通话 03:12",
+            message_type: "call_event",
+            metadata: {
+              media_type: "video",
+              outcome: "completed",
+              duration_seconds: 192,
+            },
+            created_at: "2026-07-01T00:00:00.000Z",
+          },
+        ]}
+        onNearBottomChange={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("视频通话 03:12")).toBeInTheDocument();
+  });
 });

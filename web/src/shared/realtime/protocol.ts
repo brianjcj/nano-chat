@@ -1,10 +1,23 @@
-import type { ConversationMember, Message } from "@/shared/api/types";
+import type {
+  CallEndReason,
+  CallMediaType,
+  ConversationMember,
+  Message,
+  UserSummary,
+} from "@/shared/api/types";
 
 export type ClientCommandType =
   | "message.send"
   | "direct_message.send"
   | "conversation.read"
-  | "heartbeat.ping";
+  | "heartbeat.ping"
+  | "call.invite"
+  | "call.accept"
+  | "call.connected"
+  | "call.reject"
+  | "call.cancel"
+  | "call.hangup"
+  | "call.signal";
 
 export type MessageSendPayload = {
   conversation_id: string;
@@ -30,11 +43,38 @@ export type HeartbeatPingPayload = {
   client_time: string;
 };
 
+export type CallInvitePayload = {
+  conversation_id: string;
+  media_type: CallMediaType;
+};
+
+export type CallIdPayload = {
+  call_id: string;
+};
+
+export type CallHangupPayload = {
+  call_id: string;
+  reason?: CallEndReason;
+};
+
+export type CallSignalPayload = {
+  call_id: string;
+  signal_type: "offer" | "answer" | "ice_candidate";
+  data: unknown;
+};
+
 export type ClientCommandPayloadByType = {
   "message.send": MessageSendPayload;
   "direct_message.send": DirectMessageSendPayload;
   "conversation.read": ConversationReadPayload;
   "heartbeat.ping": HeartbeatPingPayload;
+  "call.invite": CallInvitePayload;
+  "call.accept": CallIdPayload;
+  "call.connected": CallIdPayload;
+  "call.reject": CallIdPayload;
+  "call.cancel": CallIdPayload;
+  "call.hangup": CallHangupPayload;
+  "call.signal": CallSignalPayload;
 };
 
 export type RealtimeOutgoing<
@@ -63,6 +103,21 @@ export type HeartbeatPongPayload = {
 export type RealtimeErrorPayload = {
   code: string;
   message: string;
+};
+
+export type CallSummary = {
+  call_id: string;
+  conversation_id: string;
+  caller: UserSummary;
+  callee: UserSummary;
+  caller_client_id: string;
+  accepted_client_id: string | null;
+  media_type: "audio" | "video";
+  state: "ringing" | "connecting" | "active" | "ended";
+  started_at: string;
+  accepted_at: string | null;
+  ended_at: string | null;
+  end_reason: CallEndReason | null;
 };
 
 export type MessageCreatedEvent = {
@@ -106,6 +161,28 @@ export type ConversationDissolvedEvent = {
   };
 };
 
+export type CallStateEventType =
+  | "call.incoming"
+  | "call.ringing"
+  | "call.accepted"
+  | "call.connected"
+  | "call.rejected"
+  | "call.canceled"
+  | "call.ended"
+  | "call.busy";
+
+export type CallStateEvent = {
+  type: CallStateEventType;
+  payload: {
+    call: CallSummary;
+  };
+};
+
+export type CallSignalEvent = {
+  type: "call.signal";
+  payload: CallSignalPayload;
+};
+
 export type ServerDrainingEvent = {
   type: "server.draining";
   payload?: {
@@ -119,6 +196,8 @@ export type RealtimeServerEvent =
   | ConversationMemberAddedEvent
   | ConversationMemberLeftEvent
   | ConversationDissolvedEvent
+  | CallStateEvent
+  | CallSignalEvent
   | ServerDrainingEvent;
 
 export type CommandOkEnvelope<TPayload = unknown> = {

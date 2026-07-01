@@ -15,6 +15,37 @@ export type ConversationType = "direct" | "group";
 
 export type ConversationState = "active" | "dissolved";
 
+export type MessageType = "text" | "call_event";
+export type CallMediaType = "audio" | "video";
+export type CallEndReason =
+  | "completed"
+  | "rejected"
+  | "canceled"
+  | "timeout"
+  | "busy"
+  | "offline"
+  | "network_error";
+
+export type CallEventMetadata = {
+  call_id?: string;
+  media_type?: CallMediaType;
+  outcome?: CallEndReason;
+  duration_seconds?: number;
+  caller_user_id?: string;
+  callee_user_id?: string;
+};
+
+export type IceServer = {
+  urls: string[];
+  username?: string;
+  credential?: string;
+};
+
+export type IceServersResponse = {
+  ice_servers: IceServer[];
+  expires_at: string;
+};
+
 export type MessageMetadata = Record<string, unknown>;
 
 export type LatestMessageSummary = {
@@ -22,8 +53,8 @@ export type LatestMessageSummary = {
   message_seq: number;
   sender: UserSummary;
   body: string;
-  message_type: string;
-  metadata: MessageMetadata;
+  message_type: MessageType;
+  metadata: Record<string, unknown>;
   created_at: string;
 };
 
@@ -46,8 +77,8 @@ export type Message = {
   message_seq: number;
   sender: UserSummary;
   body: string;
-  message_type: string;
-  metadata: MessageMetadata;
+  message_type: MessageType;
+  metadata: Record<string, unknown>;
   created_at: string;
 };
 

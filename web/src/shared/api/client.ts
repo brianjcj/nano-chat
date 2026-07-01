@@ -5,6 +5,7 @@ import type {
   ConversationSummary,
   CreateGroupRequest,
   ErrorEnvelope,
+  IceServersResponse,
   LoginRequest,
   Message,
   MessageHistoryQuery,
@@ -44,6 +45,7 @@ export type ApiClient = {
     conversationId: string,
     query?: MessageHistoryQuery,
   ): Promise<Message[]>;
+  getIceServers(): Promise<IceServersResponse>;
 };
 
 type ApiClientOptions = {
@@ -184,6 +186,9 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         `/conversations/${encodeURIComponent(conversationId)}/messages`,
         { query },
       );
+    },
+    getIceServers() {
+      return request<IceServersResponse>("/calls/ice-servers");
     },
   };
 }

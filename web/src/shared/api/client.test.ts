@@ -189,4 +189,31 @@ describe("createApiClient", () => {
     expect(url.searchParams.get("before_seq")).toBe("10");
     expect(url.searchParams.get("limit")).toBe("50");
   });
+
+  it("fetches ICE servers from the calls endpoint", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ice_servers: [{ urls: ["stun:turn.example.com:3478"] }],
+          expires_at: "2026-07-01T00:10:00.000Z",
+        }),
+        { status: 200 },
+      ),
+    );
+    const client = createApiClient({
+      baseUrl: "/api/v1",
+      getAccessToken: () => "token",
+      onUnauthorized: vi.fn(),
+      fetchImpl,
+    });
+
+    await expect(client.getIceServers()).resolves.toEqual({
+      ice_servers: [{ urls: ["stun:turn.example.com:3478"] }],
+      expires_at: "2026-07-01T00:10:00.000Z",
+    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/v1/calls/ice-servers",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
 });
