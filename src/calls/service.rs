@@ -367,6 +367,7 @@ async fn end_call(
         return Err(AppError::invalid_request("Invalid call state transition"));
     }
 
+    let conversation = messages_service::lock_conversation(&mut tx, call.conversation_id).await?;
     let now = now_utc();
     let media_type = call_media_type(&call)?;
     let duration_seconds = call_duration_seconds(&call, now, reason);
@@ -388,7 +389,6 @@ async fn end_call(
 
     update_call_participants_state(&mut tx, call_id, CallState::Ended).await?;
 
-    let conversation = messages_service::lock_conversation(&mut tx, call.conversation_id).await?;
     let message = messages_service::insert_call_event_message_in_locked_conversation(
         &mut tx,
         &conversation,
