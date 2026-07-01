@@ -1,0 +1,23 @@
+docs/superpowers/specs/2026-07-01-1v1-webrtc-calls-design.md
+  s_3183c7873664b5::t_02fa8e7bf4c24d 76,109-111,132,147-148,238
+  s_3183c7873664b5::t_a9b068bdeb8865 1-75,77-108,112-131,133-146,149-237,239-299
+CONTEXT.md
+  s_3183c7873664b5::t_84e33097e38bc5 55-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "d3546766b11628bc4c81bf9143eafcdb718f6b2e",
+  "prompts": {},
+  "logical_commit_id": "d3546766b11628bc4c81bf9143eafcdb718f6b2e",
+  "sessions": {
+    "s_3183c7873664b5": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1cd9-d0ab-7e1d-9a4e-3e09bb2a5595",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
