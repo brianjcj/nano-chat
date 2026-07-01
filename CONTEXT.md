@@ -52,6 +52,22 @@ _Avoid_: 富媒体消息, 文件消息
 A conversation with exactly two users; each pair of users has at most one direct conversation.
 _Avoid_: 私聊房间, direct room
 
+**通话**:
+A realtime one-to-one audio or video interaction started from a direct conversation.
+_Avoid_: 会议, 房间, 直播
+
+**来电**:
+A pending call that is waiting for the invited user to answer, reject, or miss it.
+_Avoid_: 邀请消息, 通知, 呼叫请求
+
+**忙线**:
+The state where a user cannot receive or start another call because that user already has a pending or active call.
+_Avoid_: 在线, 占用连接, 设备忙
+
+**通话记录消息**:
+A conversation message that records the visible outcome of a call, such as missed, rejected, canceled, failed, or completed.
+_Avoid_: 信令, 系统通知, 通话日志
+
 **单聊草稿**:
 A Web application state for composing the first message to another user before a direct conversation exists.
 _Avoid_: 空单聊会话, 临时会话
