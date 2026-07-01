@@ -385,6 +385,8 @@ pub struct TestLatestMessage {
     pub message_seq: i64,
     pub sender: TestMember,
     pub body: String,
+    pub message_type: String,
+    pub metadata: serde_json::Value,
     pub created_at: String,
 }
 
@@ -396,6 +398,8 @@ pub struct TestMessage {
     pub message_seq: i64,
     pub sender: TestMember,
     pub body: String,
+    pub message_type: String,
+    pub metadata: serde_json::Value,
     pub created_at: String,
 }
 

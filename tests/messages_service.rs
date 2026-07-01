@@ -56,6 +56,24 @@ async fn direct_message_creates_or_reuses_direct_conversation_atomically() {
 
 #[tokio::test]
 #[serial_test::serial]
+async fn text_messages_return_type_and_empty_metadata() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let _bob = ctx.register("bob").await;
+
+    let sent = ctx
+        .send_direct_message(&alice, "bob", "typed-text", "hello")
+        .await;
+    assert_eq!(sent.message.message_type, "text");
+    assert_eq!(sent.message.metadata, serde_json::json!({}));
+
+    let history = ctx.messages(&alice, sent.conversation_id, "").await;
+    assert_eq!(history[0].message_type, "text");
+    assert_eq!(history[0].metadata, serde_json::json!({}));
+}
+
+#[tokio::test]
+#[serial_test::serial]
 async fn same_client_msg_id_with_different_body_is_conflict() {
     let ctx = common::TestContext::new().await;
     let alice = ctx.register("alice").await;

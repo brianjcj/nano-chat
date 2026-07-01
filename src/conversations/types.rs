@@ -37,6 +37,8 @@ pub struct LatestMessageSummary {
     pub message_seq: i64,
     pub sender: UserSummary,
     pub body: String,
+    pub message_type: String,
+    pub metadata: serde_json::Value,
     pub created_at: DateTime<Utc>,
 }
 

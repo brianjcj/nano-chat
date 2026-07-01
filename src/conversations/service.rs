@@ -36,6 +36,8 @@ struct ConversationSummaryRow {
     latest_sender_username: Option<String>,
     latest_sender_display_name: Option<String>,
     latest_message_body: Option<String>,
+    latest_message_type: Option<String>,
+    latest_message_metadata: Option<serde_json::Value>,
     latest_message_created_at: Option<DateTime<Utc>>,
 }
 
@@ -97,6 +99,8 @@ impl From<ConversationSummaryRow> for ConversationSummary {
             row.latest_sender_user_id,
             row.latest_sender_username,
             row.latest_message_body,
+            row.latest_message_type,
+            row.latest_message_metadata,
             row.latest_message_created_at,
         ) {
             (
@@ -105,6 +109,8 @@ impl From<ConversationSummaryRow> for ConversationSummary {
                 Some(sender_user_id),
                 Some(sender_username),
                 Some(body),
+                Some(message_type),
+                Some(metadata),
                 Some(created_at),
             ) => Some(LatestMessageSummary {
                 message_id,
@@ -115,6 +121,8 @@ impl From<ConversationSummaryRow> for ConversationSummary {
                     display_name: row.latest_sender_display_name,
                 },
                 body,
+                message_type,
+                metadata,
                 created_at,
             }),
             _ => None,
@@ -172,6 +180,8 @@ pub async fn list_conversations(
                 latest_sender.username as latest_sender_username,
                 latest_sender.display_name as latest_sender_display_name,
                 latest_message.body as latest_message_body,
+                latest_message.message_type as latest_message_type,
+                latest_message.metadata as latest_message_metadata,
                 latest_message.created_at as latest_message_created_at
          from conversation_members cm
          join conversations c on c.conversation_id = cm.conversation_id
@@ -188,6 +198,8 @@ pub async fn list_conversations(
                     m.message_seq,
                     m.sender_user_id,
                     m.body,
+                    m.message_type,
+                    m.metadata,
                     m.created_at
              from messages m
              where m.conversation_id = c.conversation_id
@@ -758,6 +770,8 @@ async fn conversation_summary_for_user_tx(
                 latest_sender.username as latest_sender_username,
                 latest_sender.display_name as latest_sender_display_name,
                 latest_message.body as latest_message_body,
+                latest_message.message_type as latest_message_type,
+                latest_message.metadata as latest_message_metadata,
                 latest_message.created_at as latest_message_created_at
          from conversation_members cm
          join conversations c on c.conversation_id = cm.conversation_id
@@ -774,6 +788,8 @@ async fn conversation_summary_for_user_tx(
                     m.message_seq,
                     m.sender_user_id,
                     m.body,
+                    m.message_type,
+                    m.metadata,
                     m.created_at
              from messages m
              where m.conversation_id = c.conversation_id

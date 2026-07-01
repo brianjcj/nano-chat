@@ -25,7 +25,7 @@ struct ValidatedMessageInput {
 }
 
 #[derive(Debug, sqlx::FromRow)]
-struct ConversationRow {
+pub struct ConversationRow {
     conversation_id: Uuid,
     conversation_type: String,
     state: String,
@@ -57,6 +57,8 @@ struct MessageDtoRow {
     sender_username: String,
     sender_display_name: Option<String>,
     body: String,
+    message_type: String,
+    metadata: serde_json::Value,
     created_at: DateTime<Utc>,
 }
 
@@ -72,6 +74,8 @@ impl From<MessageDtoRow> for MessageDto {
                 display_name: row.sender_display_name,
             },
             body: row.body,
+            message_type: row.message_type,
+            metadata: row.metadata,
             created_at: row.created_at,
         }
     }
@@ -227,6 +231,8 @@ pub async fn list_messages(
                 u.username as sender_username,
                 u.display_name as sender_display_name,
                 m.body,
+                m.message_type,
+                m.metadata,
                 m.created_at
          from messages m
          join users u on u.user_id = m.sender_user_id
@@ -309,21 +315,14 @@ async fn send_message_in_locked_conversation(
         return existing_message_result(tx, existing, &request_fingerprint).await;
     };
 
-    sqlx::query(
-        "update conversations
-         set last_message_seq = $2,
-             last_message_id = $3,
-             last_message_at = $4,
-             updated_at = $4
-         where conversation_id = $1",
+    update_conversation_after_insert(
+        tx,
+        conversation.conversation_id,
+        message_seq,
+        inserted_message_id,
+        now,
     )
-    .bind(conversation.conversation_id)
-    .bind(message_seq)
-    .bind(inserted_message_id)
-    .bind(now)
-    .execute(&mut **tx)
-    .await
-    .map_err(internal_error)?;
+    .await?;
 
     sqlx::query(
         "update conversation_members
@@ -343,6 +342,89 @@ async fn send_message_in_locked_conversation(
         message,
         newly_created: true,
     })
+}
+
+pub async fn insert_call_event_message_in_locked_conversation(
+    tx: &mut Transaction<'_, Postgres>,
+    conversation: &ConversationRow,
+    sender: &CurrentUser,
+    body: String,
+    metadata: serde_json::Value,
+) -> AppResult<SendMessageResult> {
+    if body.trim().is_empty() {
+        return Err(AppError::unprocessable_request(
+            "Call event body must not be empty",
+        ));
+    }
+
+    let message_id = new_uuid_v7();
+    let message_seq = conversation.last_message_seq + 1;
+    let now = now_utc();
+    let client_msg_id = format!("call-event-{message_id}");
+    let body_hash = body_hash(&body);
+    let request_fingerprint = request_fingerprint(conversation.conversation_id, &body_hash);
+
+    sqlx::query(
+        "insert into messages (
+             message_id, conversation_id, message_seq, sender_user_id, client_id,
+             client_msg_id, body, body_hash, request_fingerprint, message_type, metadata, created_at
+         ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'call_event', $10, $11)",
+    )
+    .bind(message_id)
+    .bind(conversation.conversation_id)
+    .bind(message_seq)
+    .bind(sender.user_id)
+    .bind(sender.client_id)
+    .bind(client_msg_id)
+    .bind(&body)
+    .bind(body_hash)
+    .bind(request_fingerprint)
+    .bind(metadata)
+    .bind(now)
+    .execute(&mut **tx)
+    .await
+    .map_err(internal_error)?;
+
+    update_conversation_after_insert(
+        tx,
+        conversation.conversation_id,
+        message_seq,
+        message_id,
+        now,
+    )
+    .await?;
+    let message = message_dto_by_id(tx, message_id).await?;
+    Ok(SendMessageResult {
+        conversation_id: message.conversation_id,
+        message,
+        newly_created: true,
+    })
+}
+
+pub(crate) async fn update_conversation_after_insert(
+    tx: &mut Transaction<'_, Postgres>,
+    conversation_id: Uuid,
+    message_seq: i64,
+    message_id: Uuid,
+    now: DateTime<Utc>,
+) -> AppResult<()> {
+    sqlx::query(
+        "update conversations
+         set last_message_seq = $2,
+             last_message_id = $3,
+             last_message_at = $4,
+             updated_at = $4
+         where conversation_id = $1",
+    )
+    .bind(conversation_id)
+    .bind(message_seq)
+    .bind(message_id)
+    .bind(now)
+    .execute(&mut **tx)
+    .await
+    .map_err(internal_error)?;
+
+    Ok(())
 }
 
 async fn existing_message_result_for_key(
@@ -397,7 +479,7 @@ async fn find_existing_message(
     .map_err(internal_error)
 }
 
-async fn message_dto_by_id(
+pub(crate) async fn message_dto_by_id(
     tx: &mut Transaction<'_, Postgres>,
     message_id: Uuid,
 ) -> AppResult<MessageDto> {
@@ -409,6 +491,8 @@ async fn message_dto_by_id(
                 u.username as sender_username,
                 u.display_name as sender_display_name,
                 m.body,
+                m.message_type,
+                m.metadata,
                 m.created_at
          from messages m
          join users u on u.user_id = m.sender_user_id
@@ -657,7 +741,7 @@ fn validate_message_input(
         return Err(message_too_large());
     }
 
-    let body_hash = sha256_hex(body.as_bytes());
+    let body_hash = body_hash(&body);
     Ok(ValidatedMessageInput {
         client_msg_id,
         body,
@@ -683,8 +767,12 @@ fn validate_cursor_seq(value: Option<i64>, name: &'static str) -> AppResult<()> 
     }
 }
 
-fn request_fingerprint(conversation_id: Uuid, body_hash: &str) -> String {
+pub(crate) fn request_fingerprint(conversation_id: Uuid, body_hash: &str) -> String {
     sha256_hex(format!("v1|conversation:{conversation_id}|body:{body_hash}").as_bytes())
+}
+
+pub(crate) fn body_hash(body: &str) -> String {
+    sha256_hex(body.as_bytes())
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {

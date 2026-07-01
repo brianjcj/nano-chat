@@ -154,6 +154,8 @@ Success: `200 OK`
         "display_name": "Alice"
       },
       "body": "hello",
+      "message_type": "text",
+      "metadata": {},
       "created_at": "2026-06-13T00:00:00.000Z"
     }
   },
@@ -180,6 +182,8 @@ Success: `200 OK`
         "display_name": "Bob"
       },
       "body": "hi alice",
+      "message_type": "text",
+      "metadata": {},
       "created_at": "2026-06-13T00:01:00.000Z"
     }
   }
@@ -298,9 +302,28 @@ Success: `200 OK`
       "display_name": "Alice"
     },
     "body": "hello bob",
+    "message_type": "text",
+    "metadata": {},
     "created_at": "2026-06-13T00:00:00.000Z"
   }
 ]
+```
+
+Call event messages use `message_type: "call_event"` and include call details in `metadata`, for example:
+
+```json
+{
+  "message_type": "call_event",
+  "body": "视频通话 03:12",
+  "metadata": {
+    "call_id": "018f0000-0000-7000-8000-000000000040",
+    "media_type": "video",
+    "outcome": "completed",
+    "duration_seconds": 192,
+    "caller_user_id": "1001",
+    "callee_user_id": "1002"
+  }
+}
 ```
 
 The `sender` object is the sender's current user summary at read time, not a message-time snapshot.
@@ -421,6 +444,8 @@ The success payload is the same shape as `SendMessageResult`:
       "display_name": "Alice"
     },
     "body": "hello",
+    "message_type": "text",
+    "metadata": {},
     "created_at": "2026-06-13T00:00:00.000Z"
   }
 }
@@ -523,6 +548,8 @@ After successful state changes, the server fans out WebSocket events locally and
         "display_name": "Alice"
       },
       "body": "hello",
+      "message_type": "text",
+      "metadata": {},
       "created_at": "2026-06-13T00:00:00.000Z"
     }
   }
