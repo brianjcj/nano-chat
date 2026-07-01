@@ -326,6 +326,18 @@ Call event messages use `message_type: "call_event"` and include call details in
 }
 ```
 
+Call record `metadata.outcome` values:
+
+| Outcome | Meaning |
+| --- | --- |
+| `completed` | Call completed normally. |
+| `rejected` | Callee rejected before connecting. |
+| `canceled` | Caller canceled before connecting. |
+| `timeout` | Ringing timed out. |
+| `busy` | Callee was busy. |
+| `offline` | Callee was offline. |
+| `network_error` | Call ended due to network interruption. |
+
 The `sender` object is the sender's current user summary at read time, not a message-time snapshot.
 
 ### Message sending semantics

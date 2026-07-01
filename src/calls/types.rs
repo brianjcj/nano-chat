@@ -29,6 +29,17 @@ pub enum CallState {
     Ended,
 }
 
+impl CallState {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ringing => "ringing",
+            Self::Connecting => "connecting",
+            Self::Active => "active",
+            Self::Ended => "ended",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CallEndReason {

@@ -55,6 +55,25 @@ struct CallSummaryRow {
     end_reason: Option<String>,
 }
 
+#[derive(Debug, sqlx::FromRow)]
+struct LockedCallSessionRow {
+    call_id: Uuid,
+    conversation_id: Uuid,
+    caller_user_id: UserId,
+    callee_user_id: UserId,
+    media_type: String,
+    state: String,
+    started_at: DateTime<Utc>,
+    accepted_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RequiredCallRole {
+    Caller,
+    Callee,
+    Participant,
+}
+
 pub async fn invite(
     pool: &PgPool,
     registry: &ConnectionRegistry,
@@ -148,6 +167,123 @@ pub async fn invite(
     Ok(CallCommandResult { call })
 }
 
+pub async fn accept(
+    pool: &PgPool,
+    callee: CurrentUser,
+    call_id: Uuid,
+) -> AppResult<CallCommandResult> {
+    let mut tx = pool.begin().await.map_err(internal_error)?;
+    let call = lock_call_session(&mut tx, call_id).await?;
+    ensure_required_role(&call, callee.user_id, RequiredCallRole::Callee)?;
+    ensure_call_state(&call, &[CallState::Ringing])?;
+
+    let now = now_utc();
+    sqlx::query(
+        "update call_sessions
+         set state = $2,
+             accepted_at = $3,
+             accepted_client_id = $4
+         where call_id = $1",
+    )
+    .bind(call_id)
+    .bind(CallState::Connecting.as_str())
+    .bind(now)
+    .bind(callee.client_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(internal_error)?;
+
+    update_call_participants_state(&mut tx, call_id, CallState::Connecting).await?;
+    let call = call_summary_by_id(&mut tx, call_id).await?;
+    tx.commit().await.map_err(internal_error)?;
+    Ok(CallCommandResult { call })
+}
+
+pub async fn connected(
+    pool: &PgPool,
+    participant: CurrentUser,
+    call_id: Uuid,
+) -> AppResult<CallCommandResult> {
+    let mut tx = pool.begin().await.map_err(internal_error)?;
+    let call = lock_call_session(&mut tx, call_id).await?;
+    ensure_required_role(&call, participant.user_id, RequiredCallRole::Participant)?;
+    ensure_call_state(&call, &[CallState::Connecting])?;
+
+    sqlx::query(
+        "update call_sessions
+         set state = $2
+         where call_id = $1",
+    )
+    .bind(call_id)
+    .bind(CallState::Active.as_str())
+    .execute(&mut *tx)
+    .await
+    .map_err(internal_error)?;
+
+    update_call_participants_state(&mut tx, call_id, CallState::Active).await?;
+    let call = call_summary_by_id(&mut tx, call_id).await?;
+    tx.commit().await.map_err(internal_error)?;
+    Ok(CallCommandResult { call })
+}
+
+pub async fn reject(
+    pool: &PgPool,
+    callee: CurrentUser,
+    call_id: Uuid,
+) -> AppResult<CallCommandResult> {
+    end_call(
+        pool,
+        callee,
+        call_id,
+        CallEndReason::Rejected,
+        RequiredCallRole::Callee,
+        &[CallState::Ringing],
+    )
+    .await
+}
+
+pub async fn cancel(
+    pool: &PgPool,
+    caller: CurrentUser,
+    call_id: Uuid,
+) -> AppResult<CallCommandResult> {
+    end_call(
+        pool,
+        caller,
+        call_id,
+        CallEndReason::Canceled,
+        RequiredCallRole::Caller,
+        &[CallState::Ringing],
+    )
+    .await
+}
+
+pub async fn hangup(
+    pool: &PgPool,
+    participant: CurrentUser,
+    call_id: Uuid,
+    reason: CallEndReason,
+) -> AppResult<CallCommandResult> {
+    if !matches!(
+        reason,
+        CallEndReason::Completed | CallEndReason::NetworkError
+    ) {
+        return Err(AppError::invalid_request(
+            "Hangup reason must be completed or network_error",
+        ));
+    }
+
+    end_call(
+        pool,
+        participant,
+        call_id,
+        reason,
+        RequiredCallRole::Participant,
+        &[CallState::Connecting, CallState::Active],
+    )
+    .await
+}
+
 pub(crate) async fn call_summary_by_id(
     tx: &mut Transaction<'_, Postgres>,
     call_id: Uuid,
@@ -181,6 +317,183 @@ pub(crate) async fn call_summary_by_id(
     .ok_or_else(call_not_found)?;
 
     row.into_summary()
+}
+
+async fn lock_call_session(
+    tx: &mut Transaction<'_, Postgres>,
+    call_id: Uuid,
+) -> AppResult<LockedCallSessionRow> {
+    sqlx::query_as::<_, LockedCallSessionRow>(
+        "select call_id,
+                conversation_id,
+                caller_user_id,
+                callee_user_id,
+                media_type,
+                state,
+                started_at,
+                accepted_at
+         from call_sessions
+         where call_id = $1
+         for update",
+    )
+    .bind(call_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(internal_error)?
+    .ok_or_else(call_not_found)
+}
+
+async fn end_call(
+    pool: &PgPool,
+    actor: CurrentUser,
+    call_id: Uuid,
+    reason: CallEndReason,
+    required_role: RequiredCallRole,
+    allowed_states: &[CallState],
+) -> AppResult<CallCommandResult> {
+    let mut tx = pool.begin().await.map_err(internal_error)?;
+    let call = lock_call_session(&mut tx, call_id).await?;
+    ensure_required_role(&call, actor.user_id, RequiredCallRole::Participant)?;
+
+    let current_state = call_state(&call)?;
+    if current_state == CallState::Ended {
+        let call = call_summary_by_id(&mut tx, call_id).await?;
+        tx.commit().await.map_err(internal_error)?;
+        return Ok(CallCommandResult { call });
+    }
+
+    ensure_required_role(&call, actor.user_id, required_role)?;
+    if !allowed_states.contains(&current_state) {
+        return Err(AppError::invalid_request("Invalid call state transition"));
+    }
+
+    let now = now_utc();
+    let media_type = call_media_type(&call)?;
+    let duration_seconds = call_duration_seconds(&call, now, reason);
+
+    sqlx::query(
+        "update call_sessions
+         set state = $2,
+             ended_at = $3,
+             end_reason = $4
+         where call_id = $1",
+    )
+    .bind(call_id)
+    .bind(CallState::Ended.as_str())
+    .bind(now)
+    .bind(reason.as_str())
+    .execute(&mut *tx)
+    .await
+    .map_err(internal_error)?;
+
+    update_call_participants_state(&mut tx, call_id, CallState::Ended).await?;
+
+    let conversation = messages_service::lock_conversation(&mut tx, call.conversation_id).await?;
+    let message = messages_service::insert_call_event_message_in_locked_conversation(
+        &mut tx,
+        &conversation,
+        &actor,
+        call_record_body(media_type, reason, Some(duration_seconds)),
+        json!({
+            "call_id": call.call_id,
+            "media_type": media_type.as_str(),
+            "outcome": reason.as_str(),
+            "duration_seconds": duration_seconds,
+            "caller_user_id": call.caller_user_id,
+            "callee_user_id": call.callee_user_id,
+        }),
+    )
+    .await?;
+
+    sqlx::query("update call_sessions set created_message_id = $2 where call_id = $1")
+        .bind(call_id)
+        .bind(message.message.message_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(internal_error)?;
+
+    let call = call_summary_by_id(&mut tx, call_id).await?;
+    tx.commit().await.map_err(internal_error)?;
+    Ok(CallCommandResult { call })
+}
+
+async fn update_call_participants_state(
+    tx: &mut Transaction<'_, Postgres>,
+    call_id: Uuid,
+    state: CallState,
+) -> AppResult<()> {
+    sqlx::query("update call_participants set state = $2 where call_id = $1")
+        .bind(call_id)
+        .bind(state.as_str())
+        .execute(&mut **tx)
+        .await
+        .map_err(internal_error)?;
+    Ok(())
+}
+
+fn ensure_required_role(
+    call: &LockedCallSessionRow,
+    user_id: UserId,
+    required_role: RequiredCallRole,
+) -> AppResult<()> {
+    let actual_role = if user_id == call.caller_user_id {
+        Some(RequiredCallRole::Caller)
+    } else if user_id == call.callee_user_id {
+        Some(RequiredCallRole::Callee)
+    } else {
+        None
+    };
+
+    match (required_role, actual_role) {
+        (_, None) => Err(not_call_participant()),
+        (RequiredCallRole::Participant, Some(_)) => Ok(()),
+        (RequiredCallRole::Caller, Some(RequiredCallRole::Caller)) => Ok(()),
+        (RequiredCallRole::Callee, Some(RequiredCallRole::Callee)) => Ok(()),
+        (RequiredCallRole::Caller, Some(_)) => Err(AppError::invalid_request(
+            "Only the caller can perform this call transition",
+        )),
+        (RequiredCallRole::Callee, Some(_)) => Err(AppError::invalid_request(
+            "Only the callee can perform this call transition",
+        )),
+    }
+}
+
+fn ensure_call_state(call: &LockedCallSessionRow, allowed_states: &[CallState]) -> AppResult<()> {
+    let current_state = call_state(call)?;
+    if allowed_states.contains(&current_state) {
+        return Ok(());
+    }
+    if current_state == CallState::Ended {
+        return Err(call_ended());
+    }
+    Err(AppError::invalid_request("Invalid call state transition"))
+}
+
+fn call_state(call: &LockedCallSessionRow) -> AppResult<CallState> {
+    parse_call_state(&call.state)
+}
+
+fn call_media_type(call: &LockedCallSessionRow) -> AppResult<CallMediaType> {
+    parse_media_type(&call.media_type)
+}
+
+fn call_duration_seconds(
+    call: &LockedCallSessionRow,
+    ended_at: DateTime<Utc>,
+    reason: CallEndReason,
+) -> i64 {
+    if !matches!(
+        reason,
+        CallEndReason::Completed | CallEndReason::NetworkError
+    ) {
+        return 0;
+    }
+
+    let started_at = call.accepted_at.unwrap_or(call.started_at);
+    ended_at
+        .signed_duration_since(started_at)
+        .num_seconds()
+        .max(0)
 }
 
 async fn insert_ended_call_attempt(
@@ -243,7 +556,7 @@ async fn insert_ended_call_attempt_in_locked_conversation(
         tx,
         conversation,
         caller,
-        ended_attempt_body(media_type, reason),
+        call_record_body(media_type, reason, Some(0)),
         json!({
             "call_id": call_id,
             "media_type": media_type.as_str(),
@@ -461,16 +774,32 @@ fn parse_end_reason(value: &str) -> AppResult<CallEndReason> {
     }
 }
 
-fn ended_attempt_body(media_type: CallMediaType, reason: CallEndReason) -> String {
+fn call_record_body(
+    media_type: CallMediaType,
+    reason: CallEndReason,
+    duration_seconds: Option<i64>,
+) -> String {
     let media = match media_type {
         CallMediaType::Audio => "语音通话",
         CallMediaType::Video => "视频通话",
     };
     match reason {
-        CallEndReason::Offline => format!("{media} 对方离线"),
+        CallEndReason::Completed => {
+            format!("{media} {}", format_duration(duration_seconds.unwrap_or(0)))
+        }
+        CallEndReason::Rejected => format!("{media} 已拒绝"),
+        CallEndReason::Canceled => format!("{media} 已取消"),
+        CallEndReason::Timeout => format!("{media} 超时未接"),
         CallEndReason::Busy => format!("{media} 忙线未接通"),
-        _ => format!("{media} 未接通"),
+        CallEndReason::Offline => format!("{media} 对方离线"),
+        CallEndReason::NetworkError => format!("{media} 网络中断"),
     }
+}
+
+fn format_duration(seconds: i64) -> String {
+    let minutes = seconds / 60;
+    let seconds = seconds % 60;
+    format!("{minutes:02}:{seconds:02}")
 }
 
 fn is_unique_violation(error: &sqlx::Error) -> bool {
@@ -500,6 +829,22 @@ fn call_not_found() -> AppError {
         StatusCode::NOT_FOUND,
         ErrorCode::CallNotFound,
         "Call was not found",
+    )
+}
+
+fn call_ended() -> AppError {
+    AppError::new(
+        StatusCode::CONFLICT,
+        ErrorCode::CallEnded,
+        "Call has already ended",
+    )
+}
+
+fn not_call_participant() -> AppError {
+    AppError::new(
+        StatusCode::FORBIDDEN,
+        ErrorCode::NotCallParticipant,
+        "User is not a call participant",
     )
 }
 
