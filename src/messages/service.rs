@@ -394,6 +394,19 @@ pub(crate) async fn insert_call_event_message_in_locked_conversation(
         now,
     )
     .await?;
+
+    sqlx::query(
+        "update conversation_members
+         set read_seq = greatest(read_seq, $3)
+         where conversation_id = $1 and user_id = $2",
+    )
+    .bind(conversation.conversation_id)
+    .bind(sender.user_id)
+    .bind(message_seq)
+    .execute(&mut **tx)
+    .await
+    .map_err(internal_error)?;
+
     let message = message_dto_by_id(tx, message_id).await?;
     Ok(SendMessageResult {
         conversation_id: message.conversation_id,

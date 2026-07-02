@@ -212,6 +212,159 @@ async fn signal_target_rejects_non_origin_caller_client() {
 
 #[tokio::test]
 #[serial_test::serial]
+async fn cancel_rejects_non_origin_caller_client() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let alice_other = ctx.login_existing_client("alice", None).await;
+    let bob = ctx.register("bob").await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+    ctx.register_ws_sender_for(&bob);
+
+    let invited = calls_service::invite(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        direct.conversation_id,
+        CallMediaType::Audio,
+    )
+    .await
+    .expect("call should start");
+
+    let rejected =
+        calls_service::cancel(&ctx.pool, alice_other.current_user(), invited.call.call_id)
+            .await
+            .expect_err("non-origin caller client must not cancel the call");
+    assert_eq!(rejected.code, ErrorCode::NotCallParticipant);
+
+    let state: String = sqlx::query_scalar("select state from call_sessions where call_id = $1")
+        .bind(invited.call.call_id)
+        .fetch_one(&ctx.pool)
+        .await
+        .unwrap();
+    assert_eq!(state, "ringing");
+
+    calls_service::cancel(&ctx.pool, alice.current_user(), invited.call.call_id)
+        .await
+        .expect("origin caller client should still be able to cancel");
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn connected_rejects_non_selected_clients() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let alice_other = ctx.login_existing_client("alice", None).await;
+    let bob_phone = ctx.register("bob").await;
+    let bob_desktop = ctx.login_existing_client("bob", None).await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+    ctx.register_ws_sender_for(&bob_phone);
+
+    let invited = calls_service::invite(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        direct.conversation_id,
+        CallMediaType::Video,
+    )
+    .await
+    .expect("call should start");
+    let accepted = calls_service::accept(&ctx.pool, bob_phone.current_user(), invited.call.call_id)
+        .await
+        .expect("callee phone should accept");
+    assert_eq!(accepted.call.accepted_client_id, Some(bob_phone.client_id));
+
+    let caller_rejected =
+        calls_service::connected(&ctx.pool, alice_other.current_user(), invited.call.call_id)
+            .await
+            .expect_err("non-origin caller client must not mark call connected");
+    assert_eq!(caller_rejected.code, ErrorCode::NotCallParticipant);
+
+    let callee_rejected =
+        calls_service::connected(&ctx.pool, bob_desktop.current_user(), invited.call.call_id)
+            .await
+            .expect_err("non-accepted callee client must not mark call connected");
+    assert_eq!(callee_rejected.code, ErrorCode::NotCallParticipant);
+
+    calls_service::connected(&ctx.pool, alice.current_user(), invited.call.call_id)
+        .await
+        .expect("origin caller client should mark call connected");
+
+    let active_callee_rejected =
+        calls_service::connected(&ctx.pool, bob_desktop.current_user(), invited.call.call_id)
+            .await
+            .expect_err("non-accepted callee client must not use active idempotency path");
+    assert_eq!(active_callee_rejected.code, ErrorCode::NotCallParticipant);
+
+    calls_service::connected(&ctx.pool, bob_phone.current_user(), invited.call.call_id)
+        .await
+        .expect("accepted callee client should retain connected idempotency");
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn hangup_rejects_non_selected_clients() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let alice_other = ctx.login_existing_client("alice", None).await;
+    let bob_phone = ctx.register("bob").await;
+    let bob_desktop = ctx.login_existing_client("bob", None).await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+    ctx.register_ws_sender_for(&bob_phone);
+
+    let invited = calls_service::invite(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        direct.conversation_id,
+        CallMediaType::Video,
+    )
+    .await
+    .expect("call should start");
+    calls_service::accept(&ctx.pool, bob_phone.current_user(), invited.call.call_id)
+        .await
+        .expect("callee phone should accept");
+    calls_service::connected(&ctx.pool, alice.current_user(), invited.call.call_id)
+        .await
+        .expect("origin caller client should mark call connected");
+
+    let caller_rejected = calls_service::hangup(
+        &ctx.pool,
+        alice_other.current_user(),
+        invited.call.call_id,
+        CallEndReason::Completed,
+    )
+    .await
+    .expect_err("non-origin caller client must not hang up the call");
+    assert_eq!(caller_rejected.code, ErrorCode::NotCallParticipant);
+
+    let callee_rejected = calls_service::hangup(
+        &ctx.pool,
+        bob_desktop.current_user(),
+        invited.call.call_id,
+        CallEndReason::Completed,
+    )
+    .await
+    .expect_err("non-accepted callee client must not hang up the call");
+    assert_eq!(callee_rejected.code, ErrorCode::NotCallParticipant);
+
+    calls_service::hangup(
+        &ctx.pool,
+        bob_phone.current_user(),
+        invited.call.call_id,
+        CallEndReason::Completed,
+    )
+    .await
+    .expect("accepted callee client should be able to hang up");
+}
+
+#[tokio::test]
+#[serial_test::serial]
 async fn accept_connected_and_hangup_complete_call_with_duration_record() {
     let ctx = common::TestContext::new().await;
     let alice = ctx.register("alice").await;
@@ -377,6 +530,93 @@ async fn cancel_duplicate_end_create_one_canceled_record() {
         .collect();
     assert_eq!(call_events.len(), 1);
     assert_eq!(call_events[0].metadata["outcome"], "canceled");
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn caller_cancel_record_is_read_for_actor_in_conversation_summary() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+    ctx.register_ws_sender_for(&bob);
+
+    let invited = calls_service::invite(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        direct.conversation_id,
+        CallMediaType::Audio,
+    )
+    .await
+    .expect("call should start");
+    let canceled = calls_service::cancel(&ctx.pool, alice.current_user(), invited.call.call_id)
+        .await
+        .expect("origin caller should cancel");
+    let call_event_seq = canceled
+        .call_event_message
+        .as_ref()
+        .expect("cancel should create a call event message")
+        .message_seq;
+
+    let alice_conversations = ctx.conversations(&alice).await;
+    let listed = alice_conversations
+        .iter()
+        .find(|conversation| conversation.conversation_id == direct.conversation_id)
+        .expect("conversation should be listed for caller");
+    assert_eq!(listed.latest_message_seq, call_event_seq);
+    assert_eq!(listed.read_seq, call_event_seq);
+    assert_eq!(listed.unread_count, 0);
+    assert_eq!(
+        listed
+            .latest_message
+            .as_ref()
+            .expect("latest message should be the call event")
+            .message_type,
+        "call_event"
+    );
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn offline_invite_record_is_read_for_actor_in_conversation_summary() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let _bob = ctx.register("bob").await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+
+    let outcome = calls_service::invite_with_outcome(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        direct.conversation_id,
+        CallMediaType::Video,
+    )
+    .await
+    .expect("offline invite should record a call event");
+    let offline = match outcome {
+        CallInviteOutcome::Offline(result) => result,
+        CallInviteOutcome::Started(_) => panic!("offline callee should not start a call"),
+        CallInviteOutcome::Busy(_) => panic!("offline callee should not be busy"),
+    };
+    let call_event_seq = offline
+        .call_event_message
+        .as_ref()
+        .expect("offline invite should create a call event message")
+        .message_seq;
+
+    let alice_conversations = ctx.conversations(&alice).await;
+    let listed = alice_conversations
+        .iter()
+        .find(|conversation| conversation.conversation_id == direct.conversation_id)
+        .expect("conversation should be listed for caller");
+    assert_eq!(listed.latest_message_seq, call_event_seq);
+    assert_eq!(listed.read_seq, call_event_seq);
+    assert_eq!(listed.unread_count, 0);
 }
 
 #[tokio::test]

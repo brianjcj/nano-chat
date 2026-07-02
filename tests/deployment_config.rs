@@ -109,6 +109,22 @@ fn turn_external_ip_is_configured_documented_and_rendered_when_set() {
 }
 
 #[test]
+fn app_service_forwards_call_cleanup_env_from_dotenv() {
+    let compose = read_required("docker-compose.yml");
+
+    for expected in [
+        "NANO_CHAT_CALL_RINGING_TIMEOUT_SECS: ${NANO_CHAT_CALL_RINGING_TIMEOUT_SECS:-60}",
+        "NANO_CHAT_CALL_DISCONNECT_GRACE_SECS: ${NANO_CHAT_CALL_DISCONNECT_GRACE_SECS:-15}",
+        "NANO_CHAT_CALL_CLEANUP_INTERVAL_SECS: ${NANO_CHAT_CALL_CLEANUP_INTERVAL_SECS:-5}",
+    ] {
+        assert!(
+            compose.contains(expected),
+            "app service environment should include {expected}"
+        );
+    }
+}
+
+#[test]
 fn turn_relay_port_range_env_is_configured_documented_and_rendered() {
     let compose = read_required("docker-compose.yml");
     let env = read_required(".env.example");

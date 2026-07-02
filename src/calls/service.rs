@@ -65,6 +65,7 @@ struct LockedCallSessionRow {
     caller_user_id: UserId,
     callee_user_id: UserId,
     caller_client_id: Uuid,
+    accepted_client_id: Option<Uuid>,
     media_type: String,
     state: String,
     started_at: DateTime<Utc>,
@@ -101,6 +102,12 @@ enum RequiredCallRole {
     Caller,
     Callee,
     Participant,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RequiredCallClient {
+    AnyClientForRole,
+    SelectedClient,
 }
 
 pub async fn invite(
@@ -256,6 +263,7 @@ pub async fn connected(
     let mut tx = pool.begin().await.map_err(internal_error)?;
     let call = lock_call_session(&mut tx, call_id).await?;
     ensure_required_role(&call, participant.user_id, RequiredCallRole::Participant)?;
+    ensure_selected_call_client(&call, &participant)?;
     let current_state = call_state(&call)?;
     if current_state == CallState::Active {
         let call = call_summary_by_id(&mut tx, call_id).await?;
@@ -292,6 +300,7 @@ pub async fn reject(
         call_id,
         CallEndReason::Rejected,
         RequiredCallRole::Callee,
+        RequiredCallClient::AnyClientForRole,
         &[CallState::Ringing],
     )
     .await
@@ -308,6 +317,7 @@ pub async fn cancel(
         call_id,
         CallEndReason::Canceled,
         RequiredCallRole::Caller,
+        RequiredCallClient::SelectedClient,
         &[CallState::Ringing],
     )
     .await
@@ -334,6 +344,7 @@ pub async fn hangup(
         call_id,
         reason,
         RequiredCallRole::Participant,
+        RequiredCallClient::SelectedClient,
         &[CallState::Connecting, CallState::Active],
     )
     .await
@@ -590,6 +601,7 @@ async fn lock_call_session(
                 caller_user_id,
                 callee_user_id,
                 caller_client_id,
+                accepted_client_id,
                 media_type,
                 state,
                 started_at,
@@ -611,11 +623,15 @@ async fn end_call(
     call_id: Uuid,
     reason: CallEndReason,
     required_role: RequiredCallRole,
+    required_client: RequiredCallClient,
     allowed_states: &[CallState],
 ) -> AppResult<CallCommandResult> {
     let mut tx = pool.begin().await.map_err(internal_error)?;
     let call = lock_call_session(&mut tx, call_id).await?;
-    ensure_required_role(&call, actor.user_id, RequiredCallRole::Participant)?;
+    ensure_required_role(&call, actor.user_id, required_role)?;
+    if required_client == RequiredCallClient::SelectedClient {
+        ensure_selected_call_client(&call, &actor)?;
+    }
 
     let current_state = call_state(&call)?;
     if current_state == CallState::Ended {
@@ -624,7 +640,6 @@ async fn end_call(
         return Ok(CallCommandResult::without_call_event_message(call));
     }
 
-    ensure_required_role(&call, actor.user_id, required_role)?;
     if !allowed_states.contains(&current_state) {
         return Err(AppError::invalid_request("Invalid call state transition"));
     }
@@ -775,6 +790,32 @@ fn ensure_required_role(
             "Only the callee can perform this call transition",
         )),
     }
+}
+
+fn ensure_selected_call_client(call: &LockedCallSessionRow, actor: &CurrentUser) -> AppResult<()> {
+    if actor.user_id == call.caller_user_id {
+        if actor.client_id == call.caller_client_id {
+            return Ok(());
+        }
+        return Err(AppError::new(
+            StatusCode::FORBIDDEN,
+            ErrorCode::NotCallParticipant,
+            "Only the originating caller client can perform this call transition",
+        ));
+    }
+
+    if actor.user_id == call.callee_user_id {
+        if call.accepted_client_id == Some(actor.client_id) {
+            return Ok(());
+        }
+        return Err(AppError::new(
+            StatusCode::FORBIDDEN,
+            ErrorCode::NotCallParticipant,
+            "Only the accepted callee client can perform this call transition",
+        ));
+    }
+
+    Err(not_call_participant())
 }
 
 fn ensure_call_state(call: &LockedCallSessionRow, allowed_states: &[CallState]) -> AppResult<()> {
