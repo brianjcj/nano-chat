@@ -3,6 +3,37 @@ fn read_required(path: &str) -> String {
         .unwrap_or_else(|err| panic!("expected {path} to be readable: {err}"))
 }
 
+fn render_default_compose_services() -> Vec<String> {
+    let output = std::process::Command::new("docker")
+        .args(["compose", "config", "--services"])
+        .output()
+        .expect("expected docker compose config --services to run");
+
+    assert!(
+        output.status.success(),
+        "docker compose config --services failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn default_compose_config_renders_all_deployment_services() {
+    let services = render_default_compose_services();
+
+    for required_service in ["caddy", "app", "postgres", "coturn"] {
+        assert!(
+            services.iter().any(|service| service == required_service),
+            "docker compose config --services should include {required_service}; got {services:?}"
+        );
+    }
+}
+
 #[test]
 fn compose_declares_caddy_and_coturn_services() {
     let compose = read_required("docker-compose.yml");
@@ -78,7 +109,7 @@ fn turn_external_ip_is_configured_documented_and_rendered_when_set() {
 }
 
 #[test]
-fn app_port_is_absent_or_clearly_marked_legacy_for_caddy_profile() {
+fn app_port_is_absent_or_clearly_marked_legacy_for_caddy_deployment() {
     let env = read_required(".env.example");
 
     if env.contains("APP_PORT=") {

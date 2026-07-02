@@ -14,7 +14,6 @@ services:
       retries: 20
 
   app:
-    profiles: ["app"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -44,7 +43,6 @@ services:
       - "3000"
 
   caddy:
-    profiles: ["app"]
     image: caddy:2
     depends_on:
       app:

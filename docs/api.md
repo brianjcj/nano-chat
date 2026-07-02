@@ -973,7 +973,7 @@ For an application deployment, see also `docs/deployment-webrtc.md` for the sing
 
    If you changed `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, or `POSTGRES_PORT`, update this host-side URL to match.
 
-4. Open inbound TCP 80 and 443, UDP/TCP 3478, and UDP 49160-49200 on the VPS firewall, then start the app, Caddy, and coturn: `docker compose --profile app up -d --build`.
+4. Open inbound TCP 80 and 443, UDP/TCP 3478, and UDP 49160-49200 on the VPS firewall, then start the app, Caddy, and coturn: `docker compose up -d --build`.
 
 The app container derives its default `DATABASE_URL` from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` so it can reach the Compose Postgres service by service name. Leave `DATABASE_URL` unset/commented to use that derived default, or set it explicitly when connecting to a different database. If set explicitly, it must match the Postgres credentials and database name you intend the app to use. Host-side tools generally use `localhost` and the published Postgres port instead. The app service exposes port 3000 only inside the Docker network; Caddy publishes HTTPS on host ports 80 and 443.
 
@@ -986,8 +986,8 @@ Configuration variables:
 | `POSTGRES_PASSWORD` | `nano` | Official Postgres image password. |
 | `POSTGRES_DB` | `nano_chat_test` | Official Postgres image database name. |
 | `POSTGRES_PORT` | `5432` | Host port published by Compose Postgres. |
-| `APP_PORT` | `3000` | Legacy local app port setting; the single-VPS app profile is reached through Caddy instead of publishing the app port directly. |
-| `NANO_CHAT_IMAGE` | `nano-chat:local` | Compose image name for the optional app service. |
+| `APP_PORT` | `3000` | Legacy local app port setting; the single-VPS deployment is reached through Caddy instead of publishing the app port directly. |
+| `NANO_CHAT_IMAGE` | `nano-chat:local` | Compose image name for the app service. |
 | `NANO_CHAT_DOMAIN` | `chat.example.com` | HTTPS host served by Caddy for the app. |
 | `DATABASE_URL` | Derived from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` | Application database URL; may be set explicitly and should match the Postgres settings. |
 | `JWT_SECRET` | `change-me-development-secret-at-least-32-bytes` | JWT signing secret; must be changed outside local development. |
