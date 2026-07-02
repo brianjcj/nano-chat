@@ -159,7 +159,7 @@ describe("CallProvider", () => {
     );
   });
 
-  it("does not overwrite a competing call when the invite response resolves", async () => {
+  it("ignores incoming calls while the invite response is pending", async () => {
     const realtimeClient = createFakeRealtimeClient();
     const engine = createFakeCallEngine();
     const inviteDeferred = createDeferred<{ call: CallSummary }>();
@@ -192,7 +192,7 @@ describe("CallProvider", () => {
         payload: { call: createIncomingCallSummary({ call_id: "incoming-call-2" }) },
       });
     });
-    await screen.findByText("incoming");
+    expect(screen.getByTestId("call-phase")).toHaveTextContent("idle");
 
     await act(async () => {
       inviteDeferred.resolve({
@@ -203,7 +203,7 @@ describe("CallProvider", () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByTestId("call-phase")).toHaveTextContent("incoming");
+    expect(screen.getByTestId("call-phase")).toHaveTextContent("outgoing");
   });
 
   it("does not close an accepted incoming call when a stale outgoing start resolves", async () => {
@@ -314,6 +314,113 @@ describe("CallProvider", () => {
     expect(staleTrack.stop).toHaveBeenCalled();
     expect(peer.addTrack).toHaveBeenCalledTimes(addTrackCallsAfterAccept);
     expect(peer.addTrack).not.toHaveBeenCalledWith(staleTrack, staleStream);
+  });
+
+  it("blocks incoming accept while the outgoing invite is pending and cleans up failed invite media", async () => {
+    const inviteDeferred = createDeferred<{ call: CallSummary }>();
+    const realtimeClient = createFakeRealtimeClient();
+    realtimeClient.sendCommand.mockImplementation((type: string) => {
+      if (type === "call.invite") {
+        return inviteDeferred.promise;
+      }
+
+      return Promise.resolve({
+        call: createIncomingCallSummary({
+          state: "connecting",
+          accepted_client_id: "caller-client-1",
+          accepted_at: "2026-07-01T00:00:15.000Z",
+        }),
+      });
+    });
+    const incomingCall = createIncomingCallSummary({ call_id: "incoming-call-2" });
+    const outgoingTrack = createFakeTrack("video");
+    const incomingTrack = createFakeTrack("video");
+    const outgoingStream = new MediaStream([outgoingTrack]);
+    const incomingStream = new MediaStream([incomingTrack]);
+    const peer = createFakePeerConnection();
+    const getUserMedia = vi
+      .fn()
+      .mockResolvedValueOnce(outgoingStream)
+      .mockResolvedValueOnce(incomingStream);
+    const engine = new CallEngine({
+      createPeerConnection: () => peer as unknown as RTCPeerConnection,
+      getIceServers: vi.fn().mockResolvedValue([]),
+      getUserMedia,
+    });
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <CallActionProbe conversation={directConversation} />
+        <CallStateProbe />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "start" }));
+    await waitFor(() => {
+      expect(realtimeClient.sendCommand).toHaveBeenCalledWith("call.invite", {
+        conversation_id: directConversation.conversation_id,
+        media_type: "video",
+      });
+      expect(peer.addTrack).toHaveBeenCalledWith(outgoingTrack, outgoingStream);
+    });
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.incoming",
+        payload: { call: incomingCall },
+      });
+    });
+    await userEvent.click(screen.getByRole("button", { name: "accept" }));
+
+    expect(realtimeClient.sendCommand).not.toHaveBeenCalledWith("call.accept", {
+      call_id: incomingCall.call_id,
+    });
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(peer.addTrack).not.toHaveBeenCalledWith(incomingTrack, incomingStream);
+
+    await act(async () => {
+      inviteDeferred.reject(new Error("call.invite failed"));
+      await inviteDeferred.promise.catch(() => undefined);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("call-phase")).toHaveTextContent("idle");
+    expect(outgoingTrack.stop).toHaveBeenCalled();
+    expect(peer.close).toHaveBeenCalled();
+  });
+
+  it("does not prepare local media or send duplicate invites while a start is pending", async () => {
+    const realtimeClient = createFakeRealtimeClient();
+    const engine = createFakeCallEngine();
+    const mediaDeferred = createDeferred<MediaStream>();
+    engine.prepareLocalMedia.mockImplementation(() => mediaDeferred.promise);
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <StartCallProbe conversation={directConversation} mediaType="video" />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "start" }));
+    await userEvent.click(screen.getByRole("button", { name: "start" }));
+
+    expect(engine.prepareLocalMedia).toHaveBeenCalledTimes(1);
+    expect(realtimeClient.sendCommand).not.toHaveBeenCalledWith(
+      "call.invite",
+      expect.anything(),
+    );
+
+    await act(async () => {
+      mediaDeferred.resolve(new MediaStream());
+      await mediaDeferred.promise;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      realtimeClient.sendCommand.mock.calls.filter(([type]) => type === "call.invite"),
+    ).toHaveLength(1);
   });
 
   it("sends an offer signal when the caller receives call.accepted", async () => {

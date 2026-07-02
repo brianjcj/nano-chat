@@ -112,6 +112,7 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
   const localSignalSentCallIdRef = useRef<string | null>(null);
   const outboundIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const pendingStartOperationRef = useRef<CallOperationToken | null>(null);
+  const pendingOutgoingInviteOperationRef = useRef<CallOperationToken | null>(null);
   const pendingAcceptOperationRef = useRef<PendingAcceptOperation | null>(null);
 
   const setState = useCallback(
@@ -136,12 +137,17 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
     localSignalSentCallIdRef.current = null;
     outboundIceCandidatesRef.current = [];
     pendingStartOperationRef.current = null;
+    pendingOutgoingInviteOperationRef.current = null;
     pendingAcceptOperationRef.current = null;
   }, [engine]);
 
   const startCall = useCallback<CallContextValue["startCall"]>(
     async (conversation, mediaType) => {
-      if (conversation.type !== "direct" || stateRef.current.phase !== "idle") {
+      if (
+        conversation.type !== "direct" ||
+        stateRef.current.phase !== "idle" ||
+        pendingStartOperationRef.current !== null
+      ) {
         return;
       }
 
@@ -168,6 +174,7 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
       }
 
       localStreamRef.current = localStream;
+      pendingOutgoingInviteOperationRef.current = operationToken;
 
       try {
         const result = await realtimeClient.sendCommand<
@@ -179,6 +186,7 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
         });
 
         if (!ownsPendingStartOperation(pendingStartOperationRef, operationToken, stateRef)) {
+          clearPendingStartOperation(pendingOutgoingInviteOperationRef, operationToken);
           clearPendingStartOperation(pendingStartOperationRef, operationToken);
           return;
         }
@@ -191,6 +199,7 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
           closeEngine();
         }
       } finally {
+        clearPendingStartOperation(pendingOutgoingInviteOperationRef, operationToken);
         clearPendingStartOperation(pendingStartOperationRef, operationToken);
       }
     },
@@ -463,6 +472,7 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
         cameraOffRef,
         localSignalSentCallIdRef,
         outboundIceCandidatesRef,
+        pendingOutgoingInviteOperationRef,
         pendingAcceptOperationRef,
         closeEngine,
       });
@@ -524,6 +534,7 @@ type HandleRealtimeEventOptions = {
   cameraOffRef: MutableRefObject<boolean>;
   localSignalSentCallIdRef: MutableRefObject<string | null>;
   outboundIceCandidatesRef: MutableRefObject<RTCIceCandidateInit[]>;
+  pendingOutgoingInviteOperationRef: MutableRefObject<CallOperationToken | null>;
   pendingAcceptOperationRef: MutableRefObject<PendingAcceptOperation | null>;
   closeEngine: () => void;
 };
@@ -541,6 +552,7 @@ async function handleRealtimeEvent({
   cameraOffRef,
   localSignalSentCallIdRef,
   outboundIceCandidatesRef,
+  pendingOutgoingInviteOperationRef,
   pendingAcceptOperationRef,
   closeEngine,
 }: HandleRealtimeEventOptions) {
@@ -559,7 +571,10 @@ async function handleRealtimeEvent({
 
   switch (event.type) {
     case "call.incoming":
-      if (stateRef.current.phase === "idle") {
+      if (
+        stateRef.current.phase === "idle" &&
+        pendingOutgoingInviteOperationRef.current === null
+      ) {
         setState({ phase: "incoming", call: event.payload.call });
       }
       return;
@@ -586,6 +601,7 @@ async function handleRealtimeEvent({
         cameraOffRef,
         localSignalSentCallIdRef,
         outboundIceCandidatesRef,
+        pendingOutgoingInviteOperationRef,
         pendingAcceptOperationRef,
         closeEngine,
       });
