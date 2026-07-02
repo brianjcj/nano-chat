@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RealtimeClient, type RealtimeStatus } from "./realtimeClient";
 
@@ -50,6 +50,10 @@ function createClient(wsUrl: string) {
 describe("RealtimeClient", () => {
   beforeEach(() => {
     MockWebSocket.instances = [];
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("builds /ws?version=1&token=<token> when connecting to a configured ws base", () => {
@@ -106,5 +110,94 @@ describe("RealtimeClient", () => {
 
     expect(client.getStatus()).toBe("draining");
     expect(observedStatuses).toContain("draining");
+  });
+
+  it("reconnects after a connected socket misses a heartbeat pong", async () => {
+    vi.useFakeTimers();
+    const client = new RealtimeClient({
+      wsUrl: "/ws",
+      WebSocketCtor: MockWebSocket as unknown as typeof WebSocket,
+      heartbeatIntervalMs: 100,
+      heartbeatTimeoutMs: 50,
+      reconnectDelaysMs: [0],
+    });
+
+    client.connect({ access_token: "token-123" });
+    const firstSocket = MockWebSocket.instances[0];
+    firstSocket?.open();
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(firstSocket?.sent.map((data) => JSON.parse(data))).toEqual([
+      expect.objectContaining({ type: "heartbeat.ping" }),
+    ]);
+
+    await vi.advanceTimersByTimeAsync(50);
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(firstSocket?.readyState).toBe(3);
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(client.getStatus()).toBe("reconnecting");
+
+    MockWebSocket.instances[1]?.open();
+
+    expect(client.getStatus()).toBe("connected");
+  });
+
+  it("abandons a reconnect attempt that stays stuck connecting and tries again", async () => {
+    vi.useFakeTimers();
+    const client = new RealtimeClient({
+      wsUrl: "/ws",
+      WebSocketCtor: MockWebSocket as unknown as typeof WebSocket,
+      connectionTimeoutMs: 100,
+      heartbeatIntervalMs: 0,
+      reconnectDelaysMs: [0],
+    });
+
+    client.connect({ access_token: "token-123" });
+    const firstSocket = MockWebSocket.instances[0];
+    firstSocket?.open();
+    firstSocket?.close();
+    await vi.runOnlyPendingTimersAsync();
+
+    const stuckReconnectSocket = MockWebSocket.instances[1];
+    expect(stuckReconnectSocket?.readyState).toBe(0);
+    expect(client.getStatus()).toBe("reconnecting");
+
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(stuckReconnectSocket?.readyState).toBe(3);
+    expect(MockWebSocket.instances).toHaveLength(3);
+    expect(client.getStatus()).toBe("reconnecting");
+
+    MockWebSocket.instances[2]?.open();
+
+    expect(client.getStatus()).toBe("connected");
+  });
+
+  it("calls timer functions without rebinding them to the realtime client", () => {
+    let wasCalledWithThis = false;
+    const setTimeoutFn = function (
+      this: unknown,
+      _handler: () => void,
+      _timeout: number,
+    ) {
+      void _handler;
+      void _timeout;
+      wasCalledWithThis = this !== undefined;
+      return 1 as ReturnType<typeof setTimeout>;
+    };
+    const client = new RealtimeClient({
+      wsUrl: "/ws",
+      WebSocketCtor: MockWebSocket as unknown as typeof WebSocket,
+      connectionTimeoutMs: 100,
+      heartbeatIntervalMs: 0,
+      setTimeoutFn,
+    });
+
+    client.connect({ access_token: "token-123" });
+
+    expect(wasCalledWithThis).toBe(false);
   });
 });

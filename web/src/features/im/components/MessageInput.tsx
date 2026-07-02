@@ -53,22 +53,26 @@ export function MessageInput({
       return;
     }
 
+    const submittedBody = body;
     setValidationCode(null);
+    setBody("");
     setIsSending(true);
 
     try {
-      const result = await onSend(body);
+      const result = await onSend(submittedBody);
 
       if (result.ok) {
-        setBody("");
         return;
       }
 
       if (result.code === "empty_message" || result.code === "message_too_large") {
         setValidationCode(result.code);
       }
+
+      setBody((currentBody) => currentBody || submittedBody);
     } finally {
       setIsSending(false);
+      textareaRef.current?.focus();
     }
   }
 
@@ -96,7 +100,7 @@ export function MessageInput({
           ref={textareaRef}
           aria-label={t("im.messageInput.label")}
           className="max-h-44 min-h-12 flex-1 resize-none rounded-[calc(var(--radius)*1.05)] bg-white/86 py-3 pr-4 text-sm leading-6 shadow-[0_12px_32px_var(--shadow-color)]"
-          disabled={disabled || isSending}
+          disabled={disabled}
           onChange={(event) => {
             setBody(event.target.value);
             if (validationCode) {
