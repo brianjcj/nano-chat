@@ -119,11 +119,56 @@ async fn invite_with_outcome_returns_busy_summary_for_callee_busy() {
     let busy = match outcome {
         CallInviteOutcome::Busy(result) => result,
         CallInviteOutcome::Started(_) => panic!("busy callee should not start a call"),
+        CallInviteOutcome::Offline(_) => panic!("online busy callee should not be offline"),
     };
     assert_eq!(busy.call.caller.user_id, carol.user_id);
     assert_eq!(busy.call.callee.user_id, bob.user_id);
     assert_eq!(busy.call.state, CallState::Ended);
     assert_eq!(busy.call.end_reason, Some(CallEndReason::Busy));
+    let message = busy
+        .call_event_message
+        .as_ref()
+        .expect("busy invite attempt should expose created call record message");
+    assert_eq!(message.message_type, "call_event");
+    assert_eq!(message.metadata["outcome"], "busy");
+    assert_eq!(message.metadata["call_id"], busy.call.call_id.to_string());
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn invite_with_outcome_returns_offline_record_message() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let _bob = ctx.register("bob").await;
+    let direct = ctx.send_direct_message(&alice, "bob", "ab", "hello").await;
+
+    let outcome = calls_service::invite_with_outcome(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        direct.conversation_id,
+        CallMediaType::Audio,
+    )
+    .await
+    .expect("offline invite attempt should expose the recorded call");
+
+    let offline = match outcome {
+        CallInviteOutcome::Offline(result) => result,
+        CallInviteOutcome::Started(_) => panic!("offline callee should not start a call"),
+        CallInviteOutcome::Busy(_) => panic!("offline callee should not be reported busy"),
+    };
+    assert_eq!(offline.call.state, CallState::Ended);
+    assert_eq!(offline.call.end_reason, Some(CallEndReason::Offline));
+    let message = offline
+        .call_event_message
+        .as_ref()
+        .expect("offline invite attempt should expose created call record message");
+    assert_eq!(message.message_type, "call_event");
+    assert_eq!(message.metadata["outcome"], "offline");
+    assert_eq!(
+        message.metadata["call_id"],
+        offline.call.call_id.to_string()
+    );
 }
 
 #[tokio::test]
@@ -199,6 +244,15 @@ async fn accept_connected_and_hangup_complete_call_with_duration_record() {
         nano_chat::calls::types::CallState::Active
     );
 
+    let active_again =
+        calls_service::connected(&ctx.pool, bob.current_user(), invited.call.call_id)
+            .await
+            .expect("call.connected should be idempotent once active");
+    assert_eq!(
+        active_again.call.state,
+        nano_chat::calls::types::CallState::Active
+    );
+
     let ended = calls_service::hangup(
         &ctx.pool,
         alice.current_user(),
@@ -210,6 +264,14 @@ async fn accept_connected_and_hangup_complete_call_with_duration_record() {
     assert_eq!(
         ended.call.end_reason,
         Some(nano_chat::calls::types::CallEndReason::Completed)
+    );
+    assert_eq!(
+        ended
+            .call_event_message
+            .as_ref()
+            .expect("hangup should expose created call record message")
+            .metadata["outcome"],
+        "completed"
     );
 
     let history = ctx.messages(&alice, direct.conversation_id, "").await;
@@ -247,12 +309,24 @@ async fn reject_cancel_and_duplicate_end_create_one_record() {
     .await
     .unwrap();
 
-    calls_service::reject(&ctx.pool, bob.current_user(), invited.call.call_id)
+    let rejected = calls_service::reject(&ctx.pool, bob.current_user(), invited.call.call_id)
         .await
         .unwrap();
-    calls_service::reject(&ctx.pool, bob.current_user(), invited.call.call_id)
+    assert_eq!(
+        rejected
+            .call_event_message
+            .as_ref()
+            .expect("first reject should expose created call record message")
+            .metadata["outcome"],
+        "rejected"
+    );
+    let duplicate = calls_service::reject(&ctx.pool, bob.current_user(), invited.call.call_id)
         .await
         .unwrap();
+    assert!(
+        duplicate.call_event_message.is_none(),
+        "duplicate terminal command must not expose a duplicate call record message"
+    );
 
     let record_count: i64 = sqlx::query_scalar(
         "select count(*) from messages where conversation_id = $1 and message_type = 'call_event'",
@@ -434,6 +508,14 @@ async fn ringing_timeout_ends_call_and_writes_one_timeout_record() {
         ended[0].call.end_reason,
         Some(nano_chat::calls::types::CallEndReason::Timeout)
     );
+    assert_eq!(
+        ended[0]
+            .call_event_message
+            .as_ref()
+            .expect("timeout cleanup should expose created call record message")
+            .metadata["outcome"],
+        "timeout"
+    );
 
     let count: i64 = sqlx::query_scalar(
         "select count(*) from messages where conversation_id = $1 and message_type = 'call_event'",
@@ -540,6 +622,14 @@ async fn interrupted_cleanup_ends_still_missing_selected_client_after_grace() {
     .unwrap();
     assert_eq!(ended.len(), 1);
     assert_eq!(ended[0].call.end_reason, Some(CallEndReason::NetworkError));
+    assert_eq!(
+        ended[0]
+            .call_event_message
+            .as_ref()
+            .expect("interruption cleanup should expose created call record message")
+            .metadata["outcome"],
+        "network_error"
+    );
 
     let (state, end_reason): (String, Option<String>) = sqlx::query_as(
         "select state, end_reason

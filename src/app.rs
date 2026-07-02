@@ -178,7 +178,29 @@ async fn publish_call_cleanup_results(
 }
 
 async fn publish_call_ended(state: &AppState, result: calls::types::CallCommandResult) {
-    let event = RealtimeEvent::CallEnded { call: result.call };
+    publish_realtime_event(
+        state,
+        RealtimeEvent::CallEnded {
+            call: result.call.clone(),
+        },
+        "call cleanup event",
+    )
+    .await;
+
+    if let Some(message) = result.call_event_message {
+        publish_realtime_event(
+            state,
+            RealtimeEvent::MessageCreated {
+                conversation_id: message.conversation_id,
+                message,
+            },
+            "call cleanup message.created event",
+        )
+        .await;
+    }
+}
+
+async fn publish_realtime_event(state: &AppState, event: RealtimeEvent, context: &'static str) {
     let event_type = event.event_type();
     let payload = RealtimeNotifyPayload {
         origin_instance_id: state.instance_id.clone(),
@@ -187,11 +209,11 @@ async fn publish_call_ended(state: &AppState, result: calls::types::CallCommandR
     };
 
     if let Err(error) = fanout_notify_payload(&state.pool, &state.registry, &payload).await {
-        tracing::warn!(%error, event_type, "failed to fan out call cleanup event locally");
+        tracing::warn!(%error, event_type, context, "failed to fan out realtime event locally");
     }
 
     if let Err(error) = state.notify_publisher.publish(&payload).await {
-        tracing::warn!(%error, event_type, "failed to publish call cleanup notify event");
+        tracing::warn!(%error, event_type, context, "failed to publish realtime notify event");
     }
 }
 

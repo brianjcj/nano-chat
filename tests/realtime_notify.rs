@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use nano_chat::{
     app::AppState,
+    calls::types::{CallEndReason, CallMediaType, CallState, CallSummary},
     config::Config,
     db,
     ids::UserId,
@@ -167,6 +168,44 @@ async fn dissolved_notify_fanout_targets_final_leaver_other_connections_only() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
+async fn call_notify_fanout_targets_recipients_by_event_type() {
+    let ctx = RealtimeTestContext::new().await;
+    let call = test_call_summary();
+    let caller_id = call.caller.user_id;
+    let callee_id = call.callee.user_id;
+
+    assert_call_event_targets(
+        &ctx.pool,
+        RealtimeEvent::CallIncoming { call: call.clone() },
+        &[callee_id],
+    )
+    .await;
+    assert_call_event_targets(
+        &ctx.pool,
+        RealtimeEvent::CallRinging { call: call.clone() },
+        &[caller_id],
+    )
+    .await;
+    assert_call_event_targets(
+        &ctx.pool,
+        RealtimeEvent::CallBusy { call: call.clone() },
+        &[caller_id],
+    )
+    .await;
+
+    for event in [
+        RealtimeEvent::CallAccepted { call: call.clone() },
+        RealtimeEvent::CallConnected { call: call.clone() },
+        RealtimeEvent::CallRejected { call: call.clone() },
+        RealtimeEvent::CallCanceled { call: call.clone() },
+        RealtimeEvent::CallEnded { call: call.clone() },
+    ] {
+        assert_call_event_targets(&ctx.pool, event, &[caller_id, callee_id]).await;
+    }
+}
+
+#[tokio::test]
 async fn notify_listener_start_keeps_supervisor_alive_when_initial_listen_connect_fails() {
     let database_url = "postgres://nano:nano@127.0.0.1:1/nano_chat_test";
     let pool = PgPoolOptions::new()
@@ -269,6 +308,79 @@ async fn assert_message_created_for(
     );
 }
 
+async fn assert_call_event_targets(
+    pool: &PgPool,
+    event: RealtimeEvent,
+    expected_user_ids: &[UserId],
+) {
+    let call = match &event {
+        RealtimeEvent::CallIncoming { call }
+        | RealtimeEvent::CallRinging { call }
+        | RealtimeEvent::CallAccepted { call }
+        | RealtimeEvent::CallConnected { call }
+        | RealtimeEvent::CallRejected { call }
+        | RealtimeEvent::CallCanceled { call }
+        | RealtimeEvent::CallEnded { call }
+        | RealtimeEvent::CallBusy { call } => call.clone(),
+        _ => panic!("expected a call event"),
+    };
+    let event_type = event.event_type().to_string();
+    let registry = ConnectionRegistry::new(10);
+    let (caller_tx, mut caller_rx) = mpsc::channel(10);
+    let (callee_tx, mut callee_rx) = mpsc::channel(10);
+    let (other_tx, mut other_rx) = mpsc::channel(10);
+
+    registry
+        .register(call.caller.user_id, call.caller_client_id, caller_tx)
+        .unwrap();
+    registry
+        .register(
+            call.callee.user_id,
+            call.accepted_client_id.unwrap_or_else(Uuid::now_v7),
+            callee_tx,
+        )
+        .unwrap();
+    registry
+        .register(UserId::new(3).unwrap(), Uuid::now_v7(), other_tx)
+        .unwrap();
+
+    let delivered = fanout_notify_payload(
+        pool,
+        &registry,
+        &RealtimeNotifyPayload {
+            origin_instance_id: "instance-a".to_string(),
+            origin_connection_id: None,
+            event,
+        },
+    )
+    .await
+    .expect("call fanout should route recipients");
+
+    assert_eq!(delivered, expected_user_ids.len());
+    if expected_user_ids.contains(&call.caller.user_id) {
+        assert_envelope_type_for(&mut caller_rx, &event_type).await;
+    } else {
+        assert!(caller_rx.try_recv().is_err());
+    }
+    if expected_user_ids.contains(&call.callee.user_id) {
+        assert_envelope_type_for(&mut callee_rx, &event_type).await;
+    } else {
+        assert!(callee_rx.try_recv().is_err());
+    }
+    assert!(other_rx.try_recv().is_err());
+}
+
+async fn assert_envelope_type_for(
+    receiver: &mut mpsc::Receiver<nano_chat::ws::protocol::ServerEnvelope>,
+    expected_type: &str,
+) {
+    let envelope = tokio::time::timeout(Duration::from_secs(2), receiver.recv())
+        .await
+        .expect("recipient should receive event before timeout")
+        .expect("recipient channel should be open");
+    assert_eq!(envelope.message_type, expected_type);
+}
+
 async fn assert_conversation_dissolved_for(
     receiver: &mut mpsc::Receiver<nano_chat::ws::protocol::ServerEnvelope>,
     conversation_id: Uuid,
@@ -285,6 +397,41 @@ async fn assert_conversation_dissolved_for(
         Value::String(conversation_id.to_string())
     );
     assert_eq!(payload["user_id"], Value::String(user_id.to_string()));
+}
+
+fn test_call_summary() -> CallSummary {
+    CallSummary {
+        call_id: Uuid::now_v7(),
+        conversation_id: Uuid::now_v7(),
+        caller: UserSummary {
+            user_id: UserId::new(1).unwrap(),
+            username: "alice".to_string(),
+            display_name: Some("Alice".to_string()),
+        },
+        callee: UserSummary {
+            user_id: UserId::new(2).unwrap(),
+            username: "bob".to_string(),
+            display_name: Some("Bob".to_string()),
+        },
+        caller_client_id: Uuid::now_v7(),
+        accepted_client_id: Some(Uuid::now_v7()),
+        media_type: CallMediaType::Video,
+        state: CallState::Ended,
+        started_at: chrono::DateTime::parse_from_rfc3339("2026-06-13T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc),
+        accepted_at: Some(
+            chrono::DateTime::parse_from_rfc3339("2026-06-13T00:00:05Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        ),
+        ended_at: Some(
+            chrono::DateTime::parse_from_rfc3339("2026-06-13T00:00:15Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        ),
+        end_reason: Some(CallEndReason::Completed),
+    }
 }
 
 fn test_message() -> MessageDto {

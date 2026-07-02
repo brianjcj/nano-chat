@@ -25,7 +25,7 @@ import type { ConversationSummary, UserSummary } from "@/shared/api/types";
 import { createAppI18n } from "@/shared/i18n/i18n";
 import { RealtimeClientProvider } from "@/shared/realtime/RealtimeClientContext";
 import type { CallSummary, RealtimeIncoming } from "@/shared/realtime/protocol";
-import type { RealtimeClient } from "@/shared/realtime/realtimeClient";
+import { RealtimeCommandError, type RealtimeClient } from "@/shared/realtime/realtimeClient";
 
 const localUser: UserSummary = {
   user_id: "1001",
@@ -88,6 +88,7 @@ describe("CallProvider", () => {
     await renderWithProviders(
       <CallProvider engine={engine}>
         <StartCallProbe conversation={directConversation} mediaType="video" />
+        <CallOverlay />
       </CallProvider>,
       { realtimeClient },
     );
@@ -98,6 +99,55 @@ describe("CallProvider", () => {
       expectMediaPrepared(engine, "video");
     });
     expect(realtimeClient.sendCommand).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole("alert", {
+        name: "Microphone or camera access was denied.",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ["call_busy", "The other person is already in a call."],
+    ["callee_offline", "The other person is offline."],
+  ])("shows %s invite errors in the call UI", async (code, message) => {
+    const realtimeClient = createFakeRealtimeClient();
+    realtimeClient.sendCommand.mockRejectedValueOnce(
+      new RealtimeCommandError(code, message),
+    );
+    const engine = createFakeCallEngine();
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <StartCallProbe conversation={directConversation} mediaType="audio" />
+        <CallOverlay />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "start" }));
+
+    expect(await screen.findByRole("alert", { name: message })).toBeInTheDocument();
+    expect(engine.close).toHaveBeenCalled();
+  });
+
+  it("shows a network invite error in the call UI", async () => {
+    const realtimeClient = createFakeRealtimeClient({ rejectCommands: ["call.invite"] });
+    const engine = createFakeCallEngine();
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <StartCallProbe conversation={directConversation} mediaType="audio" />
+        <CallOverlay />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "start" }));
+
+    expect(
+      await screen.findByRole("alert", {
+        name: "The call was interrupted by a network problem.",
+      }),
+    ).toBeInTheDocument();
+    expect(engine.close).toHaveBeenCalled();
   });
 
   it("closes partially prepared media when local media preparation fails before invite", async () => {
@@ -385,7 +435,7 @@ describe("CallProvider", () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByTestId("call-phase")).toHaveTextContent("idle");
+    expect(screen.getByTestId("call-phase")).toHaveTextContent("error");
     expect(outgoingTrack.stop).toHaveBeenCalled();
     expect(peer.close).toHaveBeenCalled();
   });
@@ -1004,7 +1054,39 @@ describe("CallProvider", () => {
     );
   });
 
-  it("cleans up and ends when sending the caller offer signal fails", async () => {
+  it("hangs up with network_error when creating the caller offer fails", async () => {
+    const realtimeClient = createFakeRealtimeClient();
+    const engine = createFakeCallEngine();
+    engine.createOffer.mockRejectedValueOnce(new Error("offer setup failed"));
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <CallActionProbe conversation={directConversation} />
+        <CallStateProbe />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "start" }));
+    await screen.findByText("outgoing");
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.accepted",
+        payload: { call: createCallSummary({ state: "connecting" }) },
+      });
+    });
+
+    await waitFor(() => {
+      expect(engine.close).toHaveBeenCalled();
+      expect(screen.getByTestId("call-phase")).toHaveTextContent("ended");
+      expect(realtimeClient.sendCommand).toHaveBeenCalledWith("call.hangup", {
+        call_id: "call-1",
+        reason: "network_error",
+      });
+    });
+  });
+
+  it("cleans up, ends, and hangs up when sending the caller offer signal fails", async () => {
     const realtimeClient = createFakeRealtimeClient({ rejectCommands: ["call.signal"] });
     const engine = createFakeCallEngine();
     await renderWithProviders(
@@ -1028,10 +1110,58 @@ describe("CallProvider", () => {
     await waitFor(() => {
       expect(engine.close).toHaveBeenCalled();
       expect(screen.getByTestId("call-phase")).toHaveTextContent("ended");
+      expect(realtimeClient.sendCommand).toHaveBeenCalledWith("call.hangup", {
+        call_id: "call-1",
+        reason: "network_error",
+      });
     });
   });
 
-  it("cleans up and ends when sending the callee answer signal fails", async () => {
+  it("hangs up with network_error when accepting an offer fails", async () => {
+    const realtimeClient = createFakeRealtimeClient();
+    const engine = createFakeCallEngine();
+    engine.acceptOffer.mockRejectedValueOnce(new Error("answer setup failed"));
+    const incomingCall = createIncomingCallSummary();
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <CallActionProbe conversation={directConversation} />
+        <CallStateProbe />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.incoming",
+        payload: { call: incomingCall },
+      });
+    });
+    await screen.findByText("incoming");
+    await userEvent.click(screen.getByRole("button", { name: "accept" }));
+    await screen.findByText("connecting");
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.signal",
+        payload: {
+          call_id: incomingCall.call_id,
+          signal_type: "offer",
+          data: { type: "offer", sdp: "v=0" },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(engine.close).toHaveBeenCalled();
+      expect(screen.getByTestId("call-phase")).toHaveTextContent("ended");
+      expect(realtimeClient.sendCommand).toHaveBeenCalledWith("call.hangup", {
+        call_id: incomingCall.call_id,
+        reason: "network_error",
+      });
+    });
+  });
+
+  it("cleans up, ends, and hangs up when sending the callee answer signal fails", async () => {
     const realtimeClient = createFakeRealtimeClient({ rejectCommands: ["call.signal"] });
     const engine = createFakeCallEngine();
     const incomingCall = createIncomingCallSummary();
@@ -1067,6 +1197,10 @@ describe("CallProvider", () => {
     await waitFor(() => {
       expect(engine.close).toHaveBeenCalled();
       expect(screen.getByTestId("call-phase")).toHaveTextContent("ended");
+      expect(realtimeClient.sendCommand).toHaveBeenCalledWith("call.hangup", {
+        call_id: incomingCall.call_id,
+        reason: "network_error",
+      });
     });
   });
 

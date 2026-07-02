@@ -64,10 +64,12 @@ services:
       TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-change-me-turn-shared-secret-at-least-32-bytes}
       TURN_REALM: ${TURN_REALM:-turn.example.com}
       TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP:-}
+      TURN_RELAY_MIN_PORT: ${TURN_RELAY_MIN_PORT:-49160}
+      TURN_RELAY_MAX_PORT: ${TURN_RELAY_MAX_PORT:-49200}
     ports:
       - "3478:3478/udp"
       - "3478:3478/tcp"
-      - "49160-49200:49160-49200/udp"
+      - "${TURN_RELAY_MIN_PORT:-49160}-${TURN_RELAY_MAX_PORT:-49200}:${TURN_RELAY_MIN_PORT:-49160}-${TURN_RELAY_MAX_PORT:-49200}/udp"
     volumes:
       - ./coturn/turnserver.conf.template:/etc/coturn/turnserver.conf.template:ro
       - ./coturn/entrypoint.sh:/usr/local/bin/nano-chat-coturn-entrypoint.sh:ro

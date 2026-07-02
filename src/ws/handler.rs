@@ -21,7 +21,7 @@ use crate::{
     auth::{service as auth_service, types::CurrentUser},
     calls::{
         service as calls_service,
-        types::{CallEndReason, CallInviteOutcome},
+        types::{CallCommandResult, CallEndReason, CallInviteOutcome},
     },
     conversations::service as conversations_service,
     error::{AppError, AppResult, ErrorCode},
@@ -503,6 +503,21 @@ async fn handle_call_invite(
                 [result.call.caller.user_id],
             )
             .await;
+            publish_call_event_message_created(state, &result).await;
+            keep_processing
+        }
+        Ok(CallInviteOutcome::Offline(result)) => {
+            let keep_processing = send_app_error(
+                outbound_tx,
+                id,
+                AppError::new(
+                    StatusCode::CONFLICT,
+                    ErrorCode::CalleeOffline,
+                    "Callee is offline",
+                ),
+            )
+            .await;
+            publish_call_event_message_created(state, &result).await;
             keep_processing
         }
         Err(error) => send_app_error(outbound_tx, id, error).await,
@@ -596,7 +611,9 @@ async fn handle_call_reject(
                 },
             )
             .await;
-            send_ok(outbound_tx, id, "call.reject.ok", json!(result)).await
+            let keep_processing = send_ok(outbound_tx, id, "call.reject.ok", json!(result)).await;
+            publish_call_event_message_created(state, &result).await;
+            keep_processing
         }
         Err(error) => send_app_error(outbound_tx, id, error).await,
     }
@@ -627,7 +644,9 @@ async fn handle_call_cancel(
                 },
             )
             .await;
-            send_ok(outbound_tx, id, "call.cancel.ok", json!(result)).await
+            let keep_processing = send_ok(outbound_tx, id, "call.cancel.ok", json!(result)).await;
+            publish_call_event_message_created(state, &result).await;
+            keep_processing
         }
         Err(error) => send_app_error(outbound_tx, id, error).await,
     }
@@ -659,7 +678,9 @@ async fn handle_call_hangup(
                 },
             )
             .await;
-            send_ok(outbound_tx, id, "call.hangup.ok", json!(result)).await
+            let keep_processing = send_ok(outbound_tx, id, "call.hangup.ok", json!(result)).await;
+            publish_call_event_message_created(state, &result).await;
+            keep_processing
         }
         Err(error) => send_app_error(outbound_tx, id, error).await,
     }
@@ -746,6 +767,22 @@ async fn publish_realtime_event(
     if let Err(error) = state.notify_publisher.publish(&payload).await {
         tracing::warn!(%error, event_type, "failed to publish websocket realtime notify event");
     }
+}
+
+async fn publish_call_event_message_created(state: &AppState, result: &CallCommandResult) {
+    let Some(message) = &result.call_event_message else {
+        return;
+    };
+
+    publish_realtime_event(
+        state,
+        None,
+        RealtimeEvent::MessageCreated {
+            conversation_id: message.conversation_id,
+            message: message.clone(),
+        },
+    )
+    .await;
 }
 
 async fn publish_realtime_event_to_local_users(

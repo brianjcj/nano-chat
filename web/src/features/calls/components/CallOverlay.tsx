@@ -17,6 +17,20 @@ export function CallOverlay() {
     return null;
   }
 
+  if (state.phase === "error") {
+    const message = t(`calls.errors.${state.error}`);
+
+    return (
+      <aside
+        aria-label={message}
+        className="fixed bottom-6 right-6 z-40 max-w-sm rounded-[var(--radius)] border border-red-200 bg-white px-5 py-4 text-sm font-semibold text-red-700 shadow-[0_18px_60px_rgba(33,25,27,0.18)]"
+        role="alert"
+      >
+        {message}
+      </aside>
+    );
+  }
+
   const summary = state.call;
   const peerUser =
     summary.caller.user_id === session?.user.user_id ? summary.callee : summary.caller;
@@ -132,7 +146,7 @@ function displayUserName(user: UserSummary) {
 }
 
 function getStatusLabel(
-  state: Exclude<CallUiState, { phase: "idle" | "incoming" }>,
+  state: Exclude<CallUiState, { phase: "idle" | "incoming" | "error" }>,
   t: (key: string, options?: Record<string, unknown>) => string,
 ) {
   switch (state.phase) {

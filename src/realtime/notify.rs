@@ -231,14 +231,22 @@ pub async fn fanout_notify_payload(
         RealtimeEvent::ConversationDissolved { user_id, .. } => {
             registry.send_to_users(std::iter::once(*user_id), envelope, skip_connection_id)
         }
-        RealtimeEvent::CallIncoming { call }
-        | RealtimeEvent::CallRinging { call }
-        | RealtimeEvent::CallAccepted { call }
+        RealtimeEvent::CallIncoming { call } => registry.send_to_users(
+            std::iter::once(call.callee.user_id),
+            envelope,
+            skip_connection_id,
+        ),
+        RealtimeEvent::CallRinging { call } | RealtimeEvent::CallBusy { call } => registry
+            .send_to_users(
+                std::iter::once(call.caller.user_id),
+                envelope,
+                skip_connection_id,
+            ),
+        RealtimeEvent::CallAccepted { call }
         | RealtimeEvent::CallConnected { call }
         | RealtimeEvent::CallRejected { call }
         | RealtimeEvent::CallCanceled { call }
-        | RealtimeEvent::CallEnded { call }
-        | RealtimeEvent::CallBusy { call } => registry.send_to_users(
+        | RealtimeEvent::CallEnded { call } => registry.send_to_users(
             [call.caller.user_id, call.callee.user_id],
             envelope,
             skip_connection_id,

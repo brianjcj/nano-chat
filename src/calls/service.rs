@@ -8,7 +8,7 @@ use crate::{
     auth::types::CurrentUser,
     error::{AppError, AppResult, ErrorCode},
     ids::{UserId, new_uuid_v7},
-    messages::service as messages_service,
+    messages::{service as messages_service, types::MessageDto},
     realtime::connection_registry::ConnectionRegistry,
     time::now_utc,
     users::types::UserSummary,
@@ -113,6 +113,7 @@ pub async fn invite(
     match invite_with_outcome(pool, registry, caller, conversation_id, media_type).await? {
         CallInviteOutcome::Started(result) => Ok(result),
         CallInviteOutcome::Busy(_) => Err(call_busy()),
+        CallInviteOutcome::Offline(_) => Err(callee_offline()),
     }
 }
 
@@ -129,20 +130,24 @@ pub async fn invite_with_outcome(
     let participants = load_direct_participants(&mut tx, conversation_id, caller.user_id).await?;
 
     if !registry.is_user_online(participants.callee.user_id) {
-        insert_ended_call_attempt_in_locked_conversation(
+        let call_id = new_uuid_v7();
+        let call_event_message = insert_ended_call_attempt_in_locked_conversation(
             &mut tx,
             &conversation,
             &caller,
             &participants,
-            new_uuid_v7(),
+            call_id,
             conversation_id,
             media_type,
             CallEndReason::Offline,
             now_utc(),
         )
         .await?;
+        let call = call_summary_by_id(&mut tx, call_id).await?;
         tx.commit().await.map_err(internal_error)?;
-        return Err(callee_offline());
+        return Ok(CallInviteOutcome::Offline(
+            CallCommandResult::with_call_event_message(call, call_event_message),
+        ));
     }
 
     let call_id = new_uuid_v7();
@@ -206,7 +211,9 @@ pub async fn invite_with_outcome(
 
     let call = call_summary_by_id(&mut tx, call_id).await?;
     tx.commit().await.map_err(internal_error)?;
-    Ok(CallInviteOutcome::Started(CallCommandResult { call }))
+    Ok(CallInviteOutcome::Started(
+        CallCommandResult::without_call_event_message(call),
+    ))
 }
 
 pub async fn accept(
@@ -238,7 +245,7 @@ pub async fn accept(
     update_call_participants_state(&mut tx, call_id, CallState::Connecting).await?;
     let call = call_summary_by_id(&mut tx, call_id).await?;
     tx.commit().await.map_err(internal_error)?;
-    Ok(CallCommandResult { call })
+    Ok(CallCommandResult::without_call_event_message(call))
 }
 
 pub async fn connected(
@@ -249,6 +256,12 @@ pub async fn connected(
     let mut tx = pool.begin().await.map_err(internal_error)?;
     let call = lock_call_session(&mut tx, call_id).await?;
     ensure_required_role(&call, participant.user_id, RequiredCallRole::Participant)?;
+    let current_state = call_state(&call)?;
+    if current_state == CallState::Active {
+        let call = call_summary_by_id(&mut tx, call_id).await?;
+        tx.commit().await.map_err(internal_error)?;
+        return Ok(CallCommandResult::without_call_event_message(call));
+    }
     ensure_call_state(&call, &[CallState::Connecting])?;
 
     sqlx::query(
@@ -265,7 +278,7 @@ pub async fn connected(
     update_call_participants_state(&mut tx, call_id, CallState::Active).await?;
     let call = call_summary_by_id(&mut tx, call_id).await?;
     tx.commit().await.map_err(internal_error)?;
-    Ok(CallCommandResult { call })
+    Ok(CallCommandResult::without_call_event_message(call))
 }
 
 pub async fn reject(
@@ -608,7 +621,7 @@ async fn end_call(
     if current_state == CallState::Ended {
         let call = call_summary_by_id(&mut tx, call_id).await?;
         tx.commit().await.map_err(internal_error)?;
-        return Ok(CallCommandResult { call });
+        return Ok(CallCommandResult::without_call_event_message(call));
     }
 
     ensure_required_role(&call, actor.user_id, required_role)?;
@@ -717,7 +730,10 @@ async fn finalize_locked_call(
         .map_err(internal_error)?;
 
     let call = call_summary_by_id(tx, call.call_id).await?;
-    Ok(CallCommandResult { call })
+    Ok(CallCommandResult::with_call_event_message(
+        call,
+        message.message,
+    ))
 }
 
 async fn update_call_participants_state(
@@ -810,7 +826,7 @@ async fn insert_ended_call_attempt(
 ) -> AppResult<CallCommandResult> {
     let mut tx = pool.begin().await.map_err(internal_error)?;
     let conversation = messages_service::lock_conversation(&mut tx, conversation_id).await?;
-    insert_ended_call_attempt_in_locked_conversation(
+    let call_event_message = insert_ended_call_attempt_in_locked_conversation(
         &mut tx,
         &conversation,
         caller,
@@ -824,7 +840,10 @@ async fn insert_ended_call_attempt(
     .await?;
     let call = call_summary_by_id(&mut tx, call_id).await?;
     tx.commit().await.map_err(internal_error)?;
-    Ok(CallCommandResult { call })
+    Ok(CallCommandResult::with_call_event_message(
+        call,
+        call_event_message,
+    ))
 }
 
 async fn insert_ended_call_attempt_in_locked_conversation(
@@ -837,7 +856,7 @@ async fn insert_ended_call_attempt_in_locked_conversation(
     media_type: CallMediaType,
     reason: CallEndReason,
     now: DateTime<Utc>,
-) -> AppResult<()> {
+) -> AppResult<MessageDto> {
     insert_call_session(
         tx,
         call_id,
@@ -880,7 +899,7 @@ async fn insert_ended_call_attempt_in_locked_conversation(
         .await
         .map_err(internal_error)?;
 
-    Ok(())
+    Ok(message.message)
 }
 
 async fn ensure_active_direct_conversation(

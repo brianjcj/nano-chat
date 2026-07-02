@@ -24,8 +24,11 @@ import type {
   RealtimeIncoming,
 } from "@/shared/realtime/protocol";
 
+type CallErrorKey = "permissionDenied" | "busy" | "offline" | "network";
+
 export type CallUiState =
   | { phase: "idle" }
+  | { phase: "error"; error: CallErrorKey }
   | { phase: "outgoing"; call: CallSummary; localStream: MediaStream | null }
   | { phase: "incoming"; call: CallSummary }
   | {
@@ -160,9 +163,10 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
           shouldContinue: () =>
             ownsPendingStartOperation(pendingStartOperationRef, operationToken, stateRef),
         });
-      } catch {
+      } catch (error) {
         if (ownsPendingStartOperation(pendingStartOperationRef, operationToken, stateRef)) {
           closeEngine();
+          setState({ phase: "error", error: callErrorFromMediaError(error) });
         }
         clearPendingStartOperation(pendingStartOperationRef, operationToken);
         return;
@@ -194,9 +198,10 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
         if (isCallCommandResult(result)) {
           setState({ phase: "outgoing", call: result.call, localStream });
         }
-      } catch {
+      } catch (error) {
         if (ownsPendingStartOperation(pendingStartOperationRef, operationToken, stateRef)) {
           closeEngine();
+          setState({ phase: "error", error: callErrorFromInviteError(error) });
         }
       } finally {
         clearPendingStartOperation(pendingOutgoingInviteOperationRef, operationToken);
@@ -374,7 +379,7 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
   }, [engine, setState]);
 
   useEffect(() => {
-    if (state.phase !== "ended") {
+    if (state.phase !== "ended" && state.phase !== "error") {
       return undefined;
     }
 
@@ -438,10 +443,12 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
           });
           break;
         case "failed":
-          void realtimeClient.sendCommand<"call.hangup", unknown>("call.hangup", {
-            call_id: currentCall.call_id,
-            reason: "network_error",
-          });
+          void realtimeClient
+            .sendCommand<"call.hangup", unknown>("call.hangup", {
+              call_id: currentCall.call_id,
+              reason: "network_error",
+            })
+            .catch(() => undefined);
           closeEngine();
           setState({
             phase: "ended",
@@ -706,6 +713,7 @@ async function handleAcceptedEvent({
       endCurrentCallWithSignalError({
         callId: call.call_id,
         closeEngine,
+        realtimeClient,
         setState,
         stateRef,
       });
@@ -730,6 +738,7 @@ async function handleAcceptedEvent({
       endCurrentCallWithSignalError({
         callId: call.call_id,
         closeEngine,
+        realtimeClient,
         setState,
         stateRef,
       });
@@ -800,6 +809,7 @@ async function handleSignalEvent({
       endCurrentCallWithSignalError({
         callId: payload.call_id,
         closeEngine,
+        realtimeClient,
         setState,
         stateRef,
       });
@@ -833,6 +843,7 @@ async function handleSignalEvent({
       endCurrentCallWithSignalError({
         callId: payload.call_id,
         closeEngine,
+        realtimeClient,
         setState,
         stateRef,
       });
@@ -847,6 +858,7 @@ async function handleSignalEvent({
       endCurrentCallWithSignalError({
         callId: payload.call_id,
         closeEngine,
+        realtimeClient,
         setState,
         stateRef,
       });
@@ -958,7 +970,7 @@ function sendIceCandidate({
 }
 
 function getStateCall(state: CallUiState): CallSummary | null {
-  return state.phase === "idle" ? null : state.call;
+  return state.phase === "idle" || state.phase === "error" ? null : state.call;
 }
 
 function isSameCurrentCall(state: CallUiState, call: CallSummary): boolean {
@@ -1055,11 +1067,13 @@ function isCurrentPendingAcceptState(
 function endCurrentCallWithSignalError({
   callId,
   closeEngine,
+  realtimeClient,
   setState,
   stateRef,
 }: {
   callId: string;
   closeEngine: () => void;
+  realtimeClient: ReturnType<typeof useRealtimeClient>;
   setState: (next: CallUiState | ((current: CallUiState) => CallUiState)) => void;
   stateRef: MutableRefObject<CallUiState>;
 }) {
@@ -1069,6 +1083,12 @@ function endCurrentCallWithSignalError({
     return;
   }
 
+  void realtimeClient
+    .sendCommand<"call.hangup", unknown>("call.hangup", {
+      call_id: currentCall.call_id,
+      reason: "network_error",
+    })
+    .catch(() => undefined);
   closeEngine();
   setState({
     phase: "ended",
@@ -1100,6 +1120,28 @@ function reasonFromEventType(type: string) {
     default:
       return "completed";
   }
+}
+
+function callErrorFromMediaError(error: unknown): CallErrorKey {
+  const name = isRecord(error) && typeof error.name === "string" ? error.name : "";
+
+  return name === "NotAllowedError" || name === "PermissionDeniedError"
+    ? "permissionDenied"
+    : "network";
+}
+
+function callErrorFromInviteError(error: unknown): CallErrorKey {
+  const code = isRecord(error) && typeof error.code === "string" ? error.code : "";
+
+  if (code === "call_busy") {
+    return "busy";
+  }
+
+  if (code === "callee_offline") {
+    return "offline";
+  }
+
+  return "network";
 }
 
 function isCallCommandResult(value: unknown): value is CallCommandResult {

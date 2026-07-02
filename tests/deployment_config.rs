@@ -43,7 +43,7 @@ fn compose_declares_caddy_and_coturn_services() {
     assert!(compose.contains("443:443"));
     assert!(compose.contains("3478:3478/udp"));
     assert!(compose.contains("3478:3478/tcp"));
-    assert!(compose.contains("49160-49200:49160-49200/udp"));
+    assert!(compose.contains("${TURN_RELAY_MIN_PORT:-49160}-${TURN_RELAY_MAX_PORT:-49200}:${TURN_RELAY_MIN_PORT:-49160}-${TURN_RELAY_MAX_PORT:-49200}/udp"));
 }
 
 #[test]
@@ -80,8 +80,8 @@ fn coturn_renders_active_config_from_template() {
     assert!(template.contains("static-auth-secret=__TURN_SHARED_SECRET__"));
     assert!(template.contains("realm=__TURN_REALM__"));
     assert!(template.contains("server-name=__TURN_REALM__"));
-    assert!(template.contains("min-port=49160"));
-    assert!(template.contains("max-port=49200"));
+    assert!(template.contains("min-port=__TURN_RELAY_MIN_PORT__"));
+    assert!(template.contains("max-port=__TURN_RELAY_MAX_PORT__"));
     assert!(
         !template.contains("${TURN_SHARED_SECRET}") && !template.contains("${TURN_REALM}"),
         "template placeholders must not look like shell variables that coturn could receive literally"
@@ -106,6 +106,30 @@ fn turn_external_ip_is_configured_documented_and_rendered_when_set() {
     assert!(entrypoint.contains("TURN_EXTERNAL_IP"));
     assert!(entrypoint.contains("external-ip="));
     assert!(template.contains("__TURN_EXTERNAL_IP_CONFIG__"));
+}
+
+#[test]
+fn turn_relay_port_range_env_is_configured_documented_and_rendered() {
+    let compose = read_required("docker-compose.yml");
+    let env = read_required(".env.example");
+    let docs = read_required("docs/deployment-webrtc.md");
+    let api = read_required("docs/api.md");
+    let entrypoint = read_required("coturn/entrypoint.sh");
+    let template = read_required("coturn/turnserver.conf.template");
+
+    assert!(compose.contains("TURN_RELAY_MIN_PORT: ${TURN_RELAY_MIN_PORT:-49160}"));
+    assert!(compose.contains("TURN_RELAY_MAX_PORT: ${TURN_RELAY_MAX_PORT:-49200}"));
+    assert!(compose.contains("${TURN_RELAY_MIN_PORT:-49160}-${TURN_RELAY_MAX_PORT:-49200}:${TURN_RELAY_MIN_PORT:-49160}-${TURN_RELAY_MAX_PORT:-49200}/udp"));
+    assert!(env.contains("TURN_RELAY_MIN_PORT=49160"));
+    assert!(env.contains("TURN_RELAY_MAX_PORT=49200"));
+    assert!(docs.contains("TURN_RELAY_MIN_PORT"));
+    assert!(docs.contains("TURN_RELAY_MAX_PORT"));
+    assert!(api.contains("TURN_RELAY_MIN_PORT"));
+    assert!(api.contains("TURN_RELAY_MAX_PORT"));
+    assert!(entrypoint.contains("TURN_RELAY_MIN_PORT"));
+    assert!(entrypoint.contains("TURN_RELAY_MAX_PORT"));
+    assert!(template.contains("min-port=__TURN_RELAY_MIN_PORT__"));
+    assert!(template.contains("max-port=__TURN_RELAY_MAX_PORT__"));
 }
 
 #[test]

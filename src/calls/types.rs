@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{ids::UserId, users::types::UserSummary};
+use crate::{ids::UserId, messages::types::MessageDto, users::types::UserSummary};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -85,12 +85,31 @@ pub struct CallSummary {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CallCommandResult {
     pub call: CallSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub call_event_message: Option<MessageDto>,
+}
+
+impl CallCommandResult {
+    pub(crate) fn without_call_event_message(call: CallSummary) -> Self {
+        Self {
+            call,
+            call_event_message: None,
+        }
+    }
+
+    pub(crate) fn with_call_event_message(call: CallSummary, message: MessageDto) -> Self {
+        Self {
+            call,
+            call_event_message: Some(message),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CallInviteOutcome {
     Started(CallCommandResult),
     Busy(CallCommandResult),
+    Offline(CallCommandResult),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

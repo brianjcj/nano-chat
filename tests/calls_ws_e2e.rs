@@ -61,6 +61,59 @@ async fn call_invite_emits_ringing_and_accept_reaches_caller_and_losing_callee()
 
 #[tokio::test]
 #[serial_test::serial]
+async fn call_reject_publishes_call_record_message_created_to_online_peer() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+    let (addr, server) = spawn_ws_server(ctx.app.clone()).await;
+
+    let mut alice_ws = connect_user(&addr, &alice).await;
+    let mut bob_ws = connect_user(&addr, &bob).await;
+
+    alice_ws
+        .send_json(json!({
+            "id":"invite-1",
+            "type":"call.invite",
+            "payload":{"conversation_id": direct.conversation_id, "media_type":"audio"}
+        }))
+        .await;
+
+    let alice_ack = assert_next_type(&mut alice_ws, "call.invite.ok").await;
+    let call_id = alice_ack["payload"]["call"]["call_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_next_type(&mut alice_ws, "call.ringing").await;
+    assert_next_type(&mut bob_ws, "call.incoming").await;
+
+    bob_ws
+        .send_json(json!({"id":"reject-1", "type":"call.reject", "payload":{"call_id": call_id}}))
+        .await;
+    assert_next_type(&mut bob_ws, "call.reject.ok").await;
+    assert_next_type(&mut alice_ws, "call.rejected").await;
+    let message = assert_next_type(&mut alice_ws, "message.created").await;
+    assert_eq!(
+        message["payload"]["conversation_id"],
+        json!(direct.conversation_id)
+    );
+    assert_eq!(message["payload"]["message"]["message_type"], "call_event");
+    assert_eq!(
+        message["payload"]["message"]["metadata"]["outcome"],
+        "rejected"
+    );
+    assert_eq!(
+        message["payload"]["message"]["metadata"]["call_id"],
+        json!(call_id)
+    );
+
+    server.abort();
+}
+
+#[tokio::test]
+#[serial_test::serial]
 async fn call_signal_is_limited_to_origin_caller_and_accepted_callee_client() {
     let ctx = common::TestContext::new().await;
     let alice = ctx.register("alice").await;
@@ -189,6 +242,47 @@ async fn call_busy_is_emitted_for_callee_busy_invite_attempt() {
     );
     assert_eq!(busy["payload"]["call"]["state"], "ended");
     assert_eq!(busy["payload"]["call"]["end_reason"], "busy");
+    let message = assert_next_type(&mut carol_ws, "message.created").await;
+    assert_eq!(message["payload"]["message"]["message_type"], "call_event");
+    assert_eq!(message["payload"]["message"]["metadata"]["outcome"], "busy");
+
+    server.abort();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn call_invite_offline_publishes_call_record_message_created_to_caller() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let _bob = ctx.register("bob").await;
+    let direct = ctx
+        .send_direct_message(&alice, "bob", "seed", "hello")
+        .await;
+    let (addr, server) = spawn_ws_server(ctx.app.clone()).await;
+
+    let mut alice_ws = connect_user(&addr, &alice).await;
+
+    alice_ws
+        .send_json(json!({
+            "id":"offline-invite-1",
+            "type":"call.invite",
+            "payload":{"conversation_id": direct.conversation_id, "media_type":"video"}
+        }))
+        .await;
+
+    let error = assert_next_type(&mut alice_ws, "error").await;
+    assert_eq!(error["id"], "offline-invite-1");
+    assert_eq!(error["error"]["code"], "callee_offline");
+    let message = assert_next_type(&mut alice_ws, "message.created").await;
+    assert_eq!(
+        message["payload"]["conversation_id"],
+        json!(direct.conversation_id)
+    );
+    assert_eq!(message["payload"]["message"]["message_type"], "call_event");
+    assert_eq!(
+        message["payload"]["message"]["metadata"]["outcome"],
+        "offline"
+    );
 
     server.abort();
 }
