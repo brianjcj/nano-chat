@@ -1,0 +1,21 @@
+web/src/features/im/components/ChatView.test.tsx
+  s_7d4bbc984c91b1::t_827e59ba0a6a6a 249-280
+  s_7d4bbc984c91b1::t_8f4cda2b9d5e58 281-282
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "06390e04b62371b9f199f4bf661894c0d6c35a33",
+  "prompts": {},
+  "logical_commit_id": "06390e04b62371b9f199f4bf661894c0d6c35a33",
+  "sessions": {
+    "s_7d4bbc984c91b1": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f117f-17a5-7e9f-b993-d2bce88b336a",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
