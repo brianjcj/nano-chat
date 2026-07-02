@@ -18,7 +18,7 @@ import {
   useCall,
   type CallEnginePort,
 } from "./CallProvider";
-import type { CallEngineEvent } from "./CallEngine";
+import { CallEngine, type CallEngineEvent } from "./CallEngine";
 import { CallOverlay } from "./components/CallOverlay";
 import type { ApiClient } from "@/shared/api/client";
 import type { ConversationSummary, UserSummary } from "@/shared/api/types";
@@ -72,7 +72,7 @@ describe("CallProvider", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "start" }));
 
-    expect(engine.prepareLocalMedia).toHaveBeenCalledWith("audio");
+    expectMediaPrepared(engine, "audio");
     expect(realtimeClient.sendCommand).toHaveBeenCalledWith("call.invite", {
       conversation_id: directConversation.conversation_id,
       media_type: "audio",
@@ -95,7 +95,7 @@ describe("CallProvider", () => {
     await userEvent.click(screen.getByRole("button", { name: "start" }));
 
     await waitFor(() => {
-      expect(engine.prepareLocalMedia).toHaveBeenCalledWith("video");
+      expectMediaPrepared(engine, "video");
     });
     expect(realtimeClient.sendCommand).not.toHaveBeenCalled();
   });
@@ -134,7 +134,7 @@ describe("CallProvider", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "start" }));
     await waitFor(() => {
-      expect(engine.prepareLocalMedia).toHaveBeenCalledWith("video");
+      expectMediaPrepared(engine, "video");
     });
 
     act(() => {
@@ -224,7 +224,7 @@ describe("CallProvider", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "start" }));
     await waitFor(() => {
-      expect(engine.prepareLocalMedia).toHaveBeenCalledWith("video");
+      expectMediaPrepared(engine, "video");
     });
 
     act(() => {
@@ -253,6 +253,67 @@ describe("CallProvider", () => {
 
     expect(screen.getByTestId("call-phase")).toHaveTextContent("connecting");
     expect(engine.close).toHaveBeenCalledTimes(closeCallsBeforeStaleStartResolved);
+  });
+
+  it("stops stale outgoing media before it can replace an accepted incoming engine stream", async () => {
+    const realtimeClient = createFakeRealtimeClient();
+    const incomingCall = createIncomingCallSummary({ call_id: "incoming-call-2" });
+    const startMediaDeferred = createDeferred<MediaStream>();
+    const staleTrack = createFakeTrack("video");
+    const acceptedTrack = createFakeTrack("video");
+    const staleStream = new MediaStream([staleTrack]);
+    const acceptedStream = new MediaStream([acceptedTrack]);
+    const peer = createFakePeerConnection();
+    const getUserMedia = vi
+      .fn()
+      .mockImplementationOnce(() => startMediaDeferred.promise)
+      .mockResolvedValueOnce(acceptedStream);
+    const engine = new CallEngine({
+      createPeerConnection: () => peer as unknown as RTCPeerConnection,
+      getIceServers: vi.fn().mockResolvedValue([]),
+      getUserMedia,
+    });
+    await renderWithProviders(
+      <CallProvider engine={engine}>
+        <CallActionProbe conversation={directConversation} />
+        <CallStateProbe />
+      </CallProvider>,
+      { realtimeClient },
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "start" }));
+    await waitFor(() => {
+      expect(getUserMedia).toHaveBeenCalledWith({ audio: true, video: true });
+    });
+
+    act(() => {
+      realtimeClient.emit({
+        type: "call.incoming",
+        payload: { call: incomingCall },
+      });
+    });
+    await screen.findByText("incoming");
+
+    await userEvent.click(screen.getByRole("button", { name: "accept" }));
+    await waitFor(() => {
+      expect(realtimeClient.sendCommand).toHaveBeenCalledWith("call.accept", {
+        call_id: incomingCall.call_id,
+      });
+      expect(peer.addTrack).toHaveBeenCalledWith(acceptedTrack, acceptedStream);
+    });
+    const addTrackCallsAfterAccept = peer.addTrack.mock.calls.length;
+
+    await act(async () => {
+      startMediaDeferred.resolve(staleStream);
+      await startMediaDeferred.promise;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("call-phase")).toHaveTextContent("connecting");
+    expect(staleTrack.stop).toHaveBeenCalled();
+    expect(peer.addTrack).toHaveBeenCalledTimes(addTrackCallsAfterAccept);
+    expect(peer.addTrack).not.toHaveBeenCalledWith(staleTrack, staleStream);
   });
 
   it("sends an offer signal when the caller receives call.accepted", async () => {
@@ -447,7 +508,7 @@ describe("CallProvider", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "accept" }));
     await waitFor(() => {
-      expect(engine.prepareLocalMedia).toHaveBeenCalledWith(incomingCall.media_type);
+      expectMediaPrepared(engine, incomingCall.media_type);
     });
 
     act(() => {
@@ -1102,6 +1163,17 @@ async function renderWithProviders(
   );
 }
 
+function expectMediaPrepared(
+  engine: ReturnType<typeof createFakeCallEngine>,
+  mediaType: "audio" | "video",
+) {
+  expect(
+    engine.prepareLocalMedia.mock.calls.some(
+      ([requestedMediaType]) => requestedMediaType === mediaType,
+    ),
+  ).toBe(true);
+}
+
 function createFakeCallEngine() {
   const listeners = new Set<(event: CallEngineEvent) => void>();
 
@@ -1231,6 +1303,30 @@ function createCallSummaryShape(): CallSummary {
     ended_at: null,
     end_reason: null,
   };
+}
+
+function createFakePeerConnection() {
+  return {
+    addTrack: vi.fn(),
+    createOffer: vi.fn().mockResolvedValue({ type: "offer", sdp: "v=0" }),
+    createAnswer: vi.fn().mockResolvedValue({ type: "answer", sdp: "v=0" }),
+    setLocalDescription: vi.fn(),
+    setRemoteDescription: vi.fn(),
+    addIceCandidate: vi.fn(),
+    close: vi.fn(),
+    onicecandidate: null as RTCPeerConnection["onicecandidate"],
+    ontrack: null as RTCPeerConnection["ontrack"],
+    onconnectionstatechange: null as RTCPeerConnection["onconnectionstatechange"],
+    connectionState: "new" as RTCPeerConnectionState,
+  };
+}
+
+function createFakeTrack(kind: "audio" | "video") {
+  return {
+    kind,
+    enabled: true,
+    stop: vi.fn(),
+  } as unknown as MediaStreamTrack;
 }
 
 class TestMediaStream {

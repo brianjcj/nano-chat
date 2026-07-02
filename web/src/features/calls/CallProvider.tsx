@@ -11,7 +11,11 @@ import {
 } from "react";
 
 import { useApiClient, useSession } from "@/app/AppProviders";
-import { CallEngine, type CallEngineEvent } from "./CallEngine";
+import {
+  CallEngine,
+  type CallEngineEvent,
+  type PrepareLocalMediaOptions,
+} from "./CallEngine";
 import type { ConversationSummary, CallEndReason } from "@/shared/api/types";
 import { useRealtimeClient } from "@/shared/realtime/RealtimeClientContext";
 import type {
@@ -41,7 +45,10 @@ export type CallUiState =
   | { phase: "ended"; call: CallSummary; reason: string };
 
 export type CallEnginePort = {
-  prepareLocalMedia(mediaType: "audio" | "video"): Promise<MediaStream>;
+  prepareLocalMedia(
+    mediaType: "audio" | "video",
+    options?: PrepareLocalMediaOptions,
+  ): Promise<MediaStream>;
   createOffer(): Promise<RTCSessionDescriptionInit>;
   acceptOffer(offer: RTCSessionDescriptionInit): Promise<RTCSessionDescriptionInit>;
   acceptAnswer(answer: RTCSessionDescriptionInit): Promise<void>;
@@ -143,7 +150,10 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
       let localStream: MediaStream;
 
       try {
-        localStream = await engine.prepareLocalMedia(mediaType);
+        localStream = await engine.prepareLocalMedia(mediaType, {
+          shouldContinue: () =>
+            ownsPendingStartOperation(pendingStartOperationRef, operationToken, stateRef),
+        });
       } catch {
         if (ownsPendingStartOperation(pendingStartOperationRef, operationToken, stateRef)) {
           closeEngine();
@@ -199,7 +209,14 @@ export function CallProvider({ children, engine: injectedEngine }: CallProviderP
     pendingAcceptOperationRef.current = { callId: call.call_id, token: operationToken };
 
     try {
-      const localStream = await engine.prepareLocalMedia(call.media_type);
+      const localStream = await engine.prepareLocalMedia(call.media_type, {
+        shouldContinue: () =>
+          ownsPendingAcceptOperation(
+            pendingAcceptOperationRef,
+            operationToken,
+            call.call_id,
+          ) && isCurrentIncomingCall(stateRef, call.call_id),
+      });
 
       if (!isCurrentIncomingCall(stateRef, call.call_id)) {
         clearPendingAcceptOperation(pendingAcceptOperationRef, operationToken);

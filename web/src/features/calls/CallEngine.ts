@@ -11,6 +11,10 @@ export type CallEngineEvent =
   | { type: "failed" }
   | { type: "closed" };
 
+export type PrepareLocalMediaOptions = {
+  shouldContinue?: () => boolean;
+};
+
 export class CallEngine {
   private readonly createPeerConnection: (configuration: RTCConfiguration) => RTCPeerConnection;
   private readonly getUserMedia: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
@@ -33,20 +37,50 @@ export class CallEngine {
     this.getIceServers = deps.getIceServers;
   }
 
-  async prepareLocalMedia(mediaType: "audio" | "video"): Promise<MediaStream> {
-    const stream = await this.getUserMedia({
-      audio: true,
-      video: mediaType === "video",
-    });
+  async prepareLocalMedia(
+    mediaType: "audio" | "video",
+    { shouldContinue = () => true }: PrepareLocalMediaOptions = {},
+  ): Promise<MediaStream> {
+    let stream: MediaStream | null = null;
+    let installed = false;
 
-    this.localStream = stream;
-    this.muted = false;
-    this.cameraOff = false;
+    try {
+      stream = await this.getUserMedia({
+        audio: true,
+        video: mediaType === "video",
+      });
 
-    const peerConnection = await this.ensurePeerConnection();
-    this.addLocalTracks(peerConnection);
+      if (!shouldContinue()) {
+        throw new DOMException("Media preparation was canceled.", "AbortError");
+      }
 
-    return stream;
+      const iceServers = this.peerConnection ? null : await this.getIceServers();
+
+      if (!shouldContinue()) {
+        throw new DOMException("Media preparation was canceled.", "AbortError");
+      }
+
+      this.localStream = stream;
+      this.muted = false;
+      this.cameraOff = false;
+
+      const peerConnection =
+        this.peerConnection ?? this.installPeerConnection(iceServers ?? []);
+      this.addLocalTracks(peerConnection);
+      installed = true;
+
+      return stream;
+    } catch (error) {
+      if (stream && !installed) {
+        stopMediaStream(stream);
+
+        if (this.localStream === stream) {
+          this.localStream = null;
+        }
+      }
+
+      throw error;
+    }
   }
 
   async createOffer(): Promise<RTCSessionDescriptionInit> {
@@ -136,6 +170,11 @@ export class CallEngine {
     }
 
     const iceServers = await this.getIceServers();
+
+    return this.installPeerConnection(iceServers);
+  }
+
+  private installPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
     const peerConnection = this.createPeerConnection({ iceServers });
     this.peerConnection = peerConnection;
 
@@ -219,6 +258,12 @@ function getBrowserUserMedia(
   }
 
   return navigator.mediaDevices.getUserMedia(constraints);
+}
+
+function stopMediaStream(stream: MediaStream): void {
+  for (const track of stream.getTracks()) {
+    track.stop();
+  }
 }
 
 function toIceCandidateInit(candidate: RTCIceCandidate | RTCIceCandidateInit) {
