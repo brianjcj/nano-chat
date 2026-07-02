@@ -48,6 +48,10 @@ The Vite dev server proxies backend traffic to `http://127.0.0.1:3000`:
 
 For normal local development, leave both unset and rely on the Vite proxy.
 
+## WebRTC local notes
+
+WebRTC media permission works on localhost during development. For LAN/mobile testing use HTTPS through Caddy or another trusted TLS endpoint. iOS Safari may block ringtone autoplay; the incoming call dialog remains the reliable indicator.
+
 ## Quality commands
 
 Run from `web/`:
