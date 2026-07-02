@@ -1,0 +1,31 @@
+web/src/shared/realtime/realtimeClient.test.ts
+  s_fc3884d6f5eabb::t_f18ad1c723032e 57,145-146,177,209
+  s_fc3884d6f5eabb::t_376d944668868e 55-56
+  s_fc3884d6f5eabb::t_b446c20c12d74f 58
+  s_fc3884d6f5eabb::t_bf0c5ebc76418c 147-149,174-176
+  s_fc3884d6f5eabb::t_d9ab471fe46d22 178-180,206-208
+  s_fc3884d6f5eabb::t_501502cb2d9f4b 210-212
+web/src/features/im/components/ChatView.test.tsx
+  s_fc3884d6f5eabb::t_32e0e8596a8af0 253-286
+web/src/features/im/components/MessageInput.tsx
+  s_fc3884d6f5eabb::t_2560cd269fc525 56,58,62,71-72,75,103
+web/src/shared/realtime/realtimeClient.ts
+  s_fc3884d6f5eabb::t_dd8c10a297b3d6 18-19,34-35,37-38,42-43,45,64-65,67-68,79,81,89-92,97-104,123,198,205,220,241-244,293-324,339-344,349,355-380,386-394,404-421
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "3651b5b61a8dae5e44a8f091cf784abd02cecad6",
+  "prompts": {},
+  "logical_commit_id": "3651b5b61a8dae5e44a8f091cf784abd02cecad6",
+  "sessions": {
+    "s_fc3884d6f5eabb": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f213c-4629-708c-a2ce-0486662426b0",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
