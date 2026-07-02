@@ -250,6 +250,40 @@ describe("ChatView", () => {
     });
   });
 
+  it("keeps the composer focused and ready for the next message while sending", async () => {
+    const sendDeferred = deferred<{ conversation_id: string; message: Message }>();
+    const sendCommand = vi.fn((type: string, payload: unknown) => {
+      if (type === "message.send") {
+        return sendDeferred.promise;
+      }
+
+      return Promise.resolve({
+        conversation_id: "conversation-1",
+        read_seq: (payload as { read_seq?: number }).read_seq ?? 0,
+      });
+    });
+    const { user } = await renderChatView({ sendCommand });
+
+    const composer = await screen.findByRole("textbox", { name: "Message" });
+    await user.click(composer);
+    await user.type(composer, "First message{Enter}");
+
+    await waitFor(() => {
+      expect(sendCommand).toHaveBeenCalledWith(
+        "message.send",
+        expect.objectContaining({ body: "First message" }),
+      );
+    });
+    expect(composer).toHaveValue("");
+    expect(composer).not.toBeDisabled();
+    expect(composer).toHaveFocus();
+
+    sendDeferred.resolve({
+      conversation_id: "conversation-1",
+      message: message(1, "First message"),
+    });
+  });
+
   it("requests latest messages with before_seq one greater than latest_message_seq", async () => {
     const listMessages = vi.fn<ApiClient["listMessages"]>().mockResolvedValue([]);
 
