@@ -329,6 +329,7 @@ describe("ChatView", () => {
 
     await user.keyboard("{Control>}{Enter}{/Control}again");
     expect(composer).toHaveValue("hello\nworld\nagain");
+    expect(sendCommand).not.toHaveBeenCalled();
 
     await user.keyboard("{Enter}");
 
@@ -340,13 +341,28 @@ describe("ChatView", () => {
     });
   });
 
-  it("allows vertical mouse resizing of the composer", async () => {
+  it("resizes the composer panel by dragging the horizontal splitter", async () => {
     await renderChatView();
 
-    const composer = await screen.findByRole("textbox", { name: "Message" });
+    const resizeHandle = await screen.findByRole("separator", {
+      name: "Resize message input",
+    });
+    const composerPanel = resizeHandle.closest("form");
+    const composer = screen.getByRole("textbox", { name: "Message" });
 
-    expect(composer).toHaveClass("resize-y");
-    expect(composer).not.toHaveClass("resize-none");
+    if (!composerPanel) {
+      throw new Error("Resize handle should render inside the message input form");
+    }
+
+    expect(composerPanel).toHaveStyle({ height: "112px" });
+    expect(composer).toHaveClass("resize-none");
+    expect(composer).not.toHaveClass("resize-y");
+
+    fireEvent.pointerDown(resizeHandle, { clientY: 400, pointerId: 1 });
+    fireEvent.pointerMove(resizeHandle, { clientY: 340, pointerId: 1 });
+    fireEvent.pointerUp(resizeHandle, { clientY: 340, pointerId: 1 });
+
+    expect(composerPanel).toHaveStyle({ height: "172px" });
   });
 
   it("keeps the composer focused and ready for the next message while sending", async () => {
