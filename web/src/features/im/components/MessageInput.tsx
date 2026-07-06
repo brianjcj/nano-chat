@@ -32,6 +32,7 @@ type MessageInputProps = {
 const VALIDATION_NOTICE_TIMEOUT_MS = 2000;
 const DEFAULT_MESSAGE_INPUT_HEIGHT_PX = 112;
 const MIN_MESSAGE_INPUT_HEIGHT_PX = 80;
+const MIN_DISABLED_MESSAGE_INPUT_HEIGHT_PX = 128;
 const MAX_MESSAGE_INPUT_HEIGHT_PX = 280;
 
 type ResizeDragState = {
@@ -54,6 +55,10 @@ export function MessageInput({
   const [validationNotice, setValidationNotice] = useState<ValidationNotice | null>(null);
   const [isSending, setIsSending] = useState(false);
   const validationCode = validationNotice?.code ?? null;
+  const minimumPanelHeight = disabled
+    ? MIN_DISABLED_MESSAGE_INPUT_HEIGHT_PX
+    : MIN_MESSAGE_INPUT_HEIGHT_PX;
+  const effectivePanelHeight = Math.max(panelHeight, minimumPanelHeight);
 
   useEffect(() => {
     if (!validationNotice) {
@@ -115,7 +120,7 @@ export function MessageInput({
     event.preventDefault();
     resizeDragRef.current = {
       pointerId: event.pointerId,
-      startHeight: panelHeight,
+      startHeight: effectivePanelHeight,
       startY: event.clientY,
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -129,7 +134,7 @@ export function MessageInput({
     }
 
     const nextHeight = resizeDrag.startHeight + resizeDrag.startY - event.clientY;
-    setPanelHeight(clampMessageInputHeight(nextHeight));
+    setPanelHeight(clampMessageInputHeight(nextHeight, minimumPanelHeight));
   }
 
   function handleResizePointerEnd(event: PointerEvent<HTMLDivElement>) {
@@ -174,14 +179,14 @@ export function MessageInput({
     <form
       className="relative flex shrink-0 flex-col border-t border-[var(--border)] bg-[var(--surface)] px-3 pb-3 pt-4 md:px-5 md:pb-4 md:pt-5"
       onSubmit={submitMessage}
-      style={{ height: `${panelHeight}px` }}
+      style={{ height: `${effectivePanelHeight}px` }}
     >
       <div
         aria-label={t("im.messageInput.resizeHandle")}
         aria-orientation="horizontal"
         aria-valuemax={MAX_MESSAGE_INPUT_HEIGHT_PX}
-        aria-valuemin={MIN_MESSAGE_INPUT_HEIGHT_PX}
-        aria-valuenow={panelHeight}
+        aria-valuemin={minimumPanelHeight}
+        aria-valuenow={effectivePanelHeight}
         className="group absolute left-0 top-0 flex h-3 w-full -translate-y-1/2 cursor-row-resize touch-none items-center justify-center"
         onPointerCancel={handleResizePointerEnd}
         onPointerDown={handleResizePointerDown}
@@ -244,9 +249,9 @@ export function MessageInput({
   );
 }
 
-function clampMessageInputHeight(height: number) {
-  return Math.min(
-    MAX_MESSAGE_INPUT_HEIGHT_PX,
-    Math.max(MIN_MESSAGE_INPUT_HEIGHT_PX, height),
-  );
+function clampMessageInputHeight(
+  height: number,
+  minHeight = MIN_MESSAGE_INPUT_HEIGHT_PX,
+) {
+  return Math.min(MAX_MESSAGE_INPUT_HEIGHT_PX, Math.max(minHeight, height));
 }

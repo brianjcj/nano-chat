@@ -365,6 +365,37 @@ describe("ChatView", () => {
     expect(composerPanel).toHaveStyle({ height: "172px" });
   });
 
+  it("keeps dissolved conversation composer tall enough for the disabled notice", async () => {
+    await renderChatView({
+      conversations: [conversation({ state: "dissolved" })],
+    });
+
+    const resizeHandle = await screen.findByRole("separator", {
+      name: "Resize message input",
+    });
+    const composerPanel = resizeHandle.closest("form");
+    const composer = screen.getByRole("textbox", { name: "Message" });
+
+    if (!composerPanel) {
+      throw new Error("Resize handle should render inside the message input form");
+    }
+
+    expect(
+      screen.getByText("This conversation is unavailable, so sending is disabled."),
+    ).toBeInTheDocument();
+    expect(composer).toBeDisabled();
+    expect(composerPanel).toHaveStyle({ height: "128px" });
+    expect(resizeHandle).toHaveAttribute("aria-valuemin", "128");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "128");
+
+    fireEvent.pointerDown(resizeHandle, { clientY: 400, pointerId: 1 });
+    fireEvent.pointerMove(resizeHandle, { clientY: 500, pointerId: 1 });
+    fireEvent.pointerUp(resizeHandle, { clientY: 500, pointerId: 1 });
+
+    expect(composerPanel).toHaveStyle({ height: "128px" });
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "128");
+  });
+
   it("keeps the composer focused and ready for the next message while sending", async () => {
     const sendDeferred = deferred<{ conversation_id: string; message: Message }>();
     const sendCommand = vi.fn((type: string, payload: unknown) => {
