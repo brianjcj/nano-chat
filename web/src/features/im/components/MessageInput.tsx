@@ -87,19 +87,19 @@ export function MessageInput({
 
   return (
     <form
-      className="border-t border-[var(--border)] bg-white/58 px-4 py-4 backdrop-blur md:px-6"
+      className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-3 py-3 md:px-5 md:py-4"
       onSubmit={submitMessage}
     >
       {disabled && disabledReason ? (
-        <p className="mb-3 rounded-[var(--radius)] border border-[var(--border)] bg-white/70 px-3 py-2 text-sm font-semibold text-[var(--muted-foreground)]">
+        <p className="mb-3 rounded-[calc(var(--radius)*0.65)] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-sm font-semibold text-[var(--muted-foreground)]">
           {disabledReason}
         </p>
       ) : null}
-      <div className="flex items-end gap-3">
+      <div className="flex items-end gap-2 md:gap-3">
         <Textarea
           ref={textareaRef}
           aria-label={t("im.messageInput.label")}
-          className="max-h-44 min-h-12 flex-1 resize-none rounded-[calc(var(--radius)*1.05)] bg-white/86 py-3 pr-4 text-sm leading-6 shadow-[0_12px_32px_var(--shadow-color)]"
+          className="max-h-40 min-h-10 flex-1 resize-none rounded-[calc(var(--radius)*0.65)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm leading-6 shadow-none"
           disabled={disabled}
           onChange={(event) => {
             setBody(event.target.value);
@@ -114,7 +114,7 @@ export function MessageInput({
         />
         <Button
           aria-label={t("im.messageInput.send")}
-          className="h-12 rounded-[calc(var(--radius)*0.95)] px-4"
+          className="h-10 rounded-[calc(var(--radius)*0.65)] px-3 md:px-4"
           disabled={disabled || isSending}
           type="submit"
         >

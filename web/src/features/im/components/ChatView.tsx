@@ -67,22 +67,22 @@ function LoadedChatView({ conversation }: { conversation: ConversationSummary })
   });
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[calc(var(--radius)*1.25)] border border-white/72 bg-white/50 shadow-[0_30px_90px_var(--shadow-color)] backdrop-blur">
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] bg-white/62 px-4 py-4 md:px-6">
+    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-none border-0 bg-[var(--surface-muted)] shadow-none">
+      <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 md:h-[4.5rem] md:px-6">
         <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--accent)]">
+          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
             {conversation.type === "group" ? t("im.chat.group") : t("im.chat.direct")}
           </p>
-          <h2 className="truncate text-xl font-black tracking-tight md:text-2xl">
+          <h2 className="truncate text-lg font-semibold tracking-tight md:text-xl">
             {title}
           </h2>
           {subtitle ? (
-            <p className="mt-1 truncate text-sm font-semibold text-[var(--muted-foreground)]">
+            <p className="mt-0.5 truncate text-xs text-[var(--muted-foreground)] md:text-sm">
               {subtitle}
             </p>
           ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-2 pr-14 md:pr-0">
+        <div className="flex shrink-0 items-center gap-2">
           <ChatHeaderCallButtons conversation={conversation} disabled={disabled} />
           {conversation.type === "group" ? (
             <Button
@@ -139,7 +139,7 @@ function ChatViewNotice({
   title: string;
 }) {
   return (
-    <section className="flex h-full min-h-0 w-full items-center justify-center rounded-[calc(var(--radius)*1.25)] border border-white/72 bg-white/54 p-8 text-center shadow-[0_30px_90px_var(--shadow-color)] backdrop-blur">
+    <section className="flex h-full min-h-0 w-full items-center justify-center bg-[var(--surface-muted)] p-8 text-center">
       <div className="max-w-md">
         <h2 className="text-2xl font-black tracking-tight">{title}</h2>
         <p className="mt-3 text-sm leading-7 text-[var(--muted-foreground)]">

@@ -220,6 +220,25 @@ describe("ChatView", () => {
     expect(screen.queryByText("@jcj")).not.toBeInTheDocument();
   });
 
+  it("renders the loaded chat as fixed header, scroll area, and composer zones", async () => {
+    await renderChatView({
+      listMessages: vi.fn<ApiClient["listMessages"]>().mockResolvedValue([
+        message(1, "Client layout message"),
+      ]),
+    });
+
+    const heading = await screen.findByRole("heading", { name: "Bob" });
+    const chatSection = heading.closest("section");
+    const chatHeader = heading.closest("header");
+    const messageList = await screen.findByLabelText("Message list");
+    const composer = screen.getByRole("textbox", { name: "Message" }).closest("form");
+
+    expect(chatSection).toHaveClass("h-full", "min-h-0", "overflow-hidden", "rounded-none", "shadow-none");
+    expect(chatHeader).toHaveClass("shrink-0");
+    expect(messageList).toHaveClass("h-full", "min-h-0", "overflow-y-auto");
+    expect(composer).toHaveClass("shrink-0");
+  });
+
   it("rejects empty or whitespace-only messages before sending", async () => {
     const sendCommand = vi.fn().mockResolvedValue({});
     const { user } = await renderChatView({ sendCommand });
