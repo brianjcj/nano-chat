@@ -164,6 +164,40 @@ describe("AppShell", () => {
     ).toBeInTheDocument();
   });
 
+  it("hides the mobile feature bar while the chat panel is active", async () => {
+    const remoteUser: UserSummary = {
+      user_id: "1002",
+      username: "bob",
+      display_name: "Bob",
+    };
+    const conversation: ConversationSummary = {
+      conversation_id: "conversation-1",
+      type: "direct",
+      name: null,
+      state: "active",
+      latest_message_seq: 1,
+      read_seq: 1,
+      unread_count: 0,
+      active_member_count: 2,
+      direct_user: remoteUser,
+      latest_message: null,
+    };
+    const listConversations = vi.fn().mockResolvedValue([conversation]);
+    const listMessages = vi.fn().mockResolvedValue([]);
+
+    await renderAppRoute({
+      initialEntries: ["/app/im/conversations/conversation-1"],
+      session: makeAuthResponse(),
+      apiClient: createShellApiClient({ listConversations, listMessages }),
+    });
+
+    expect(await screen.findByRole("heading", { name: "Bob" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Mobile feature bar")).not.toBeInTheDocument();
+    });
+    expect(useImStore.getState().mobilePanel).toBe("chat");
+  });
+
   it("opens shell settings and toggles message sequence numbers", async () => {
     const user = userEvent.setup();
     await renderAppRoute({

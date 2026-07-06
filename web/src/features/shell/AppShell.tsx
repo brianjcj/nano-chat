@@ -35,14 +35,13 @@ export function AppShell() {
   }, [conversationId, directDraft, setCurrentConversationId, setMobilePanel]);
 
   return (
-    <div className="relative h-dvh min-h-0 overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_8%,rgb(255_190_164_/_38%),transparent_28rem),radial-gradient(circle_at_88%_10%,rgb(138_109_255_/_16%),transparent_24rem),linear-gradient(135deg,rgb(255_255_255_/_28%),transparent_45%)]" />
-      <div className="relative flex h-full min-h-0">
+    <div className="h-dvh min-h-0 overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
+      <div className="flex h-full min-h-0 bg-[var(--surface-muted)]">
         <DesktopRail />
         <div className="flex h-full min-h-0 min-w-0 flex-1">
           <aside
             className={cn(
-              "h-full min-h-0 min-w-0 flex-1 flex-col border-r border-white/70 bg-white/32 pb-24 backdrop-blur-xl md:flex md:max-w-[24rem] md:flex-none md:pb-0",
+              "h-full min-h-0 min-w-0 flex-1 flex-col border-r border-[var(--border)] bg-[var(--surface)] pb-20 md:flex md:w-[23rem] md:max-w-none md:flex-none md:pb-0",
               mobilePanel === "conversations" ? "flex" : "hidden md:flex",
             )}
           >
@@ -52,7 +51,7 @@ export function AppShell() {
           <main
             aria-label={t("shell.mainWorkspace")}
             className={cn(
-              "h-full min-h-0 min-w-0 flex-1 flex-col pb-24 md:flex md:pb-0",
+              "h-full min-h-0 min-w-0 flex-1 flex-col bg-[var(--surface-muted)] md:flex",
               mobilePanel === "chat" ? "flex" : "hidden md:flex",
             )}
           >
@@ -72,28 +71,23 @@ function EmptyWorkspace() {
   const workspaceNotice = useImStore((state) => state.workspaceNotice);
 
   return (
-    <div className="relative w-full max-w-3xl overflow-hidden rounded-[calc(var(--radius)*1.45)] border border-white/72 bg-white/64 p-8 shadow-[0_30px_90px_var(--shadow-color)] backdrop-blur md:p-12">
-      <div className="absolute -right-20 -top-24 size-56 rounded-full bg-[color-mix(in_oklab,var(--primary)_18%,transparent)] blur-3xl" />
-      <div className="absolute -bottom-24 -left-20 size-60 rounded-full bg-[color-mix(in_oklab,var(--accent)_16%,transparent)] blur-3xl" />
-      <div className="relative">
+    <div className="flex h-full w-full items-center justify-center bg-[var(--surface-muted)] p-8 text-center">
+      <div className="max-w-md">
         {workspaceNotice ? (
           <p
-            className="mb-5 rounded-[var(--radius)] border border-[color-mix(in_oklab,var(--primary)_26%,white)] bg-[color-mix(in_oklab,var(--primary)_10%,white)] px-4 py-3 text-sm font-bold text-[var(--foreground)]"
+            className="mb-5 rounded-[calc(var(--radius)*0.75)] border border-[color-mix(in_oklab,var(--primary)_24%,var(--border))] bg-[color-mix(in_oklab,var(--primary)_9%,white)] px-4 py-3 text-sm font-semibold text-[var(--foreground)]"
             role="status"
           >
             {t(`im.notices.${workspaceNotice.type}`)}
           </p>
         ) : null}
-        <span className="mb-7 inline-flex size-14 items-center justify-center rounded-[calc(var(--radius)*0.95)] bg-[var(--foreground)] text-white shadow-[0_18px_45px_var(--shadow-color)]">
-          <MessageCircleHeart aria-hidden="true" className="size-7" />
+        <span className="mx-auto mb-5 flex size-16 items-center justify-center rounded-[calc(var(--radius)*0.9)] bg-[var(--surface)] text-[var(--muted-foreground)] shadow-sm ring-1 ring-[var(--border)]">
+          <MessageCircleHeart aria-hidden="true" className="size-8" />
         </span>
-        <p className="mb-3 text-xs font-black uppercase tracking-[0.28em] text-[var(--accent)]">
-          {t("shell.placeholder.emptyEyebrow")}
-        </p>
-        <h2 className="max-w-2xl text-4xl font-black tracking-tight text-balance md:text-6xl">
+        <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">
           {t("shell.placeholder.emptyTitle")}
         </h2>
-        <p className="mt-5 max-w-2xl text-base leading-8 text-[var(--muted-foreground)] md:text-lg">
+        <p className="mt-3 text-sm leading-6 text-[var(--muted-foreground)]">
           {t("shell.placeholder.emptyDescription")}
         </p>
       </div>
@@ -137,11 +131,11 @@ function Workspace({ conversationId }: { conversationId: string | null }) {
   }
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col px-5 py-5 md:px-8 md:py-8">
-      <div className="mb-5 flex items-center justify-between md:hidden">
+    <section className="flex h-full min-h-0 w-full flex-col bg-[var(--surface-muted)]">
+      <div className="flex h-14 shrink-0 items-center border-b border-[var(--border)] bg-[var(--surface)] px-3 md:hidden">
         {conversationId || directDraft ? (
           <button
-            className="inline-flex items-center gap-2 rounded-full border border-white/72 bg-white/72 px-3 py-2 text-sm font-bold text-[var(--foreground)] shadow-sm"
+            className="inline-flex h-10 items-center gap-2 rounded-[calc(var(--radius)*0.65)] px-3 text-sm font-semibold text-[var(--foreground)] transition-colors hover:bg-[var(--surface-muted)]"
             onClick={returnToConversations}
             type="button"
           >
@@ -153,7 +147,7 @@ function Workspace({ conversationId }: { conversationId: string | null }) {
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 items-center justify-center">
+      <div className="flex min-h-0 flex-1 items-stretch justify-stretch">
         {conversationId ? (
           <ChatView conversationId={conversationId} />
         ) : directDraft ? (

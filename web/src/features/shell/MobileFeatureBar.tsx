@@ -16,6 +16,11 @@ export function MobileFeatureBar() {
     (state) => state.setCurrentConversationId,
   );
   const setMobilePanel = useImStore((state) => state.setMobilePanel);
+  const mobilePanel = useImStore((state) => state.mobilePanel);
+
+  if (mobilePanel === "chat") {
+    return null;
+  }
 
   return (
     <nav
