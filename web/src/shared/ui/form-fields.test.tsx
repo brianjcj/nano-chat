@@ -37,4 +37,17 @@ describe("shared form fields", () => {
     expect(styles).toContain("input:focus,\ntextarea:focus");
     expect(styles).toContain("outline: none;");
   });
+
+  it("defines the quiet ink-blue mist theme tokens", () => {
+    expect(styles).toContain("--background: #edf4f7;");
+    expect(styles).toContain("--foreground: #12232d;");
+    expect(styles).toContain("--surface-muted: #f5f9fb;");
+    expect(styles).toContain("--primary: #0f9f8f;");
+    expect(styles).toContain("--accent: #315c7c;");
+    expect(styles).toContain("--bubble-outgoing: #d8f4ee;");
+    expect(styles).toContain("--border: #d3e1e8;");
+    expect(styles).not.toContain("--background: #fff8f1;");
+    expect(styles).not.toContain("--primary: #ff715f;");
+    expect(styles).not.toContain("--accent: #8a6dff;");
+  });
 });

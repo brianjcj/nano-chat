@@ -160,6 +160,29 @@ describe("MessageList", () => {
     expect(screen.queryByLabelText("Alice avatar")).not.toBeInTheDocument();
   });
 
+  it("uses the calm outgoing bubble token instead of the action color", () => {
+    render(
+      <MessageList
+        currentUserId="1001"
+        hasLoadedAllKnownHistory
+        isFetchingOlder={false}
+        isLoading={false}
+        isNearBottom
+        loadOlder={vi.fn()}
+        messages={[message(2)]}
+        onNearBottomChange={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    const outgoingBubble = screen.getByText("Message 2").closest("div");
+
+    expect(outgoingBubble).toHaveClass("bg-[var(--bubble-outgoing)]");
+    expect(outgoingBubble).toHaveClass("text-[var(--foreground)]");
+    expect(outgoingBubble).not.toHaveClass("bg-[var(--primary)]");
+    expect(outgoingBubble).not.toHaveClass("text-[var(--primary-foreground)]");
+  });
+
   it("renders call event message sent time", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-06T23:00:00"));
