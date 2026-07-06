@@ -38,17 +38,6 @@ export function MessageInput({
   const validationCode = validationNotice?.code ?? null;
 
   useEffect(() => {
-    const textarea = textareaRef.current;
-
-    if (!textarea) {
-      return;
-    }
-
-    textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
-  }, [body]);
-
-  useEffect(() => {
     if (!validationNotice) {
       return;
     }
@@ -105,7 +94,25 @@ export function MessageInput({
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+    if (event.key === "Enter" && event.ctrlKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+
+      const textarea = event.currentTarget;
+      textarea.setRangeText("\n", textarea.selectionStart, textarea.selectionEnd, "end");
+      setBody(textarea.value);
+      if (validationNotice) {
+        setValidationNotice(null);
+      }
+
+      return;
+    }
+
+    if (
+      event.key !== "Enter" ||
+      event.shiftKey ||
+      event.ctrlKey ||
+      event.nativeEvent.isComposing
+    ) {
       return;
     }
 
@@ -127,7 +134,7 @@ export function MessageInput({
         <Textarea
           ref={textareaRef}
           aria-label={t("im.messageInput.label")}
-          className="max-h-40 min-h-10 flex-1 resize-none rounded-[calc(var(--radius)*0.65)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm leading-6 shadow-none"
+          className="max-h-40 min-h-10 flex-1 resize-y rounded-[calc(var(--radius)*0.65)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm leading-6 shadow-none"
           disabled={disabled}
           onChange={(event) => {
             setBody(event.target.value);
