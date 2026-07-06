@@ -18,7 +18,7 @@ describe("avatar helpers", () => {
     expect(getAvatarInitials(user({ display_name: null, username: "grace_hopper" }))).toBe("GH");
   });
 
-  it("returns the same soft-social gradient token and class for the same user id", () => {
+  it("returns the same cool-ink gradient token and class for the same user id", () => {
     const first = getAvatarVisual(user({ user_id: "1001" }));
     const second = getAvatarVisual(
       user({
@@ -30,6 +30,18 @@ describe("avatar helpers", () => {
 
     expect(second.gradientToken).toBe(first.gradientToken);
     expect(second.gradientClassName).toBe(first.gradientClassName);
-    expect(first.gradientToken).toMatch(/^soft-social-/);
+    expect(first.gradientToken).toMatch(/^cool-ink-/);
+    expect(first.gradientClassName).toContain("linear-gradient");
+  });
+
+  it("does not return legacy warm candy avatar names or colors", () => {
+    const legacyPattern = /soft-social|#ff8a7a|#ffd0b0|#8a6dff|#f0abfc|#fed7aa|#f9a8d4|#fb7185|#fdba74|#fde68a|#fbcfe8|#fef08a|#fda4af/i;
+
+    for (const userId of ["1001", "1002", "1003", "1004", "1005", "1006"]) {
+      const visual = getAvatarVisual(user({ user_id: userId }));
+
+      expect(visual.gradientToken).toMatch(/^cool-ink-/);
+      expect(`${visual.gradientToken} ${visual.gradientClassName}`).not.toMatch(legacyPattern);
+    }
   });
 });

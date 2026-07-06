@@ -13,34 +13,34 @@ export type AvatarVisual = {
 
 const avatarGradients = [
   {
-    token: "soft-social-sunrise",
+    token: "cool-ink-harbor",
     className:
-      "bg-[linear-gradient(135deg,#ff8a7a_0%,#ffd0b0_52%,#8a6dff_100%)]",
+      "bg-[linear-gradient(135deg,var(--foreground)_0%,color-mix(in_oklab,var(--accent)_82%,var(--foreground))_54%,color-mix(in_oklab,var(--primary)_70%,var(--foreground))_100%)]",
   },
   {
-    token: "soft-social-orchid",
+    token: "cool-ink-estuary",
     className:
-      "bg-[linear-gradient(135deg,#a78bfa_0%,#f0abfc_48%,#fed7aa_100%)]",
+      "bg-[linear-gradient(135deg,color-mix(in_oklab,var(--accent)_70%,var(--foreground))_0%,var(--primary)_52%,color-mix(in_oklab,var(--ring)_74%,var(--foreground))_100%)]",
   },
   {
-    token: "soft-social-mint",
+    token: "cool-ink-slate",
     className:
-      "bg-[linear-gradient(135deg,#5eead4_0%,#bae6fd_45%,#f9a8d4_100%)]",
+      "bg-[linear-gradient(135deg,var(--accent)_0%,#17435f_48%,color-mix(in_oklab,var(--primary)_66%,var(--foreground))_100%)]",
   },
   {
-    token: "soft-social-peach",
+    token: "cool-ink-tide",
     className:
-      "bg-[linear-gradient(135deg,#fb7185_0%,#fdba74_50%,#fde68a_100%)]",
+      "bg-[linear-gradient(135deg,#123a4f_0%,color-mix(in_oklab,var(--ring)_58%,var(--accent))_50%,var(--primary)_100%)]",
   },
   {
-    token: "soft-social-lagoon",
+    token: "cool-ink-depth",
     className:
-      "bg-[linear-gradient(135deg,#38bdf8_0%,#c4b5fd_54%,#fbcfe8_100%)]",
+      "bg-[linear-gradient(135deg,var(--foreground)_0%,#1f4f6d_46%,var(--accent)_100%)]",
   },
   {
-    token: "soft-social-meadow",
+    token: "cool-ink-signal",
     className:
-      "bg-[linear-gradient(135deg,#86efac_0%,#fef08a_52%,#fda4af_100%)]",
+      "bg-[linear-gradient(135deg,color-mix(in_oklab,var(--primary)_64%,var(--foreground))_0%,var(--accent)_56%,color-mix(in_oklab,var(--ring)_68%,var(--foreground))_100%)]",
   },
 ] as const;
 
