@@ -230,11 +230,11 @@ export function MessageInput({
           {disabledReason}
         </p>
       ) : null}
-      <div className="flex min-h-0 flex-1 items-end gap-2 md:gap-3">
+      <div className="flex min-h-0 flex-1 flex-col items-stretch gap-2">
         <Textarea
           ref={textareaRef}
           aria-label={t("im.messageInput.label")}
-          className="h-full min-h-10 flex-1 resize-none rounded-[calc(var(--radius)*0.65)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm leading-6 shadow-none"
+          className="min-h-0 flex-1 resize-none rounded-[calc(var(--radius)*0.65)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm leading-6 shadow-none"
           disabled={disabled}
           onChange={(event) => {
             setBody(event.target.value);
@@ -247,15 +247,17 @@ export function MessageInput({
           rows={1}
           value={body}
         />
-        <Button
-          aria-label={t("im.messageInput.send")}
-          className="h-10 rounded-[calc(var(--radius)*0.65)] px-3 md:px-4"
-          disabled={disabled || isSending}
-          type="submit"
-        >
-          <SendHorizontal aria-hidden="true" className="size-4" />
-          <span className="hidden sm:inline">{t("im.messageInput.send")}</span>
-        </Button>
+        <div className="flex shrink-0 justify-end">
+          <Button
+            aria-label={t("im.messageInput.send")}
+            className="h-8 rounded-[calc(var(--radius)*0.55)] px-2.5 text-xs md:px-3"
+            disabled={disabled || isSending}
+            type="submit"
+          >
+            <SendHorizontal aria-hidden="true" className="size-3.5" />
+            <span className="hidden sm:inline">{t("im.messageInput.send")}</span>
+          </Button>
+        </div>
       </div>
       {validationCode ? (
         <p
