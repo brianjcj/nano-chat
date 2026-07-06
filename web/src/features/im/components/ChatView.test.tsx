@@ -315,10 +315,10 @@ describe("ChatView", () => {
     expect(sendCommand).not.toHaveBeenCalled();
   });
 
-  it("sends with Enter and inserts a newline with Shift+Enter", async () => {
+  it("sends with Enter and inserts newlines with Shift+Enter or Ctrl+Enter", async () => {
     const sendCommand = vi.fn().mockResolvedValue({
       conversation_id: "conversation-1",
-      message: message(1, "hello\nworld"),
+      message: message(1, "hello\nworld\nagain"),
     });
     const { user } = await renderChatView({ sendCommand });
 
@@ -327,14 +327,26 @@ describe("ChatView", () => {
     await user.keyboard("hello{Shift>}{Enter}{/Shift}world");
     expect(composer).toHaveValue("hello\nworld");
 
+    await user.keyboard("{Control>}{Enter}{/Control}again");
+    expect(composer).toHaveValue("hello\nworld\nagain");
+
     await user.keyboard("{Enter}");
 
     await waitFor(() => {
       expect(sendCommand).toHaveBeenCalledWith(
         "message.send",
-        expect.objectContaining({ body: "hello\nworld" }),
+        expect.objectContaining({ body: "hello\nworld\nagain" }),
       );
     });
+  });
+
+  it("allows vertical mouse resizing of the composer", async () => {
+    await renderChatView();
+
+    const composer = await screen.findByRole("textbox", { name: "Message" });
+
+    expect(composer).toHaveClass("resize-y");
+    expect(composer).not.toHaveClass("resize-none");
   });
 
   it("keeps the composer focused and ready for the next message while sending", async () => {
