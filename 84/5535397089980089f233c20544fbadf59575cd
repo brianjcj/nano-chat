@@ -1,0 +1,24 @@
+web/src/features/im/components/MessageList.tsx
+  s_af83b710a3aec2::t_0ed3148eef45f2 109,239,263
+web/src/features/shell/AppShell.tsx
+  s_af83b710a3aec2::t_1caf8e7fd2bc55 84,107
+web/src/features/shell/DesktopRail.tsx
+  s_af83b710a3aec2::t_4e16f57b3b255c 20,32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "845535397089980089f233c20544fbadf59575cd",
+  "prompts": {},
+  "logical_commit_id": "845535397089980089f233c20544fbadf59575cd",
+  "sessions": {
+    "s_af83b710a3aec2": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f37db-0c44-7369-8279-9eeea7ab9391",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
