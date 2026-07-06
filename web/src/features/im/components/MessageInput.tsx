@@ -30,7 +30,7 @@ type MessageInputProps = {
 };
 
 const VALIDATION_NOTICE_TIMEOUT_MS = 2000;
-const DEFAULT_MESSAGE_INPUT_HEIGHT_PX = 112;
+const DEFAULT_MESSAGE_INPUT_HEIGHT_PX = 152;
 const MIN_MESSAGE_INPUT_HEIGHT_PX = 80;
 const MIN_DISABLED_MESSAGE_INPUT_HEIGHT_PX = 128;
 const MESSAGE_INPUT_KEYBOARD_RESIZE_STEP_PX = 8;
@@ -201,7 +201,7 @@ export function MessageInput({
 
   return (
     <form
-      className="relative flex shrink-0 flex-col border-t border-[var(--border)] bg-[var(--surface)] px-3 pb-3 pt-4 md:px-5 md:pb-4 md:pt-5"
+      className="relative flex shrink-0 flex-col border-t border-[var(--border)] bg-[var(--surface)] px-2 pb-2 pt-3 md:px-4 md:pb-3 md:pt-4"
       onSubmit={submitMessage}
       style={{ height: `${effectivePanelHeight}px` }}
     >
@@ -230,11 +230,11 @@ export function MessageInput({
           {disabledReason}
         </p>
       ) : null}
-      <div className="flex min-h-0 flex-1 flex-col items-stretch gap-2">
+      <div className="flex min-h-0 flex-1 flex-col items-stretch gap-1.5">
         <Textarea
           ref={textareaRef}
           aria-label={t("im.messageInput.label")}
-          className="min-h-0 flex-1 resize-none rounded-[calc(var(--radius)*0.65)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm leading-6 shadow-none"
+          className="min-h-0 flex-1 resize-none rounded-[calc(var(--radius)*0.65)] bg-[var(--surface-muted)] px-2.5 py-2 text-sm leading-6 shadow-none"
           disabled={disabled}
           onChange={(event) => {
             setBody(event.target.value);
@@ -244,17 +244,17 @@ export function MessageInput({
           }}
           onKeyDown={handleKeyDown}
           placeholder={t("im.messageInput.placeholder")}
-          rows={1}
+          rows={3}
           value={body}
         />
         <div className="flex shrink-0 justify-end">
           <Button
             aria-label={t("im.messageInput.send")}
-            className="h-8 rounded-[calc(var(--radius)*0.55)] px-2.5 text-xs md:px-3"
+            className="h-7 rounded-[calc(var(--radius)*0.5)] px-2 text-[0.7rem] md:px-2.5"
             disabled={disabled || isSending}
             type="submit"
           >
-            <SendHorizontal aria-hidden="true" className="size-3.5" />
+            <SendHorizontal aria-hidden="true" className="size-3" />
             <span className="hidden sm:inline">{t("im.messageInput.send")}</span>
           </Button>
         </div>
