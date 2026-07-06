@@ -118,7 +118,10 @@ export function ConversationList() {
                     }
                     type="button"
                   >
-                    <ConversationAvatar conversation={conversation} />
+                    <ConversationAvatar
+                      conversation={conversation}
+                      unreadCount={unreadCount}
+                    />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-start justify-between gap-3">
                         <span className="min-w-0">
@@ -131,26 +134,14 @@ export function ConversationList() {
                             </span>
                           ) : null}
                         </span>
-                        {latestTime || unreadCount > 0 ? (
-                          <span className="flex shrink-0 flex-col items-end gap-1">
-                            {latestTime ? (
-                              <time
-                                className="text-xs font-bold tabular-nums text-[var(--muted-foreground)]"
-                                dateTime={conversation.latest_message?.created_at}
-                              >
-                                {latestTime}
-                              </time>
-                            ) : null}
-                            {unreadCount > 0 ? (
-                              <span
-                                aria-label={t("im.conversationList.unread", {
-                                  count: unreadCount,
-                                })}
-                                className="min-w-6 rounded-full bg-[var(--primary)] px-2 py-0.5 text-center text-xs font-extrabold tabular-nums text-white shadow-[0_10px_22px_var(--primary-shadow)]"
-                              >
-                                {unreadCount}
-                              </span>
-                            ) : null}
+                        {latestTime ? (
+                          <span className="flex shrink-0 items-start">
+                            <time
+                              className="text-xs font-bold tabular-nums text-[var(--muted-foreground)]"
+                              dateTime={conversation.latest_message?.created_at}
+                            >
+                              {latestTime}
+                            </time>
                           </span>
                         ) : null}
                       </span>
@@ -171,27 +162,54 @@ export function ConversationList() {
 
 function ConversationAvatar({
   conversation,
+  unreadCount,
 }: {
   conversation: ConversationSummary;
+  unreadCount: number;
 }) {
+  const { t } = useTranslation();
+  const unreadBadge =
+    unreadCount > 0 ? (
+      <span
+        aria-label={t("im.conversationList.unread", {
+          count: unreadCount,
+        })}
+        className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[var(--primary)] px-1.5 py-0.5 text-center text-[0.68rem] font-extrabold leading-none tabular-nums text-white shadow-[0_10px_22px_var(--primary-shadow)] ring-2 ring-[var(--surface)]"
+      >
+        {unreadCount}
+      </span>
+    ) : null;
+
   if (conversation.type === "direct" && conversation.direct_user) {
     const avatar = getAvatarVisual(conversation.direct_user);
 
     return (
       <span
-        className={cn(
-          "flex size-11 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.65)] text-sm font-bold tracking-tight text-white shadow-sm ring-1 ring-white/70",
-          avatar.gradientClassName,
-        )}
+        className="relative flex size-11 shrink-0"
+        data-testid="conversation-avatar"
       >
-        {avatar.initials}
+        <span
+          className={cn(
+            "flex size-11 items-center justify-center rounded-[calc(var(--radius)*0.65)] text-sm font-bold tracking-tight text-white shadow-sm ring-1 ring-white/70",
+            avatar.gradientClassName,
+          )}
+        >
+          {avatar.initials}
+        </span>
+        {unreadBadge}
       </span>
     );
   }
 
   return (
-    <span className="flex size-11 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.65)] bg-[color-mix(in_oklab,var(--accent)_14%,white)] text-[var(--accent)] shadow-sm ring-1 ring-white/70">
-      <MessageCircleHeart aria-hidden="true" className="size-5" />
+    <span
+      className="relative flex size-11 shrink-0"
+      data-testid="conversation-avatar"
+    >
+      <span className="flex size-11 items-center justify-center rounded-[calc(var(--radius)*0.65)] bg-[color-mix(in_oklab,var(--accent)_14%,white)] text-[var(--accent)] shadow-sm ring-1 ring-white/70">
+        <MessageCircleHeart aria-hidden="true" className="size-5" />
+      </span>
+      {unreadBadge}
     </span>
   );
 }

@@ -190,6 +190,37 @@ describe("ConversationList", () => {
     expect(screen.getByText("Active group · no messages yet")).toBeInTheDocument();
   });
 
+  it("renders unread totals as avatar badges instead of right-side metadata", async () => {
+    await renderConversationList({
+      conversations: [
+        conversation({
+          conversation_id: "direct-1",
+          type: "direct",
+          name: null,
+          unread_count: 5,
+          direct_user: directUser,
+          latest_message: {
+            message_id: "message-direct-1",
+            message_seq: 8,
+            sender: directUser,
+            body: "Hey from Alice",
+            created_at: "2026-06-14T00:01:00.000Z",
+          },
+        }),
+      ],
+    });
+
+    const row = (await screen.findByText("Alice A.")).closest("button");
+    const unreadBadge = screen.getByLabelText("5 unread");
+    const avatar = unreadBadge.closest('[data-testid="conversation-avatar"]');
+
+    expect(row).toContainElement(unreadBadge);
+    expect(avatar).toContainElement(unreadBadge);
+    expect(avatar).toHaveClass("relative");
+    expect(unreadBadge).toHaveClass("absolute", "-right-1", "-top-1");
+    expect(unreadBadge.parentElement).not.toHaveClass("flex-col", "items-end");
+  });
+
   it("renders conversations as dense client rows instead of floating cards", async () => {
     await renderConversationList({
       initialEntries: ["/app/im/conversations/direct-1"],
