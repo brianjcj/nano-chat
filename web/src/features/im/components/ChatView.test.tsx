@@ -372,6 +372,27 @@ describe("ChatView", () => {
     });
   });
 
+  it("places a compact send button on a separate bottom-right row", async () => {
+    await renderChatView();
+
+    const composer = await screen.findByRole("textbox", { name: "Message" });
+    const sendButton = screen.getByRole("button", { name: "Send" });
+    const composerStack = composer.parentElement;
+    const actionRow = sendButton.parentElement;
+
+    if (!composerStack || !actionRow) {
+      throw new Error("Message composer layout wrappers should exist");
+    }
+
+    expect(composerStack).toHaveClass("flex-col");
+    expect(composerStack).toHaveClass("items-stretch");
+    expect(actionRow).toHaveClass("justify-end");
+    expect(actionRow).not.toBe(composerStack);
+    expect(sendButton).toHaveClass("h-8");
+    expect(sendButton).toHaveClass("text-xs");
+    expect(sendButton).not.toHaveClass("h-10");
+  });
+
   it("resizes the composer panel by dragging the horizontal splitter", async () => {
     await renderChatView();
 
