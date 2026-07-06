@@ -341,6 +341,37 @@ describe("ChatView", () => {
     });
   });
 
+  it("does not send with Alt+Enter or Meta+Enter", async () => {
+    const sendCommand = vi.fn().mockResolvedValue({
+      conversation_id: "conversation-1",
+      message: message(1, "Bare sends"),
+    });
+    await renderChatView({ sendCommand });
+
+    const composer = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(composer, { target: { value: "Alt should not send" } });
+    expect(fireEvent.keyDown(composer, { key: "Enter", altKey: true })).toBe(true);
+    expect(
+      sendCommand.mock.calls.filter(([type]) => type === "message.send"),
+    ).toHaveLength(0);
+
+    fireEvent.change(composer, { target: { value: "Meta should not send" } });
+    expect(fireEvent.keyDown(composer, { key: "Enter", metaKey: true })).toBe(true);
+    expect(
+      sendCommand.mock.calls.filter(([type]) => type === "message.send"),
+    ).toHaveLength(0);
+
+    fireEvent.change(composer, { target: { value: "Bare sends" } });
+    expect(fireEvent.keyDown(composer, { key: "Enter" })).toBe(false);
+
+    await waitFor(() => {
+      expect(sendCommand).toHaveBeenCalledWith(
+        "message.send",
+        expect.objectContaining({ body: "Bare sends" }),
+      );
+    });
+  });
+
   it("resizes the composer panel by dragging the horizontal splitter", async () => {
     await renderChatView();
 
@@ -363,6 +394,40 @@ describe("ChatView", () => {
     fireEvent.pointerUp(resizeHandle, { clientY: 340, pointerId: 1 });
 
     expect(composerPanel).toHaveStyle({ height: "172px" });
+  });
+
+  it("resizes the focused composer splitter with keyboard controls", async () => {
+    await renderChatView();
+
+    const resizeHandle = await screen.findByRole("separator", {
+      name: "Resize message input",
+    });
+    const composerPanel = resizeHandle.closest("form");
+
+    if (!composerPanel) {
+      throw new Error("Resize handle should render inside the message input form");
+    }
+
+    expect(resizeHandle).toHaveAttribute("tabindex", "0");
+    resizeHandle.focus();
+    expect(resizeHandle).toHaveFocus();
+    expect(composerPanel).toHaveStyle({ height: "112px" });
+
+    fireEvent.keyDown(resizeHandle, { key: "ArrowUp" });
+    expect(composerPanel).toHaveStyle({ height: "120px" });
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "120");
+
+    fireEvent.keyDown(resizeHandle, { key: "ArrowDown" });
+    expect(composerPanel).toHaveStyle({ height: "112px" });
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "112");
+
+    fireEvent.keyDown(resizeHandle, { key: "End" });
+    expect(composerPanel).toHaveStyle({ height: "280px" });
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "280");
+
+    fireEvent.keyDown(resizeHandle, { key: "Home" });
+    expect(composerPanel).toHaveStyle({ height: "80px" });
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "80");
   });
 
   it("keeps dissolved conversation composer tall enough for the disabled notice", async () => {

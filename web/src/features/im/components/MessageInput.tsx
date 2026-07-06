@@ -33,6 +33,7 @@ const VALIDATION_NOTICE_TIMEOUT_MS = 2000;
 const DEFAULT_MESSAGE_INPUT_HEIGHT_PX = 112;
 const MIN_MESSAGE_INPUT_HEIGHT_PX = 80;
 const MIN_DISABLED_MESSAGE_INPUT_HEIGHT_PX = 128;
+const MESSAGE_INPUT_KEYBOARD_RESIZE_STEP_PX = 8;
 const MAX_MESSAGE_INPUT_HEIGHT_PX = 280;
 
 type ResizeDragState = {
@@ -148,6 +149,27 @@ export function MessageInput({
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   }
 
+  function handleResizeKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    let nextHeight: number | null = null;
+
+    if (event.key === "ArrowUp") {
+      nextHeight = effectivePanelHeight + MESSAGE_INPUT_KEYBOARD_RESIZE_STEP_PX;
+    } else if (event.key === "ArrowDown") {
+      nextHeight = effectivePanelHeight - MESSAGE_INPUT_KEYBOARD_RESIZE_STEP_PX;
+    } else if (event.key === "Home") {
+      nextHeight = minimumPanelHeight;
+    } else if (event.key === "End") {
+      nextHeight = MAX_MESSAGE_INPUT_HEIGHT_PX;
+    }
+
+    if (nextHeight === null) {
+      return;
+    }
+
+    event.preventDefault();
+    setPanelHeight(clampMessageInputHeight(nextHeight, minimumPanelHeight));
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && event.ctrlKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
@@ -166,6 +188,8 @@ export function MessageInput({
       event.key !== "Enter" ||
       event.shiftKey ||
       event.ctrlKey ||
+      event.altKey ||
+      event.metaKey ||
       event.nativeEvent.isComposing
     ) {
       return;
@@ -189,10 +213,12 @@ export function MessageInput({
         aria-valuenow={effectivePanelHeight}
         className="group absolute left-0 top-0 flex h-3 w-full -translate-y-1/2 cursor-row-resize touch-none items-center justify-center"
         onPointerCancel={handleResizePointerEnd}
+        onKeyDown={handleResizeKeyDown}
         onPointerDown={handleResizePointerDown}
         onPointerMove={handleResizePointerMove}
         onPointerUp={handleResizePointerEnd}
         role="separator"
+        tabIndex={0}
       >
         <span
           aria-hidden="true"
