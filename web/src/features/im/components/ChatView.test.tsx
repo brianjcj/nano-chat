@@ -384,12 +384,28 @@ describe("ChatView", () => {
       throw new Error("Message composer layout wrappers should exist");
     }
 
+    const composerPanel = composerStack.closest("form");
+
+    if (!composerPanel) {
+      throw new Error("Message composer form should exist");
+    }
+
+    expect(composerPanel).toHaveClass("px-2");
+    expect(composerPanel).toHaveClass("pb-2");
+    expect(composerPanel).toHaveClass("pt-3");
+    expect(composerPanel).toHaveStyle({ height: "152px" });
     expect(composerStack).toHaveClass("flex-col");
     expect(composerStack).toHaveClass("items-stretch");
+    expect(composerStack).toHaveClass("gap-1.5");
+    expect(composer).toHaveAttribute("rows", "3");
+    expect(composer).toHaveClass("px-2.5");
+    expect(composer).toHaveClass("py-2");
     expect(actionRow).toHaveClass("justify-end");
     expect(actionRow).not.toBe(composerStack);
-    expect(sendButton).toHaveClass("h-8");
-    expect(sendButton).toHaveClass("text-xs");
+    expect(sendButton).toHaveClass("h-7");
+    expect(sendButton).toHaveClass("px-2");
+    expect(sendButton).toHaveClass("text-[0.7rem]");
+    expect(sendButton).not.toHaveClass("h-8");
     expect(sendButton).not.toHaveClass("h-10");
   });
 
@@ -406,7 +422,7 @@ describe("ChatView", () => {
       throw new Error("Resize handle should render inside the message input form");
     }
 
-    expect(composerPanel).toHaveStyle({ height: "112px" });
+    expect(composerPanel).toHaveStyle({ height: "152px" });
     expect(composer).toHaveClass("resize-none");
     expect(composer).not.toHaveClass("resize-y");
 
@@ -414,7 +430,7 @@ describe("ChatView", () => {
     fireEvent.pointerMove(resizeHandle, { clientY: 340, pointerId: 1 });
     fireEvent.pointerUp(resizeHandle, { clientY: 340, pointerId: 1 });
 
-    expect(composerPanel).toHaveStyle({ height: "172px" });
+    expect(composerPanel).toHaveStyle({ height: "212px" });
   });
 
   it("resizes the focused composer splitter with keyboard controls", async () => {
@@ -432,15 +448,15 @@ describe("ChatView", () => {
     expect(resizeHandle).toHaveAttribute("tabindex", "0");
     resizeHandle.focus();
     expect(resizeHandle).toHaveFocus();
-    expect(composerPanel).toHaveStyle({ height: "112px" });
+    expect(composerPanel).toHaveStyle({ height: "152px" });
 
     fireEvent.keyDown(resizeHandle, { key: "ArrowUp" });
-    expect(composerPanel).toHaveStyle({ height: "120px" });
-    expect(resizeHandle).toHaveAttribute("aria-valuenow", "120");
+    expect(composerPanel).toHaveStyle({ height: "160px" });
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "160");
 
     fireEvent.keyDown(resizeHandle, { key: "ArrowDown" });
-    expect(composerPanel).toHaveStyle({ height: "112px" });
-    expect(resizeHandle).toHaveAttribute("aria-valuenow", "112");
+    expect(composerPanel).toHaveStyle({ height: "152px" });
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "152");
 
     fireEvent.keyDown(resizeHandle, { key: "End" });
     expect(composerPanel).toHaveStyle({ height: "280px" });
@@ -470,9 +486,9 @@ describe("ChatView", () => {
       screen.getByText("This conversation is unavailable, so sending is disabled."),
     ).toBeInTheDocument();
     expect(composer).toBeDisabled();
-    expect(composerPanel).toHaveStyle({ height: "128px" });
+    expect(composerPanel).toHaveStyle({ height: "152px" });
     expect(resizeHandle).toHaveAttribute("aria-valuemin", "128");
-    expect(resizeHandle).toHaveAttribute("aria-valuenow", "128");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "152");
 
     fireEvent.pointerDown(resizeHandle, { clientY: 400, pointerId: 1 });
     fireEvent.pointerMove(resizeHandle, { clientY: 500, pointerId: 1 });
