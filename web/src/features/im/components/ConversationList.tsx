@@ -40,43 +40,42 @@ export function ConversationList() {
   return (
     <section
       aria-label={t("im.conversationList.region")}
-      className="flex h-full min-h-0 flex-1 flex-col bg-[color-mix(in_oklab,var(--surface)_86%,transparent)]"
+      className="flex h-full min-h-0 flex-1 flex-col bg-[var(--surface)]"
     >
-      <header className="border-b border-[var(--border)] px-5 pb-4 pt-5 md:px-6 md:pt-6">
-        <div className="mb-1 flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-[calc(var(--radius)*0.8)] bg-[var(--foreground)] text-white shadow-[0_14px_34px_var(--shadow-color)]">
-            <MessagesSquare aria-hidden="true" className="size-5" />
-          </span>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--accent)]">
+      <header className="shrink-0 border-b border-[var(--border)] px-4 py-4 md:px-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
               {t("shell.im")}
             </p>
-            <h1 className="text-2xl font-bold tracking-tight">
+            <h1 className="truncate text-xl font-bold tracking-tight">
               {t("im.conversationList.title")}
             </h1>
           </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              aria-label={t("im.conversationList.newDirect")}
+              className="inline-flex size-9 items-center justify-center rounded-[calc(var(--radius)*0.6)] border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] transition-colors hover:bg-[var(--surface-muted)]"
+              onClick={() => setIsNewDirectOpen(true)}
+              title={t("im.conversationList.newDirect")}
+              type="button"
+            >
+              <UserPlus aria-hidden="true" className="size-4" />
+            </button>
+            <button
+              aria-label={t("im.conversationList.createGroup")}
+              className="inline-flex size-9 items-center justify-center rounded-[calc(var(--radius)*0.6)] border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] transition-colors hover:bg-[var(--surface-muted)]"
+              onClick={() => setIsCreateGroupOpen(true)}
+              title={t("im.conversationList.createGroup")}
+              type="button"
+            >
+              <UsersRound aria-hidden="true" className="size-4" />
+            </button>
+          </div>
         </div>
-        <p className="text-sm leading-6 text-[var(--muted-foreground)]">
+        <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
           {t("im.conversationList.subtitle")}
         </p>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <button
-            className="inline-flex items-center justify-center gap-2 rounded-[calc(var(--radius)*0.85)] border border-[var(--border)] bg-white/72 px-3 py-2 text-sm font-black text-[var(--foreground)] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-white"
-            onClick={() => setIsNewDirectOpen(true)}
-            type="button"
-          >
-            <UserPlus aria-hidden="true" className="size-4" />
-            {t("im.conversationList.newDirect")}
-          </button>
-          <button
-            className="inline-flex items-center justify-center gap-2 rounded-[calc(var(--radius)*0.85)] border border-[var(--border)] bg-white/72 px-3 py-2 text-sm font-black text-[var(--foreground)] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-white"
-            onClick={() => setIsCreateGroupOpen(true)}
-            type="button"
-          >
-            <UsersRound aria-hidden="true" className="size-4" />
-            {t("im.conversationList.createGroup")}
-          </button>
-        </div>
         <NewDirectDialog
           onOpenChange={setIsNewDirectOpen}
           open={isNewDirectOpen}
@@ -87,7 +86,7 @@ export function ConversationList() {
         />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 md:px-4">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {conversationsQuery.isLoading ? (
           <ConversationListNotice>{t("common.loading")}</ConversationListNotice>
         ) : conversationsQuery.isError ? (
@@ -97,7 +96,7 @@ export function ConversationList() {
         ) : (conversationsQuery.data ?? []).length === 0 ? (
           <EmptyConversations />
         ) : (
-          <ul className="space-y-2">
+          <ul className="divide-y divide-[var(--border)]">
             {(conversationsQuery.data ?? []).map((conversation) => {
               const unreadCount = getUnreadCount(
                 conversation,
@@ -115,10 +114,10 @@ export function ConversationList() {
                   <button
                     aria-current={isActive ? "page" : undefined}
                     className={cn(
-                      "group flex w-full items-center gap-3 rounded-[calc(var(--radius)*0.95)] border px-3 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_34px_var(--shadow-color)]",
+                      "group flex w-full items-center gap-3 rounded-none border-b border-transparent px-4 py-3 text-left shadow-none transition-colors duration-150 last:border-b-0 md:px-5",
                       isActive
-                        ? "border-[var(--primary)] bg-[color-mix(in_oklab,var(--primary)_12%,white)] shadow-[0_14px_34px_var(--primary-shadow)]"
-                        : "border-transparent bg-white/58 hover:border-white/80 hover:bg-white/82",
+                        ? "bg-[color-mix(in_oklab,var(--primary)_10%,var(--surface))]"
+                        : "bg-transparent hover:bg-[var(--surface-muted)]",
                     )}
                     onClick={() =>
                       selectConversation(conversation.conversation_id)
@@ -129,11 +128,11 @@ export function ConversationList() {
                     <span className="min-w-0 flex-1">
                       <span className="flex items-start justify-between gap-3">
                         <span className="min-w-0">
-                          <span className="block truncate text-sm font-bold text-[var(--foreground)]">
+                          <span className="block truncate text-[0.95rem] font-semibold text-[var(--foreground)]">
                             {title}
                           </span>
                           {subtitle ? (
-                            <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--muted-foreground)]">
+                            <span className="mt-0.5 block truncate text-xs text-[var(--muted-foreground)]">
                               {subtitle}
                             </span>
                           ) : null}
@@ -161,7 +160,7 @@ export function ConversationList() {
                           </span>
                         ) : null}
                       </span>
-                      <span className="mt-2 block truncate text-sm leading-5 text-[var(--muted-foreground)]">
+                      <span className="mt-1 block truncate text-sm leading-5 text-[var(--muted-foreground)]">
                         {latestPreview}
                       </span>
                     </span>
@@ -187,7 +186,7 @@ function ConversationAvatar({
     return (
       <span
         className={cn(
-          "flex size-12 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.85)] text-sm font-black tracking-tight text-white shadow-[0_12px_26px_var(--shadow-color)] ring-2 ring-white/70",
+          "flex size-11 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.65)] text-sm font-bold tracking-tight text-white shadow-sm ring-1 ring-white/70",
           avatar.gradientClassName,
         )}
       >
@@ -197,7 +196,7 @@ function ConversationAvatar({
   }
 
   return (
-    <span className="flex size-12 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.85)] bg-[color-mix(in_oklab,var(--accent)_18%,white)] text-[var(--accent)] shadow-[0_12px_26px_var(--shadow-color)] ring-2 ring-white/70">
+    <span className="flex size-11 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.65)] bg-[color-mix(in_oklab,var(--accent)_14%,white)] text-[var(--accent)] shadow-sm ring-1 ring-white/70">
       <MessageCircleHeart aria-hidden="true" className="size-5" />
     </span>
   );

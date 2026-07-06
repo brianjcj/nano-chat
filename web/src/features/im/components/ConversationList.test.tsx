@@ -181,6 +181,34 @@ describe("ConversationList", () => {
     expect(screen.getByText("Active group · no messages yet")).toBeInTheDocument();
   });
 
+  it("renders conversations as dense client rows instead of floating cards", async () => {
+    await renderConversationList({
+      initialEntries: ["/app/im/conversations/direct-1"],
+      conversations: [
+        conversation({
+          conversation_id: "direct-1",
+          type: "direct",
+          name: null,
+          unread_count: 2,
+          direct_user: directUser,
+          latest_message: {
+            message_id: "message-direct-1",
+            message_seq: 8,
+            sender: directUser,
+            body: "Hey from Alice",
+            created_at: "2026-06-14T00:01:00.000Z",
+          },
+        }),
+      ],
+    });
+
+    const row = (await screen.findByText("Alice A.")).closest("button");
+
+    expect(row).toHaveAttribute("aria-current", "page");
+    expect(row).toHaveClass("rounded-none", "border-b", "shadow-none");
+    expect(row).not.toHaveClass("hover:-translate-y-0.5");
+  });
+
   it("hides the direct username subtitle when it duplicates the conversation title", async () => {
     await renderConversationList({
       conversations: [
