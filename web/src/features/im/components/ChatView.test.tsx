@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppProviders } from "@/app/AppProviders";
 import { createQueryClient } from "@/app/queryClient";
@@ -194,6 +194,10 @@ function AppTestProviders({
 }
 
 describe("ChatView", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     localStorage.clear();
     useImStore.getState().reset();
@@ -247,7 +251,53 @@ describe("ChatView", () => {
     await user.type(composer, "   ");
     await user.click(screen.getByRole("button", { name: "Send" }));
 
-    expect(await screen.findByText("Message cannot be empty")).toBeInTheDocument();
+    const alert = await screen.findByRole("alert");
+    const composerForm = composer.closest("form");
+
+    expect(alert).toHaveTextContent("Message cannot be empty");
+    expect(composerForm).toHaveClass("relative");
+    expect(alert).toHaveClass(
+      "absolute",
+      "bottom-full",
+      "left-1/2",
+      "w-fit",
+      "-translate-x-1/2",
+      "bg-[var(--surface)]",
+      "text-[var(--foreground)]",
+    );
+    expect(alert).not.toHaveClass("right-3");
+    expect(alert).not.toHaveClass(
+      "bg-[color-mix(in_oklab,var(--foreground)_94%,#3d2c32)]",
+    );
+    expect(sendCommand).not.toHaveBeenCalled();
+  });
+
+  it("keeps validation alerts temporary without changing composer flow", async () => {
+    const sendCommand = vi.fn().mockResolvedValue({});
+    await renderChatView({ sendCommand });
+
+    const composer = await screen.findByRole("textbox", { name: "Message" });
+    vi.useFakeTimers();
+    fireEvent.change(composer, { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Message cannot be empty");
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("Message cannot be empty");
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(sendCommand).not.toHaveBeenCalled();
   });
 

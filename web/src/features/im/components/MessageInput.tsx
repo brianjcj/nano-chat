@@ -9,11 +9,20 @@ import {
   type MessageValidationResult,
 } from "@/shared/utils/message";
 
+type ValidationCode = "empty_message" | "message_too_large";
+
+type ValidationNotice = {
+  code: ValidationCode;
+  id: number;
+};
+
 type MessageInputProps = {
   disabled?: boolean;
   disabledReason?: string;
   onSend: (body: string) => Promise<MessageValidationResult | { ok: false; code: "send_failed" }>;
 };
+
+const VALIDATION_NOTICE_TIMEOUT_MS = 2000;
 
 export function MessageInput({
   disabled = false,
@@ -22,11 +31,11 @@ export function MessageInput({
 }: MessageInputProps) {
   const { t } = useTranslation();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const validationNoticeIdRef = useRef(0);
   const [body, setBody] = useState("");
-  const [validationCode, setValidationCode] = useState<
-    "empty_message" | "message_too_large" | null
-  >(null);
+  const [validationNotice, setValidationNotice] = useState<ValidationNotice | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const validationCode = validationNotice?.code ?? null;
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -39,6 +48,20 @@ export function MessageInput({
     textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
   }, [body]);
 
+  useEffect(() => {
+    if (!validationNotice) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setValidationNotice((currentNotice) =>
+        currentNotice?.id === validationNotice.id ? null : currentNotice,
+      );
+    }, VALIDATION_NOTICE_TIMEOUT_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [validationNotice]);
+
   async function submitMessage(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
 
@@ -49,12 +72,12 @@ export function MessageInput({
     const validation = validateMessageBody(body);
 
     if (!validation.ok) {
-      setValidationCode(validation.code);
+      showValidationNotice(validation.code);
       return;
     }
 
     const submittedBody = body;
-    setValidationCode(null);
+    setValidationNotice(null);
     setBody("");
     setIsSending(true);
 
@@ -66,7 +89,7 @@ export function MessageInput({
       }
 
       if (result.code === "empty_message" || result.code === "message_too_large") {
-        setValidationCode(result.code);
+        showValidationNotice(result.code);
       }
 
       setBody((currentBody) => currentBody || submittedBody);
@@ -74,6 +97,11 @@ export function MessageInput({
       setIsSending(false);
       textareaRef.current?.focus();
     }
+  }
+
+  function showValidationNotice(code: ValidationCode) {
+    validationNoticeIdRef.current += 1;
+    setValidationNotice({ code, id: validationNoticeIdRef.current });
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -87,7 +115,7 @@ export function MessageInput({
 
   return (
     <form
-      className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-3 py-3 md:px-5 md:py-4"
+      className="relative shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-3 py-3 md:px-5 md:py-4"
       onSubmit={submitMessage}
     >
       {disabled && disabledReason ? (
@@ -103,8 +131,8 @@ export function MessageInput({
           disabled={disabled}
           onChange={(event) => {
             setBody(event.target.value);
-            if (validationCode) {
-              setValidationCode(null);
+            if (validationNotice) {
+              setValidationNotice(null);
             }
           }}
           onKeyDown={handleKeyDown}
@@ -123,8 +151,17 @@ export function MessageInput({
         </Button>
       </div>
       {validationCode ? (
-        <p className="mt-2 text-sm font-semibold text-[var(--destructive)]" role="alert">
-          {t(`im.messageInput.${validationCode === "empty_message" ? "empty" : "tooLarge"}`)}
+        <p
+          className="pointer-events-none absolute bottom-full left-1/2 mb-2 flex w-fit max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--destructive)]/25 bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--foreground)] shadow-[0_12px_30px_rgb(98_63_48_/16%)] ring-1 ring-white/80"
+          role="alert"
+        >
+          <span
+            aria-hidden="true"
+            className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[var(--destructive)]/12 text-xs font-black text-[var(--destructive)]"
+          >
+            !
+          </span>
+          <span>{t(`im.messageInput.${validationCode === "empty_message" ? "empty" : "tooLarge"}`)}</span>
         </p>
       ) : null}
     </form>
