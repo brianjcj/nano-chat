@@ -11,6 +11,7 @@ import { MessageList } from "@/features/im/components/MessageList";
 import { useConversationMessages } from "@/features/im/hooks/useConversationMessages";
 import { useMarkRead } from "@/features/im/hooks/useMarkRead";
 import { useSendMessage } from "@/features/im/hooks/useSendMessage";
+import { useImStore } from "@/features/im/state/imStore";
 import { Button } from "@/shared/ui/button";
 import type { ConversationSummary, UserSummary } from "@/shared/api/types";
 
@@ -50,6 +51,9 @@ function LoadedChatView({ conversation }: { conversation: ConversationSummary })
   const { session } = useSession();
   const [isNearBottom, setIsNearBottom] = useState(true);
   const [isMemberPanelOpen, setIsMemberPanelOpen] = useState(false);
+  const showMessageSequenceNumbers = useImStore(
+    (state) => state.showMessageSequenceNumbers,
+  );
   const messagesQuery = useConversationMessages(conversation);
   const sendMessage = useSendMessage(conversation);
   const title = getConversationTitle(conversation, t);
@@ -115,6 +119,7 @@ function LoadedChatView({ conversation }: { conversation: ConversationSummary })
         onRetry={(message) => {
           void sendMessage.retryMessage(message);
         }}
+        showMessageSequenceNumbers={showMessageSequenceNumbers}
       />
 
       <MessageInput
@@ -164,8 +169,11 @@ function getConversationSubtitle(
   t: (key: string, options?: Record<string, unknown>) => string,
 ) {
   if (conversation.type === "direct") {
-    return conversation.direct_user?.username
-      ? `@${conversation.direct_user.username}`
+    const directUser = conversation.direct_user;
+    const displayName = directUser?.display_name?.trim();
+
+    return directUser && displayName && displayName !== directUser.username
+      ? `@${directUser.username}`
       : null;
   }
 
@@ -181,3 +189,4 @@ function displayUserName(user: UserSummary | null) {
 
   return user.display_name?.trim() || user.username;
 }
+

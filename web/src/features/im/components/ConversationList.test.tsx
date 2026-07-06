@@ -181,6 +181,59 @@ describe("ConversationList", () => {
     expect(screen.getByText("Active group · no messages yet")).toBeInTheDocument();
   });
 
+  it("hides the direct username subtitle when it duplicates the conversation title", async () => {
+    await renderConversationList({
+      conversations: [
+        conversation({
+          conversation_id: "direct-1",
+          type: "direct",
+          name: null,
+          direct_user: {
+            user_id: "1002",
+            username: "jcj",
+            display_name: "jcj",
+          },
+        }),
+      ],
+    });
+
+    expect(await screen.findByText("jcj")).toBeInTheDocument();
+    expect(screen.queryByText("@jcj")).not.toBeInTheDocument();
+  });
+
+  it("renders latest-message time and omits it for conversations without messages", async () => {
+    await renderConversationList({
+      conversations: [
+        conversation({
+          conversation_id: "archive-group-1",
+          type: "group",
+          name: "Archive Guild",
+          latest_message: {
+            message_id: "message-archive-1",
+            message_seq: 2,
+            sender: localUser,
+            body: "Archived note",
+            created_at: "1999-12-31T09:00:00",
+          },
+        }),
+        conversation({
+          conversation_id: "empty-group-1",
+          type: "group",
+          name: "Quiet Launch",
+          latest_message_seq: 0,
+          read_seq: 0,
+          latest_message: null,
+          active_member_count: 4,
+        }),
+      ],
+    });
+
+    expect(await screen.findByText("Archive Guild")).toBeInTheDocument();
+    expect(screen.getByText("99/12/31")).toBeInTheDocument();
+    expect(screen.getByText("Quiet Launch")).toBeInTheDocument();
+    expect(screen.getAllByText(/\d{2}\/\d{2}\/\d{2}/)).toHaveLength(1);
+  });
+
   it("renders the empty state when no conversations exist", async () => {
     await renderConversationList({ conversations: [] });
 

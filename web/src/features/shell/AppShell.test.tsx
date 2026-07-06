@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -24,10 +24,22 @@ function createShellApiClient(overrides: Partial<ApiClient> = {}) {
   });
 }
 
+function getDesktopUserMenuTrigger() {
+  return within(screen.getByLabelText("Feature rail")).getByRole("button", {
+    name: /User menu/i,
+  });
+}
+
+function getDesktopSettingsTrigger() {
+  return within(screen.getByLabelText("Feature rail")).getByRole("button", {
+    name: "Settings",
+  });
+}
+
 describe("AppShell", () => {
   beforeEach(() => {
-    useImStore.getState().reset();
     window.localStorage.clear();
+    useImStore.getState().reset();
   });
 
   it("renders the chat workspace when loading an authenticated conversation route", async () => {
@@ -95,7 +107,15 @@ describe("AppShell", () => {
       apiClient: createShellApiClient(),
     });
 
-    expect(await screen.findByLabelText("Feature rail")).toBeInTheDocument();
+    const featureRail = await screen.findByLabelText("Feature rail");
+
+    expect(featureRail).toBeInTheDocument();
+    expect(
+      within(featureRail).getByRole("button", { name: /User menu/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(featureRail).getByRole("button", { name: "Settings" }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Conversation list")).toBeInTheDocument();
     expect(
       screen.getByRole("main", { name: "Main workspace" }),
@@ -136,6 +156,43 @@ describe("AppShell", () => {
 
     expect(featureRail).toHaveClass("hidden", "md:flex");
     expect(mobileFeatureBar).toHaveClass("md:hidden");
+    expect(
+      within(mobileFeatureBar).getByRole("button", { name: /User menu/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(mobileFeatureBar).getByRole("button", { name: "Settings" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens shell settings and toggles message sequence numbers", async () => {
+    const user = userEvent.setup();
+    await renderAppRoute({
+      initialEntries: ["/app/im"],
+      session: makeAuthResponse(),
+      apiClient: createShellApiClient(),
+    });
+
+    await screen.findByLabelText("Feature rail");
+    const trigger = getDesktopSettingsTrigger();
+
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(trigger);
+
+    const popup = screen.getByRole("region", { name: "Settings" });
+    const sequenceSwitch = within(popup).getByRole("switch", {
+      name: "Show message sequence numbers",
+    });
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(sequenceSwitch).toHaveAttribute("aria-checked", "false");
+
+    await user.click(sequenceSwitch);
+
+    expect(sequenceSwitch).toHaveAttribute("aria-checked", "true");
+    expect(useImStore.getState().showMessageSequenceNumbers).toBe(true);
+    expect(
+      window.localStorage.getItem("nano-chat:show-message-sequence-numbers"),
+    ).toBe("true");
   });
 
   it("shows translated connection status banners for realtime reconnection states", async () => {
@@ -158,6 +215,22 @@ describe("AppShell", () => {
     );
   });
 
+  it("hides the username handle when the user menu primary name is already the username", async () => {
+    const user = userEvent.setup();
+    await renderAppRoute({
+      initialEntries: ["/app/im"],
+      session: makeAuthResponse({ username: "jcj", displayName: null }),
+      apiClient: createShellApiClient(),
+    });
+
+    await screen.findByLabelText("Feature rail");
+    await user.click(getDesktopUserMenuTrigger());
+
+    const popup = screen.getByRole("region", { name: "User menu" });
+    expect(within(popup).getByText("jcj")).toBeInTheDocument();
+    expect(within(popup).queryByText("@jcj")).not.toBeInTheDocument();
+  });
+
   it("treats the user actions popup as a disclosure and closes it with Escape", async () => {
     const user = userEvent.setup();
     await renderAppRoute({
@@ -166,7 +239,8 @@ describe("AppShell", () => {
       apiClient: createShellApiClient(),
     });
 
-    const trigger = await screen.findByRole("button", { name: /User menu/i });
+    await screen.findByLabelText("Feature rail");
+    const trigger = getDesktopUserMenuTrigger();
 
     expect(trigger).not.toHaveAttribute("aria-haspopup", "menu");
     expect(trigger).toHaveAttribute("aria-expanded", "false");
@@ -185,6 +259,28 @@ describe("AppShell", () => {
     expect(trigger).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("closes the user actions popup after clicking outside it", async () => {
+    const user = userEvent.setup();
+    await renderAppRoute({
+      initialEntries: ["/app/im"],
+      session: makeAuthResponse(),
+      apiClient: createShellApiClient(),
+    });
+
+    await screen.findByLabelText("Feature rail");
+    const trigger = getDesktopUserMenuTrigger();
+    await user.click(trigger);
+
+    expect(screen.getByRole("region", { name: "User menu" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("main", { name: "Main workspace" }));
+
+    expect(
+      screen.queryByRole("region", { name: "User menu" }),
+    ).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("changes language from the user menu", async () => {
     const user = userEvent.setup();
     await renderAppRoute({
@@ -193,7 +289,8 @@ describe("AppShell", () => {
       apiClient: createShellApiClient(),
     });
 
-    await user.click(await screen.findByRole("button", { name: /User menu/i }));
+    await screen.findByLabelText("Feature rail");
+    await user.click(getDesktopUserMenuTrigger());
     await user.click(screen.getByRole("button", { name: "中文" }));
 
     expect(await screen.findByLabelText("功能栏")).toBeInTheDocument();
@@ -227,7 +324,8 @@ describe("AppShell", () => {
       cachedConversations,
     );
 
-    await user.click(await screen.findByRole("button", { name: /User menu/i }));
+    await screen.findByLabelText("Feature rail");
+    await user.click(getDesktopUserMenuTrigger());
     await user.click(screen.getByRole("button", { name: "Sign out" }));
 
     await waitFor(() => {
@@ -257,7 +355,8 @@ describe("AppShell", () => {
       apiClient: createShellApiClient({ patchMe }),
     });
 
-    await user.click(await screen.findByRole("button", { name: /User menu/i }));
+    await screen.findByLabelText("Feature rail");
+    await user.click(getDesktopUserMenuTrigger());
     await user.click(screen.getByRole("button", { name: "Edit profile" }));
     const input = screen.getByLabelText("Display name");
     await user.clear(input);

@@ -83,6 +83,11 @@ textarea:disabled {
   outline-offset: 3px;
 }
 
+input:focus,
+textarea:focus {
+  outline: none;
+}
+
 #root {
   min-height: 100vh;
 }

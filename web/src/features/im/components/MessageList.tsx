@@ -1,12 +1,17 @@
 import { ArrowDown, Loader2 } from "lucide-react";
-import { useLayoutEffect, useRef } from "react";
+import { Fragment, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/shared/ui/button";
 import { cn } from "@/shared/utils/cn";
-import { isServerSequenced, type ChatMessage } from "@/shared/utils/message";
+import {
+  formatMessageSentTime,
+  isServerSequenced,
+  type ChatMessage,
+} from "@/shared/utils/message";
 
 const NEAR_BOTTOM_THRESHOLD_PX = 96;
+const MESSAGE_TIMESTAMP_SUPPRESSION_MS = 5 * 60 * 1000;
 
 type MessageListProps = {
   currentUserId: string;
@@ -18,6 +23,7 @@ type MessageListProps = {
   messages: ChatMessage[];
   onNearBottomChange: (isNearBottom: boolean) => void;
   onRetry: (message: ChatMessage) => void;
+  showMessageSequenceNumbers?: boolean;
 };
 
 export function MessageList({
@@ -30,11 +36,13 @@ export function MessageList({
   messages,
   onNearBottomChange,
   onRetry,
+  showMessageSequenceNumbers = false,
 }: MessageListProps) {
   const { t } = useTranslation();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const pendingHistoryPrependRef = useRef<PendingHistoryPrepend | null>(null);
   const oldestMessageSeq = getMinimumMessageSeq(messages);
+  const timestampedMessages = getTimestampedMessages(messages);
 
   useLayoutEffect(() => {
     const scrollContainer = scrollContainerRef.current;
@@ -128,18 +136,23 @@ export function MessageList({
           <MessageListNotice>{t("im.messageList.empty")}</MessageListNotice>
         ) : (
           <ol className="mt-auto space-y-3">
-            {messages.map((message) =>
-              "message_type" in message && message.message_type === "call_event" ? (
-                <CallEventMessage key={message.message_id} message={message} />
-              ) : (
-                <MessageBubble
-                  key={message.message_id}
-                  currentUserId={currentUserId}
-                  message={message}
-                  onRetry={onRetry}
-                />
-              ),
-            )}
+            {timestampedMessages.map(({ message, showTimestamp }) => (
+              <Fragment key={message.message_id}>
+                {showTimestamp ? (
+                  <MessageTimestamp createdAt={message.created_at} />
+                ) : null}
+                {"message_type" in message && message.message_type === "call_event" ? (
+                  <CallEventMessage message={message} />
+                ) : (
+                  <MessageBubble
+                    currentUserId={currentUserId}
+                    message={message}
+                    onRetry={onRetry}
+                    showMessageSequenceNumber={showMessageSequenceNumbers}
+                  />
+                )}
+              </Fragment>
+            ))}
           </ol>
         )}
       </div>
@@ -159,7 +172,7 @@ export function MessageList({
           type="button"
         >
           <ArrowDown aria-hidden="true" className="size-3.5" />
-          {t("im.messageList.newMessages")}
+          {t("im.messageList.backToBottom")}
         </button>
       ) : null}
     </div>
@@ -172,6 +185,16 @@ type PendingHistoryPrepend = {
   scrollHeight: number;
   scrollTop: number;
 };
+
+function MessageTimestamp({ createdAt }: { createdAt: string }) {
+  return (
+    <li className="flex justify-center">
+      <time className="rounded-full bg-white/45 px-2.5 py-0.5 text-[0.68rem] font-bold text-[var(--muted-foreground)] opacity-65 shadow-[0_6px_16px_var(--shadow-color)]">
+        {formatMessageSentTime(createdAt)}
+      </time>
+    </li>
+  );
+}
 
 function CallEventMessage({ message }: { message: ChatMessage }) {
   return (
@@ -187,10 +210,12 @@ function MessageBubble({
   currentUserId,
   message,
   onRetry,
+  showMessageSequenceNumber,
 }: {
   currentUserId: string;
   message: ChatMessage;
   onRetry: (message: ChatMessage) => void;
+  showMessageSequenceNumber: boolean;
 }) {
   const { t } = useTranslation();
   const isOutgoing = message.sender.user_id === currentUserId;
@@ -217,7 +242,7 @@ function MessageBubble({
             isOutgoing ? "justify-end" : "justify-start",
           )}
         >
-          {isServerSequenced(message) ? (
+          {showMessageSequenceNumber && isServerSequenced(message) ? (
             <span>#{message.message_seq}</span>
           ) : null}
           {isPending ? <span>{t("im.messageList.pending")}</span> : null}
@@ -238,6 +263,29 @@ function MessageBubble({
       </div>
     </li>
   );
+}
+
+type TimestampedChatMessage = {
+  message: ChatMessage;
+  showTimestamp: boolean;
+};
+
+function getTimestampedMessages(messages: ChatMessage[]): TimestampedChatMessage[] {
+  let lastDisplayedTimestampMs: number | null = null;
+
+  return messages.map((message) => {
+    const sentAtMs = Date.parse(message.created_at);
+    const showTimestamp =
+      lastDisplayedTimestampMs === null ||
+      !Number.isFinite(sentAtMs) ||
+      sentAtMs - lastDisplayedTimestampMs > MESSAGE_TIMESTAMP_SUPPRESSION_MS;
+
+    if (showTimestamp && Number.isFinite(sentAtMs)) {
+      lastDisplayedTimestampMs = sentAtMs;
+    }
+
+    return { message, showTimestamp };
+  });
 }
 
 function MessageListNotice({ children }: { children: string }) {

@@ -10,9 +10,10 @@ import { useImStore } from "@/features/im/state/imStore";
 import type { ConversationSummary, UserSummary } from "@/shared/api/types";
 import { getAvatarVisual } from "@/shared/utils/avatar";
 import { cn } from "@/shared/utils/cn";
+import { formatConversationListTime } from "@/shared/utils/message";
 
 export function ConversationList() {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
   const navigate = useNavigate();
   const { conversationId: routeConversationId } = useParams<{
     conversationId?: string;
@@ -105,6 +106,7 @@ export function ConversationList() {
               const title = getConversationTitle(conversation, t);
               const subtitle = getConversationSubtitle(conversation, t);
               const latestPreview = getLatestPreview(conversation, t);
+              const latestTime = getLatestTime(conversation, i18n.language);
               const isActive =
                 routeConversationId === conversation.conversation_id;
 
@@ -136,14 +138,26 @@ export function ConversationList() {
                             </span>
                           ) : null}
                         </span>
-                        {unreadCount > 0 ? (
-                          <span
-                            aria-label={t("im.conversationList.unread", {
-                              count: unreadCount,
-                            })}
-                            className="mt-0.5 min-w-6 rounded-full bg-[var(--primary)] px-2 py-0.5 text-center text-xs font-extrabold tabular-nums text-white shadow-[0_10px_22px_var(--primary-shadow)]"
-                          >
-                            {unreadCount}
+                        {latestTime || unreadCount > 0 ? (
+                          <span className="flex shrink-0 flex-col items-end gap-1">
+                            {latestTime ? (
+                              <time
+                                className="text-xs font-bold tabular-nums text-[var(--muted-foreground)]"
+                                dateTime={conversation.latest_message?.created_at}
+                              >
+                                {latestTime}
+                              </time>
+                            ) : null}
+                            {unreadCount > 0 ? (
+                              <span
+                                aria-label={t("im.conversationList.unread", {
+                                  count: unreadCount,
+                                })}
+                                className="min-w-6 rounded-full bg-[var(--primary)] px-2 py-0.5 text-center text-xs font-extrabold tabular-nums text-white shadow-[0_10px_22px_var(--primary-shadow)]"
+                              >
+                                {unreadCount}
+                              </span>
+                            ) : null}
                           </span>
                         ) : null}
                       </span>
@@ -238,8 +252,11 @@ function getConversationSubtitle(
   t: (key: string, options?: Record<string, unknown>) => string,
 ) {
   if (conversation.type === "direct") {
-    return conversation.direct_user?.username
-      ? `@${conversation.direct_user.username}`
+    const directUser = conversation.direct_user;
+    const displayName = directUser?.display_name?.trim();
+
+    return directUser && displayName && displayName !== directUser.username
+      ? `@${directUser.username}`
       : null;
   }
 
@@ -261,6 +278,12 @@ function getLatestPreview(
   }
 
   return t("im.conversationList.emptyLatest");
+}
+
+function getLatestTime(conversation: ConversationSummary, locale: string) {
+  const createdAt = conversation.latest_message?.created_at;
+
+  return createdAt ? formatConversationListTime(createdAt, locale) : "";
 }
 
 function displayUserName(user: UserSummary | null) {

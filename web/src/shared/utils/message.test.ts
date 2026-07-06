@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatConversationListTime,
+  formatMessageSentTime,
   mergeMessagesBySeq,
   utf8ByteLength,
   validateMessageBody,
@@ -45,6 +47,65 @@ describe("message helpers", () => {
       ok: false,
       code: "message_too_large",
     });
+  });
+
+  it("formats today's message time as hours and minutes", () => {
+    expect(
+      formatMessageSentTime(
+        "2026-07-06T14:05:00",
+        new Date("2026-07-06T23:00:00"),
+      ),
+    ).toBe("14:05");
+  });
+
+  it("formats older message time with month, day, hours, and minutes", () => {
+    expect(
+      formatMessageSentTime(
+        "2026-07-05T09:08:00",
+        new Date("2026-07-06T23:00:00"),
+      ),
+    ).toBe("07-05 09:08");
+  });
+
+  it("formats conversation list time for today", () => {
+    expect(
+      formatConversationListTime(
+        "2026-07-06T14:05:00",
+        "zh-CN",
+        new Date("2026-07-06T23:00:00"),
+      ),
+    ).toBe("14:05");
+  });
+
+  it("formats conversation list time with localized weekdays in the current week", () => {
+    const now = new Date("2026-07-08T12:00:00");
+
+    expect(formatConversationListTime("2026-07-06T09:00:00", "zh-CN", now)).toBe(
+      "星期一",
+    );
+    expect(formatConversationListTime("2026-07-06T09:00:00", "en-US", now)).toBe(
+      "Monday",
+    );
+  });
+
+  it("formats conversation list time with month and day in the current year", () => {
+    expect(
+      formatConversationListTime(
+        "2026-06-30T09:00:00",
+        "zh-CN",
+        new Date("2026-07-08T12:00:00"),
+      ),
+    ).toBe("06/30");
+  });
+
+  it("formats conversation list time with two-digit year outside the current year", () => {
+    expect(
+      formatConversationListTime(
+        "2025-12-31T09:00:00",
+        "zh-CN",
+        new Date("2026-07-08T12:00:00"),
+      ),
+    ).toBe("25/12/31");
   });
 
   it("merges messages by seq while preserving ascending order", () => {

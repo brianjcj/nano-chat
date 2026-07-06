@@ -37,7 +37,12 @@ export function DirectDraftView() {
     );
   }
 
-  const title = draft.target_display_name?.trim() || draft.target_username;
+  const displayName = draft.target_display_name?.trim();
+  const title = displayName || draft.target_username;
+  const subtitle =
+    displayName && displayName !== draft.target_username
+      ? `@${draft.target_username}`
+      : null;
 
   async function sendFirstMessage(body: string) {
     setSendErrorCode(null);
@@ -75,9 +80,11 @@ export function DirectDraftView() {
           <h2 className="truncate text-xl font-black tracking-tight md:text-2xl">
             {title}
           </h2>
-          <p className="mt-1 truncate text-sm font-semibold text-[var(--muted-foreground)]">
-            @{draft.target_username}
-          </p>
+          {subtitle ? (
+            <p className="mt-1 truncate text-sm font-semibold text-[var(--muted-foreground)]">
+              {subtitle}
+            </p>
+          ) : null}
         </div>
       </header>
 

@@ -195,11 +195,29 @@ function AppTestProviders({
 
 describe("ChatView", () => {
   beforeEach(() => {
+    localStorage.clear();
     useImStore.getState().reset();
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
       value: "visible",
     });
+  });
+
+  it("hides the direct username subtitle when it duplicates the chat title", async () => {
+    await renderChatView({
+      conversations: [
+        conversation({
+          direct_user: {
+            user_id: "1002",
+            username: "jcj",
+            display_name: "jcj",
+          },
+        }),
+      ],
+    });
+
+    expect(await screen.findByRole("heading", { name: "jcj" })).toBeInTheDocument();
+    expect(screen.queryByText("@jcj")).not.toBeInTheDocument();
   });
 
   it("rejects empty or whitespace-only messages before sending", async () => {
@@ -282,6 +300,42 @@ describe("ChatView", () => {
       conversation_id: "conversation-1",
       message: message(1, "First message"),
     });
+  });
+
+  it("hides debug sequence numbers by default and shows them when the shared setting is enabled", async () => {
+    await renderChatView({
+      conversations: [
+        conversation({ latest_message_seq: 1, read_seq: 1, unread_count: 0 }),
+      ],
+      listMessages: vi.fn<ApiClient["listMessages"]>().mockResolvedValue([message(1)]),
+    });
+
+    expect(await screen.findByText("Message 1")).toBeInTheDocument();
+    expect(screen.queryByText("#1")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Show message sequence numbers" }),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      useImStore.getState().setShowMessageSequenceNumbers(true);
+    });
+
+    expect(screen.getByText("#1")).toBeInTheDocument();
+  });
+
+  it("restores debug sequence number visibility from localStorage", async () => {
+    localStorage.setItem("nano-chat:show-message-sequence-numbers", "true");
+    useImStore.getState().reset();
+
+    await renderChatView({
+      conversations: [
+        conversation({ latest_message_seq: 1, read_seq: 1, unread_count: 0 }),
+      ],
+      listMessages: vi.fn<ApiClient["listMessages"]>().mockResolvedValue([message(1)]),
+    });
+
+    expect(await screen.findByText("Message 1")).toBeInTheDocument();
+    expect(screen.getByText("#1")).toBeInTheDocument();
   });
 
   it("requests latest messages with before_seq one greater than latest_message_seq", async () => {

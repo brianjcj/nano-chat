@@ -246,6 +246,19 @@ describe("direct draft flow", () => {
     useImStore.getState().reset();
   });
 
+  it("hides the direct username subtitle when it duplicates the direct draft title", async () => {
+    useImStore.getState().setDirectDraft({
+      target_username: "jcj",
+      target_user_id: "1002",
+      target_display_name: "jcj",
+    });
+
+    await renderDirectDraftRoute();
+
+    expect(await screen.findByRole("heading", { name: "jcj" })).toBeInTheDocument();
+    expect(screen.queryByText("@jcj")).not.toBeInTheDocument();
+  });
+
   it("performs exact username lookup and creates a direct draft instead of an empty conversation", async () => {
     const lookupUser = vi.fn<ApiClient["lookupUser"]>().mockResolvedValue(directUser);
     const queryClient = createQueryClient();

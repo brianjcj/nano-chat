@@ -11,7 +11,6 @@ import type { RealtimeStatus } from "@/shared/realtime/realtimeClient";
 import { cn } from "@/shared/utils/cn";
 import { DesktopRail } from "./DesktopRail";
 import { MobileFeatureBar } from "./MobileFeatureBar";
-import { UserMenu } from "./UserMenu";
 
 const BANNER_STATUSES = new Set<RealtimeStatus>([
   "reconnecting",
@@ -62,9 +61,6 @@ export function AppShell() {
         </div>
       </div>
 
-      <div className="fixed right-4 top-4 z-40 md:right-6 md:top-5">
-        <UserMenu />
-      </div>
       <ConnectionStatusBanner status={realtimeStatus} />
       <MobileFeatureBar />
     </div>

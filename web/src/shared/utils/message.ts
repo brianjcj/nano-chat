@@ -54,6 +54,45 @@ export function createClientMsgId(): string {
   return `client-${Date.now().toString(36)}-${random}`;
 }
 
+export function formatMessageSentTime(createdAt: string, now = new Date()): string {
+  const sentAt = new Date(createdAt);
+  const time = `${padTwoDigits(sentAt.getHours())}:${padTwoDigits(sentAt.getMinutes())}`;
+
+  if (isSameLocalDate(sentAt, now)) {
+    return time;
+  }
+
+  return `${padTwoDigits(sentAt.getMonth() + 1)}-${padTwoDigits(sentAt.getDate())} ${time}`;
+}
+
+export function formatConversationListTime(
+  createdAt: string,
+  locale: string,
+  now = new Date(),
+): string {
+  const sentAt = new Date(createdAt);
+
+  if (!Number.isFinite(sentAt.getTime())) {
+    return "";
+  }
+
+  if (isSameLocalDate(sentAt, now)) {
+    return `${padTwoDigits(sentAt.getHours())}:${padTwoDigits(sentAt.getMinutes())}`;
+  }
+
+  if (isSameLocalWeek(sentAt, now)) {
+    return new Intl.DateTimeFormat(locale, { weekday: "long" }).format(sentAt);
+  }
+
+  const monthAndDay = `${padTwoDigits(sentAt.getMonth() + 1)}/${padTwoDigits(sentAt.getDate())}`;
+
+  if (sentAt.getFullYear() === now.getFullYear()) {
+    return monthAndDay;
+  }
+
+  return `${padTwoDigits(sentAt.getFullYear() % 100)}/${monthAndDay}`;
+}
+
 export function mergeMessagesBySeq(
   existing: ChatMessage[],
   incoming: ChatMessage[],
@@ -74,6 +113,32 @@ export function mergeMessagesBySeq(
   }
 
   return merged.sort(compareChatMessages);
+}
+
+function padTwoDigits(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function isSameLocalDate(left: Date, right: Date): boolean {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+function isSameLocalWeek(left: Date, right: Date): boolean {
+  return isSameLocalDate(getLocalWeekStart(left), getLocalWeekStart(right));
+}
+
+function getLocalWeekStart(date: Date): Date {
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = start.getDay();
+  const daysSinceMonday = day === 0 ? 6 : day - 1;
+
+  start.setDate(start.getDate() - daysSinceMonday);
+
+  return start;
 }
 
 function isSameMessage(left: ChatMessage, right: ChatMessage) {

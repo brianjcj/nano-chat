@@ -1,9 +1,11 @@
-import { MessageCircleHeart, Sparkles } from "lucide-react";
+import { MessageCircleHeart } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
 
 import { useImStore } from "@/features/im/state/imStore";
 import { cn } from "@/shared/utils/cn";
+import { ShellSettingsMenu } from "./ShellSettingsMenu";
+import { UserMenu } from "./UserMenu";
 
 export function DesktopRail() {
   const { t } = useTranslation();
@@ -17,9 +19,8 @@ export function DesktopRail() {
       aria-label={t("shell.featureRail")}
       className="hidden w-20 shrink-0 flex-col items-center border-r border-white/62 bg-[color-mix(in_oklab,var(--foreground)_94%,#3d2c32)] px-3 py-4 text-white shadow-[16px_0_45px_rgb(44_31_35_/12%)] md:flex"
     >
-      <div className="mb-8 flex size-11 items-center justify-center rounded-[calc(var(--radius)*0.9)] bg-white/12 text-white shadow-inner ring-1 ring-white/16">
-        <Sparkles aria-hidden="true" className="size-5" />
-        <span className="sr-only">{t("common.appName")}</span>
+      <div className="mb-5">
+        <UserMenu placement="rail" />
       </div>
 
       <nav className="flex flex-1 flex-col items-center gap-3">
@@ -42,6 +43,10 @@ export function DesktopRail() {
           <span className="sr-only">{t("shell.im")}</span>
         </NavLink>
       </nav>
+
+      <div className="mt-5">
+        <ShellSettingsMenu placement="rail" />
+      </div>
     </aside>
   );
 }

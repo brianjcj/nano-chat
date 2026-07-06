@@ -2,6 +2,9 @@ import { create, type StoreApi, type UseBoundStore } from "zustand";
 
 import type { RealtimeStatus } from "@/shared/realtime/realtimeClient";
 
+export const SHOW_MESSAGE_SEQUENCE_NUMBERS_STORAGE_KEY =
+  "nano-chat:show-message-sequence-numbers";
+
 export type DirectDraft = {
   target_username: string;
   target_user_id?: string;
@@ -25,6 +28,7 @@ type ImStoreData = {
   directDraft: DirectDraft | null;
   workspaceNotice: WorkspaceNotice | null;
   realtimeStatus: RealtimeStatus;
+  showMessageSequenceNumbers: boolean;
   unreadCorrections: Record<string, number>;
   unreadCorrectionMaxMessageSeqs: Record<string, number>;
   historySyncMarkers: Record<string, HistorySyncMarker>;
@@ -37,6 +41,8 @@ type ImStoreActions = {
   setDirectDraft: (draft: DirectDraft | null) => void;
   setWorkspaceNotice: (notice: WorkspaceNotice | null) => void;
   setRealtimeStatus: (status: RealtimeStatus) => void;
+  setShowMessageSequenceNumbers: (show: boolean) => void;
+  toggleShowMessageSequenceNumbers: () => void;
   incrementUnreadCorrection: (
     conversationId: string,
     amount?: number,
@@ -68,6 +74,17 @@ export const useImStore = create<ImStoreState>((set) => ({
   },
   setRealtimeStatus(status) {
     set({ realtimeStatus: status });
+  },
+  setShowMessageSequenceNumbers(show) {
+    writeShowMessageSequenceNumbers(show);
+    set({ showMessageSequenceNumbers: show });
+  },
+  toggleShowMessageSequenceNumbers() {
+    set((state) => {
+      const showMessageSequenceNumbers = !state.showMessageSequenceNumbers;
+      writeShowMessageSequenceNumbers(showMessageSequenceNumbers);
+      return { showMessageSequenceNumbers };
+    });
   },
   incrementUnreadCorrection(conversationId, amount = 1, maxMessageSeq) {
     set((state) => {
@@ -135,9 +152,31 @@ export function createInitialImStoreData(): ImStoreData {
     directDraft: null,
     workspaceNotice: null,
     realtimeStatus: "idle",
+    showMessageSequenceNumbers: readShowMessageSequenceNumbers(),
     unreadCorrections: {},
     unreadCorrectionMaxMessageSeqs: {},
     historySyncMarkers: {},
     mobilePanel: "conversations",
   };
+}
+
+function readShowMessageSequenceNumbers() {
+  try {
+    return globalThis.localStorage?.getItem(
+      SHOW_MESSAGE_SEQUENCE_NUMBERS_STORAGE_KEY,
+    ) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writeShowMessageSequenceNumbers(show: boolean) {
+  try {
+    globalThis.localStorage?.setItem(
+      SHOW_MESSAGE_SEQUENCE_NUMBERS_STORAGE_KEY,
+      show ? "true" : "false",
+    );
+  } catch {
+    // Setting persistence is best-effort when storage is unavailable.
+  }
 }

@@ -51,10 +51,25 @@ export function useRealtimeBridge(options: UseRealtimeBridgeOptions = {}) {
         event,
       });
     });
+    const syncAfterBrowserRecovery = () => {
+      invalidateRealtimeAuthoritativeQueries(queryClient);
+    };
+    const syncAfterVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        syncAfterBrowserRecovery();
+      }
+    };
+
+    window.addEventListener("focus", syncAfterBrowserRecovery);
+    window.addEventListener("online", syncAfterBrowserRecovery);
+    document.addEventListener("visibilitychange", syncAfterVisibilityChange);
 
     client.connect({ access_token: session.access_token });
 
     return () => {
+      document.removeEventListener("visibilitychange", syncAfterVisibilityChange);
+      window.removeEventListener("online", syncAfterBrowserRecovery);
+      window.removeEventListener("focus", syncAfterBrowserRecovery);
       unsubscribeEvents();
       unsubscribeStatus();
       client.disconnect();

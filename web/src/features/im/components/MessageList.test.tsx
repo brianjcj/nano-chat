@@ -2,7 +2,7 @@ import { useState } from "react";
 import { I18nextProvider } from "react-i18next";
 import { screen, waitFor, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MessageList } from "./MessageList";
 import type { Message, UserSummary } from "@/shared/api/types";
@@ -34,7 +34,182 @@ function message(seq: number): Message {
   };
 }
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("MessageList", () => {
+  it("renders each chat message sent time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-06T23:00:00"));
+
+    render(
+      <MessageList
+        currentUserId="1001"
+        hasLoadedAllKnownHistory
+        isFetchingOlder={false}
+        isLoading={false}
+        isNearBottom
+        loadOlder={vi.fn()}
+        messages={[
+          {
+            ...message(1),
+            created_at: "2026-07-06T14:05:00",
+          },
+        ]}
+        onNearBottomChange={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    const timestampRow = screen.getByText("14:05").closest("li");
+
+    expect(timestampRow).toHaveClass("justify-center");
+    expect(timestampRow?.nextElementSibling).toHaveTextContent("Message 1");
+  });
+
+  it("suppresses timestamps until more than five minutes after the last shown timestamp", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-06T23:00:00"));
+
+    render(
+      <MessageList
+        currentUserId="1001"
+        hasLoadedAllKnownHistory
+        isFetchingOlder={false}
+        isLoading={false}
+        isNearBottom
+        loadOlder={vi.fn()}
+        messages={[
+          {
+            ...message(1),
+            created_at: "2026-07-06T14:00:00",
+          },
+          {
+            ...message(2),
+            created_at: "2026-07-06T14:04:00",
+          },
+          {
+            ...message(3),
+            created_at: "2026-07-06T14:06:00",
+          },
+        ]}
+        onNearBottomChange={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("14:00")).toBeInTheDocument();
+    expect(screen.queryByText("14:04")).not.toBeInTheDocument();
+    expect(screen.getByText("14:06")).toBeInTheDocument();
+  });
+
+  it("hides message sequence numbers by default", () => {
+    render(
+      <MessageList
+        currentUserId="1001"
+        hasLoadedAllKnownHistory
+        isFetchingOlder={false}
+        isLoading={false}
+        isNearBottom
+        loadOlder={vi.fn()}
+        messages={[message(1)]}
+        onNearBottomChange={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("#1")).not.toBeInTheDocument();
+  });
+
+  it("shows message sequence numbers when debug display is enabled", () => {
+    render(
+      <MessageList
+        currentUserId="1001"
+        hasLoadedAllKnownHistory
+        isFetchingOlder={false}
+        isLoading={false}
+        isNearBottom
+        loadOlder={vi.fn()}
+        messages={[message(1)]}
+        onNearBottomChange={vi.fn()}
+        onRetry={vi.fn()}
+        showMessageSequenceNumbers
+      />,
+    );
+
+    expect(screen.getByText("#1")).toBeInTheDocument();
+  });
+
+  it("renders call event message sent time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-06T23:00:00"));
+
+    render(
+      <MessageList
+        currentUserId="1001"
+        hasLoadedAllKnownHistory
+        isFetchingOlder={false}
+        isLoading={false}
+        isNearBottom
+        loadOlder={vi.fn()}
+        messages={[
+          {
+            message_id: "m1",
+            conversation_id: "c1",
+            message_seq: 1,
+            sender: { user_id: "1001", username: "alice", display_name: "Alice" },
+            body: "视频通话 03:12",
+            message_type: "call_event",
+            metadata: {
+              media_type: "video",
+              outcome: "completed",
+              duration_seconds: 192,
+            },
+            created_at: "2026-07-05T09:08:00",
+          },
+        ]}
+        onNearBottomChange={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    const timestampRow = screen.getByText("07-05 09:08").closest("li");
+
+    expect(timestampRow).toHaveClass("justify-center");
+    expect(timestampRow?.nextElementSibling).toHaveTextContent("视频通话 03:12");
+  });
+
+  it("labels the below-viewport shortcut as back to bottom instead of implying unread messages", async () => {
+    const i18nInstance = await createAppI18n({
+      language: "en-US",
+      useLanguageDetector: false,
+    });
+
+    render(
+      <I18nextProvider i18n={i18nInstance}>
+        <MessageList
+          currentUserId="1001"
+          hasLoadedAllKnownHistory
+          isFetchingOlder={false}
+          isLoading={false}
+          isNearBottom={false}
+          loadOlder={vi.fn()}
+          messages={[message(1)]}
+          onNearBottomChange={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Back to bottom" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "New messages" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("preserves scroll position when older history is prepended", async () => {
     const user = userEvent.setup();
     const i18nInstance = await createAppI18n({

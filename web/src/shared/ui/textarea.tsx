@@ -10,7 +10,7 @@ export const Textarea = React.forwardRef<
     <textarea
       ref={ref}
       className={cn(
-        "flex min-h-24 w-full resize-y rounded-[var(--radius)] border border-[var(--border)] bg-white/80 px-4 py-3 text-base text-[var(--foreground)] shadow-sm transition-colors placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] md:text-sm",
+        "flex min-h-24 w-full resize-y rounded-[var(--radius)] border border-[var(--border)] bg-white/80 px-4 py-3 text-base text-[var(--foreground)] shadow-sm transition-colors placeholder:text-[var(--muted-foreground)] focus:border-[color-mix(in_oklab,var(--ring)_36%,var(--border))] focus:bg-white focus:outline-none md:text-sm",
         className,
       )}
       {...props}

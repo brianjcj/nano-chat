@@ -4,6 +4,8 @@ import { NavLink } from "react-router";
 
 import { useImStore } from "@/features/im/state/imStore";
 import { cn } from "@/shared/utils/cn";
+import { ShellSettingsMenu } from "./ShellSettingsMenu";
+import { UserMenu } from "./UserMenu";
 
 export function MobileFeatureBar() {
   const { t } = useTranslation();
@@ -18,7 +20,7 @@ export function MobileFeatureBar() {
   return (
     <nav
       aria-label={t("shell.mobileFeatureBar")}
-      className="fixed inset-x-3 bottom-3 z-30 flex items-center justify-center rounded-[calc(var(--radius)*1.05)] border border-white/72 bg-[color-mix(in_oklab,var(--foreground)_91%,#3d2c32)] p-2 text-white shadow-[0_24px_70px_rgb(33_25_27_/26%)] backdrop-blur md:hidden"
+      className="fixed inset-x-3 bottom-3 z-30 flex items-center justify-center gap-2 rounded-[calc(var(--radius)*1.05)] border border-white/72 bg-[color-mix(in_oklab,var(--foreground)_91%,#3d2c32)] p-2 text-white shadow-[0_24px_70px_rgb(33_25_27_/26%)] backdrop-blur md:hidden"
     >
       <NavLink
         className={({ isActive }) =>
@@ -37,6 +39,8 @@ export function MobileFeatureBar() {
         <MessageCircleHeart aria-hidden="true" className="size-5" />
         {t("shell.im")}
       </NavLink>
+      <UserMenu placement="mobileBar" />
+      <ShellSettingsMenu placement="mobileBar" />
     </nav>
   );
 }

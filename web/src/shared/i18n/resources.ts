@@ -90,6 +90,12 @@ export const appResources = {
           languageEn: "English",
           logout: "退出登录",
         },
+        settings: {
+          title: "设置",
+          description: "调整聊天界面的显示偏好。",
+          messageDisplay: "消息显示",
+          sequenceDescription: "用于排查消息顺序问题，默认隐藏。",
+        },
       },
       im: {
         conversationList: {
@@ -145,6 +151,8 @@ export const appResources = {
           direct: "单聊",
           group: "群聊",
           details: "会话详情",
+          sequenceToggle: "# 序号",
+          sequenceToggleAria: "显示消息序号",
           dissolved: "该会话不可用，暂时无法发送消息。",
           notFoundTitle: "找不到会话",
           notFoundDescription: "这个会话可能已不存在，或当前账号无法访问。",
@@ -162,7 +170,7 @@ export const appResources = {
         messageList: {
           region: "消息列表",
           loadOlder: "加载更早消息",
-          newMessages: "有新消息",
+          backToBottom: "回到底部",
           empty: "还没有消息",
           pending: "发送中…",
         },
@@ -337,6 +345,12 @@ export const appResources = {
           languageEn: "English",
           logout: "Sign out",
         },
+        settings: {
+          title: "Settings",
+          description: "Adjust how the chat interface is displayed.",
+          messageDisplay: "Message display",
+          sequenceDescription: "Useful for checking message ordering; hidden by default.",
+        },
       },
       im: {
         conversationList: {
@@ -392,6 +406,8 @@ export const appResources = {
           direct: "Direct chat",
           group: "Group chat",
           details: "Conversation details",
+          sequenceToggle: "# Seq",
+          sequenceToggleAria: "Show message sequence numbers",
           dissolved: "This conversation is unavailable, so sending is disabled.",
           notFoundTitle: "Conversation not found",
           notFoundDescription: "This conversation may no longer exist or may not be available to this account.",
@@ -409,7 +425,7 @@ export const appResources = {
         messageList: {
           region: "Message list",
           loadOlder: "Load older messages",
-          newMessages: "New messages",
+          backToBottom: "Back to bottom",
           empty: "No messages yet",
           pending: "Sending…",
         },
