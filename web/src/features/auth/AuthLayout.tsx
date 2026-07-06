@@ -6,10 +6,10 @@ export function AuthLayout({ children }: PropsWithChildren) {
   const { t } = useTranslation();
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_20%_20%,color-mix(in_oklab,var(--primary)_18%,transparent),transparent_32%),radial-gradient(circle_at_85%_10%,color-mix(in_oklab,var(--accent)_16%,transparent),transparent_34%),var(--background)] text-[var(--foreground)]">
+    <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_16%_18%,color-mix(in_oklab,var(--ring)_20%,transparent),transparent_30rem),radial-gradient(circle_at_86%_12%,color-mix(in_oklab,var(--accent)_14%,transparent),transparent_32rem),linear-gradient(135deg,var(--background),#f8fbfc_52%,#e8f1f5)] text-[var(--foreground)]">
       <section className="mx-auto grid min-h-screen w-full max-w-6xl items-center gap-10 px-6 py-12 lg:grid-cols-[1fr_440px]">
         <div className="relative hidden space-y-7 lg:block">
-          <div className="absolute -left-12 -top-16 size-48 rounded-full border border-white/70 bg-white/35 blur-2xl" />
+          <div className="absolute -left-12 -top-16 size-48 rounded-full border border-white/70 bg-[color-mix(in_oklab,var(--primary)_14%,white)]/70 blur-2xl" />
           <div className="relative inline-flex items-center gap-3 rounded-full border border-[var(--border)] bg-white/70 px-4 py-2 text-sm font-medium text-[var(--muted-foreground)] shadow-sm backdrop-blur">
             <span className="flex size-9 items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-[0_10px_30px_var(--primary-shadow)]">
               <MessageCircleHeart aria-hidden="true" className="size-5" />

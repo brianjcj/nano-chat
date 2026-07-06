@@ -81,7 +81,7 @@ function EmptyWorkspace() {
             {t(`im.notices.${workspaceNotice.type}`)}
           </p>
         ) : null}
-        <span className="mx-auto mb-5 flex size-16 items-center justify-center rounded-[calc(var(--radius)*0.9)] bg-[var(--surface)] text-[var(--muted-foreground)] shadow-sm ring-1 ring-[var(--border)]">
+        <span className="mx-auto mb-5 flex size-16 items-center justify-center rounded-[calc(var(--radius)*0.9)] bg-[color-mix(in_oklab,var(--primary)_10%,white)] text-[var(--primary)] shadow-sm ring-1 ring-[color-mix(in_oklab,var(--primary)_18%,var(--border))]">
           <MessageCircleHeart aria-hidden="true" className="size-8" />
         </span>
         <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">
@@ -104,7 +104,7 @@ function ConnectionStatusBanner({ status }: { status: RealtimeStatus }) {
 
   return (
     <div
-      className="fixed inset-x-4 top-20 z-30 mx-auto flex max-w-xl items-center gap-3 rounded-full border border-white/72 bg-[color-mix(in_oklab,var(--foreground)_92%,#3d2c32)] px-4 py-3 text-sm font-bold text-white shadow-[0_18px_58px_rgb(33_25_27_/24%)] md:top-5"
+      className="fixed inset-x-4 top-20 z-30 mx-auto flex max-w-xl items-center gap-3 rounded-full border border-white/70 bg-[linear-gradient(135deg,#12232d_0%,#173446_100%)] px-4 py-3 text-sm font-bold text-white shadow-[0_18px_58px_rgb(18_35_45_/24%)] md:top-5"
       role="status"
     >
       <WifiOff aria-hidden="true" className="size-4 text-[var(--primary)]" />

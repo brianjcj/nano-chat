@@ -25,13 +25,13 @@ export function MobileFeatureBar() {
   return (
     <nav
       aria-label={t("shell.mobileFeatureBar")}
-      className="fixed inset-x-3 bottom-3 z-30 flex items-center justify-center gap-2 rounded-[calc(var(--radius)*1.05)] border border-white/72 bg-[color-mix(in_oklab,var(--foreground)_91%,#3d2c32)] p-2 text-white shadow-[0_24px_70px_rgb(33_25_27_/26%)] backdrop-blur md:hidden"
+      className="fixed inset-x-3 bottom-3 z-30 flex items-center justify-center gap-2 rounded-[calc(var(--radius)*1.05)] border border-white/70 bg-[linear-gradient(135deg,#12232d_0%,#173446_100%)] p-2 text-white shadow-[0_24px_70px_rgb(18_35_45_/24%)] backdrop-blur md:hidden"
     >
       <NavLink
         className={({ isActive }) =>
           cn(
             "flex min-h-12 flex-1 items-center justify-center gap-2 rounded-[calc(var(--radius)*0.85)] px-4 text-sm font-bold text-white/74 transition-all duration-200",
-            isActive && "bg-white text-[var(--foreground)] shadow-lg",
+            isActive && "bg-[var(--primary)] text-white shadow-[0_14px_30px_var(--primary-shadow)]",
           )
         }
         onClick={() => {

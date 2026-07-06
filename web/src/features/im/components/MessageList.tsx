@@ -106,7 +106,7 @@ export function MessageList({
   }
 
   return (
-    <div className="relative min-h-0 flex-1 bg-[var(--surface-muted)]">
+    <div className="relative min-h-0 flex-1 bg-[radial-gradient(circle_at_28%_0%,color-mix(in_oklab,var(--primary)_7%,transparent),transparent_24rem),var(--surface-muted)]">
       <div
         ref={scrollContainerRef}
         aria-label={t("im.messageList.region")}
@@ -236,7 +236,7 @@ function MessageBubble({
         className={cn(
           "max-w-[min(78%,42rem)] rounded-[calc(var(--radius)*0.8)] px-3.5 py-2.5 shadow-sm",
           isOutgoing
-            ? "rounded-br-[0.35rem] bg-[var(--primary)] text-[var(--primary-foreground)]"
+            ? "rounded-br-[0.35rem] border border-[color-mix(in_oklab,var(--primary)_18%,var(--border))] bg-[var(--bubble-outgoing)] text-[var(--foreground)]"
             : "rounded-bl-[0.35rem] border border-[var(--border)] bg-[var(--bubble-incoming)] text-[var(--foreground)]",
           isFailed ? "ring-2 ring-[var(--destructive)]/40" : null,
         )}
@@ -260,7 +260,7 @@ function MessageBubble({
           <button
             className={cn(
               "mt-2 text-xs font-bold underline-offset-4 hover:underline",
-              isOutgoing ? "text-white" : "text-[var(--destructive)]",
+              "text-[var(--destructive)]",
             )}
             onClick={() => onRetry(message)}
             type="button"
