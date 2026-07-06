@@ -90,7 +90,7 @@ describe("AppShell", () => {
       await screen.findByRole("main", { name: "Main workspace" }),
     ).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Bob" })).toBeInTheDocument();
-    expect(await screen.findByText("Direct chat")).toBeInTheDocument();
+    expect(screen.queryByText("Direct chat")).not.toBeInTheDocument();
     expect(
       await screen.findByText("Hi from the routed conversation"),
     ).toBeInTheDocument();

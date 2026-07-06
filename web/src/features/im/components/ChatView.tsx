@@ -70,9 +70,6 @@ function LoadedChatView({ conversation }: { conversation: ConversationSummary })
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-none border-0 bg-[var(--surface-muted)] shadow-none">
       <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 md:h-[4.5rem] md:px-6">
         <div className="min-w-0">
-          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
-            {conversation.type === "group" ? t("im.chat.group") : t("im.chat.direct")}
-          </p>
           <h2 className="truncate text-lg font-semibold tracking-tight md:text-xl">
             {title}
           </h2>

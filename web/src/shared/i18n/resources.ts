@@ -100,7 +100,6 @@ export const appResources = {
       im: {
         conversationList: {
           title: "会话",
-          subtitle: "轻量的实时聊天入口",
           region: "会话列表",
           emptyTitle: "还没有会话",
           emptyDescription: "查找用户发起单聊，或创建一个群聊。",
@@ -148,8 +147,6 @@ export const appResources = {
           memberRequired: "至少添加 1 位其他成员",
         },
         chat: {
-          direct: "单聊",
-          group: "群聊",
           details: "会话详情",
           sequenceToggle: "# 序号",
           sequenceToggleAria: "显示消息序号",
@@ -356,7 +353,6 @@ export const appResources = {
       im: {
         conversationList: {
           title: "Conversations",
-          subtitle: "Your lightweight realtime chat entrance",
           region: "Conversation list",
           emptyTitle: "No conversations yet",
           emptyDescription: "Look up a user for a direct chat or create a group.",
@@ -404,8 +400,6 @@ export const appResources = {
           memberRequired: "Add at least one other member",
         },
         chat: {
-          direct: "Direct chat",
-          group: "Group chat",
           details: "Conversation details",
           sequenceToggle: "# Seq",
           sequenceToggleAria: "Show message sequence numbers",

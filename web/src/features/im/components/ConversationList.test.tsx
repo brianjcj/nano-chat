@@ -130,6 +130,15 @@ describe("ConversationList", () => {
     useImStore.getState().reset();
   });
 
+  it("does not render decorative conversation list header copy", async () => {
+    await renderConversationList({ conversations: [] });
+
+    expect(screen.queryByText("Chat")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Your lightweight realtime chat entrance"),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders direct and group conversations with latest body, unread totals, and an active empty group", async () => {
     await renderConversationList({
       conversations: [

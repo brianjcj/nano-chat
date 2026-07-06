@@ -45,9 +45,6 @@ export function ConversationList() {
       <header className="shrink-0 border-b border-[var(--border)] px-4 py-4 md:px-5">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
-              {t("shell.im")}
-            </p>
             <h1 className="truncate text-xl font-bold tracking-tight">
               {t("im.conversationList.title")}
             </h1>
@@ -73,9 +70,6 @@ export function ConversationList() {
             </button>
           </div>
         </div>
-        <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
-          {t("im.conversationList.subtitle")}
-        </p>
         <NewDirectDialog
           onOpenChange={setIsNewDirectOpen}
           open={isNewDirectOpen}

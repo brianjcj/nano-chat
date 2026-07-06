@@ -434,7 +434,7 @@ describe("direct draft flow", () => {
       expect(screen.getByLabelText("Message list")).toHaveTextContent("Hello Bob");
     });
     expect(screen.getByRole("heading", { name: "Bob" })).toBeInTheDocument();
-    expect(screen.getByText("Direct chat")).toBeInTheDocument();
+    expect(screen.queryByText("Direct chat")).not.toBeInTheDocument();
     expect(
       queryClient.getQueryData<ConversationSummary[]>(
         imQueryKeys.conversations(),

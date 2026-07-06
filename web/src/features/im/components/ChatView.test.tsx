@@ -207,6 +207,13 @@ describe("ChatView", () => {
     });
   });
 
+  it("does not render the chat type eyebrow above the conversation title", async () => {
+    await renderChatView();
+
+    expect(await screen.findByRole("heading", { name: "Bob" })).toBeInTheDocument();
+    expect(screen.queryByText("Direct chat")).not.toBeInTheDocument();
+  });
+
   it("hides the direct username subtitle when it duplicates the chat title", async () => {
     await renderChatView({
       conversations: [
