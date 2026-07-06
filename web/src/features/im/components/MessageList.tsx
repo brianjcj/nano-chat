@@ -2,8 +2,10 @@ import { ArrowDown, Loader2 } from "lucide-react";
 import { Fragment, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { UserSummary } from "@/shared/api/types";
 import { Button } from "@/shared/ui/button";
 import { cn } from "@/shared/utils/cn";
+import { getAvatarVisual } from "@/shared/utils/avatar";
 import {
   formatMessageSentTime,
   isServerSequenced,
@@ -104,11 +106,11 @@ export function MessageList({
   }
 
   return (
-    <div className="relative min-h-0 flex-1 bg-[linear-gradient(180deg,rgb(255_255_255_/_34%),rgb(255_255_255_/_12%))]">
+    <div className="relative min-h-0 flex-1 bg-[var(--surface-muted)]">
       <div
         ref={scrollContainerRef}
         aria-label={t("im.messageList.region")}
-        className="flex h-full min-h-0 flex-col overflow-y-auto px-4 py-4 md:px-6 md:py-5"
+        className="flex h-full min-h-0 flex-col overflow-y-auto px-3 py-4 md:px-6 md:py-5"
         onScroll={updateNearBottom}
       >
         <div className="mb-4 flex justify-center">
@@ -135,7 +137,7 @@ export function MessageList({
         ) : messages.length === 0 ? (
           <MessageListNotice>{t("im.messageList.empty")}</MessageListNotice>
         ) : (
-          <ol className="mt-auto space-y-3">
+          <ol className="mt-auto space-y-2.5">
             {timestampedMessages.map(({ message, showTimestamp }) => (
               <Fragment key={message.message_id}>
                 {showTimestamp ? (
@@ -159,7 +161,7 @@ export function MessageList({
 
       {!isNearBottom ? (
         <button
-          className="absolute bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/80 bg-[var(--foreground)] px-3 py-2 text-xs font-black text-white shadow-[0_14px_34px_var(--shadow-color)]"
+          className="absolute bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--foreground)] shadow-md"
           onClick={() => {
             const scrollContainer = scrollContainerRef.current;
 
@@ -189,7 +191,7 @@ type PendingHistoryPrepend = {
 function MessageTimestamp({ createdAt }: { createdAt: string }) {
   return (
     <li className="flex justify-center">
-      <time className="rounded-full bg-white/45 px-2.5 py-0.5 text-[0.68rem] font-bold text-[var(--muted-foreground)] opacity-65 shadow-[0_6px_16px_var(--shadow-color)]">
+      <time className="rounded-md bg-[color-mix(in_oklab,var(--foreground)_8%,transparent)] px-2 py-0.5 text-[0.68rem] font-medium text-[var(--muted-foreground)]">
         {formatMessageSentTime(createdAt)}
       </time>
     </li>
@@ -199,7 +201,7 @@ function MessageTimestamp({ createdAt }: { createdAt: string }) {
 function CallEventMessage({ message }: { message: ChatMessage }) {
   return (
     <li className="flex justify-center">
-      <div className="max-w-[78%] rounded-full border border-white/70 bg-white/72 px-4 py-2 text-center text-xs font-black text-[var(--muted-foreground)] shadow-[0_10px_24px_var(--shadow-color)]">
+      <div className="max-w-[78%] rounded-full bg-[color-mix(in_oklab,var(--foreground)_7%,transparent)] px-3 py-1.5 text-center text-xs font-semibold text-[var(--muted-foreground)]">
         {message.body}
       </div>
     </li>
@@ -223,13 +225,19 @@ function MessageBubble({
   const isPending = message.delivery_status === "pending";
 
   return (
-    <li className={cn("flex", isOutgoing ? "justify-end" : "justify-start")}>
+    <li
+      className={cn(
+        "flex items-end gap-2",
+        isOutgoing ? "justify-end" : "justify-start",
+      )}
+    >
+      {!isOutgoing ? <MessageSenderAvatar user={message.sender} /> : null}
       <div
         className={cn(
-          "max-w-[78%] rounded-[calc(var(--radius)*1.05)] px-4 py-3 shadow-[0_14px_32px_var(--shadow-color)]",
+          "max-w-[min(78%,42rem)] rounded-[calc(var(--radius)*0.8)] px-3.5 py-2.5 shadow-sm",
           isOutgoing
-            ? "rounded-br-md bg-[var(--primary)] text-[var(--primary-foreground)]"
-            : "rounded-bl-md border border-white/74 bg-white/84 text-[var(--foreground)]",
+            ? "rounded-br-[0.35rem] bg-[var(--primary)] text-[var(--primary-foreground)]"
+            : "rounded-bl-[0.35rem] border border-[var(--border)] bg-[var(--bubble-incoming)] text-[var(--foreground)]",
           isFailed ? "ring-2 ring-[var(--destructive)]/40" : null,
         )}
       >
@@ -238,7 +246,7 @@ function MessageBubble({
         </p>
         <div
           className={cn(
-            "mt-2 flex items-center gap-2 text-[0.68rem] font-bold uppercase tracking-[0.16em] opacity-75",
+            "mt-1.5 flex items-center gap-2 text-[0.68rem] font-semibold uppercase tracking-[0.12em] opacity-70",
             isOutgoing ? "justify-end" : "justify-start",
           )}
         >
@@ -251,7 +259,7 @@ function MessageBubble({
         {isFailed ? (
           <button
             className={cn(
-              "mt-2 text-xs font-black underline-offset-4 hover:underline",
+              "mt-2 text-xs font-bold underline-offset-4 hover:underline",
               isOutgoing ? "text-white" : "text-[var(--destructive)]",
             )}
             onClick={() => onRetry(message)}
@@ -263,6 +271,27 @@ function MessageBubble({
       </div>
     </li>
   );
+}
+
+function MessageSenderAvatar({ user }: { user: UserSummary }) {
+  const avatar = getAvatarVisual(user);
+  const label = `${displaySenderName(user)} avatar`;
+
+  return (
+    <span
+      aria-label={label}
+      className={cn(
+        "flex size-8 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.55)] text-[0.68rem] font-bold text-white shadow-sm ring-1 ring-white/70",
+        avatar.gradientClassName,
+      )}
+    >
+      {avatar.initials}
+    </span>
+  );
+}
+
+function displaySenderName(user: UserSummary) {
+  return user.display_name?.trim() || user.username;
 }
 
 type TimestampedChatMessage = {
@@ -290,7 +319,7 @@ function getTimestampedMessages(messages: ChatMessage[]): TimestampedChatMessage
 
 function MessageListNotice({ children }: { children: string }) {
   return (
-    <div className="mx-auto mt-auto max-w-sm rounded-[var(--radius)] border border-dashed border-[var(--border)] bg-white/58 px-4 py-3 text-center text-sm font-semibold text-[var(--muted-foreground)]">
+    <div className="mx-auto mt-auto max-w-sm rounded-[calc(var(--radius)*0.75)] border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-center text-sm font-semibold text-[var(--muted-foreground)]">
       {children}
     </div>
   );

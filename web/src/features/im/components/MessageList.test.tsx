@@ -141,6 +141,25 @@ describe("MessageList", () => {
     expect(screen.getByText("#1")).toBeInTheDocument();
   });
 
+  it("shows avatars for incoming messages and omits them for outgoing messages", () => {
+    render(
+      <MessageList
+        currentUserId="1001"
+        hasLoadedAllKnownHistory
+        isFetchingOlder={false}
+        isLoading={false}
+        isNearBottom
+        loadOlder={vi.fn()}
+        messages={[message(1), message(2)]}
+        onNearBottomChange={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Bob avatar")).toHaveTextContent("B");
+    expect(screen.queryByLabelText("Alice avatar")).not.toBeInTheDocument();
+  });
+
   it("renders call event message sent time", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-06T23:00:00"));
