@@ -166,6 +166,7 @@ export const appResources = {
           tooLarge: "消息不能超过 4096 字节",
           sendFailure: "发送失败",
           retry: "重新发送",
+          resizeHandle: "调整输入区高度",
         },
         messageList: {
           region: "消息列表",
@@ -421,6 +422,7 @@ export const appResources = {
           tooLarge: "Message cannot exceed 4096 bytes",
           sendFailure: "Send failed",
           retry: "Retry send",
+          resizeHandle: "Resize message input",
         },
         messageList: {
           region: "Message list",

@@ -1,5 +1,12 @@
 import { SendHorizontal } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/shared/ui/button";
@@ -23,6 +30,15 @@ type MessageInputProps = {
 };
 
 const VALIDATION_NOTICE_TIMEOUT_MS = 2000;
+const DEFAULT_MESSAGE_INPUT_HEIGHT_PX = 112;
+const MIN_MESSAGE_INPUT_HEIGHT_PX = 80;
+const MAX_MESSAGE_INPUT_HEIGHT_PX = 280;
+
+type ResizeDragState = {
+  pointerId: number;
+  startHeight: number;
+  startY: number;
+};
 
 export function MessageInput({
   disabled = false,
@@ -31,8 +47,10 @@ export function MessageInput({
 }: MessageInputProps) {
   const { t } = useTranslation();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const resizeDragRef = useRef<ResizeDragState | null>(null);
   const validationNoticeIdRef = useRef(0);
   const [body, setBody] = useState("");
+  const [panelHeight, setPanelHeight] = useState(DEFAULT_MESSAGE_INPUT_HEIGHT_PX);
   const [validationNotice, setValidationNotice] = useState<ValidationNotice | null>(null);
   const [isSending, setIsSending] = useState(false);
   const validationCode = validationNotice?.code ?? null;
@@ -93,6 +111,38 @@ export function MessageInput({
     setValidationNotice({ code, id: validationNoticeIdRef.current });
   }
 
+  function handleResizePointerDown(event: PointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    resizeDragRef.current = {
+      pointerId: event.pointerId,
+      startHeight: panelHeight,
+      startY: event.clientY,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function handleResizePointerMove(event: PointerEvent<HTMLDivElement>) {
+    const resizeDrag = resizeDragRef.current;
+
+    if (!resizeDrag || resizeDrag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const nextHeight = resizeDrag.startHeight + resizeDrag.startY - event.clientY;
+    setPanelHeight(clampMessageInputHeight(nextHeight));
+  }
+
+  function handleResizePointerEnd(event: PointerEvent<HTMLDivElement>) {
+    const resizeDrag = resizeDragRef.current;
+
+    if (!resizeDrag || resizeDrag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    resizeDragRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && event.ctrlKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
@@ -122,19 +172,38 @@ export function MessageInput({
 
   return (
     <form
-      className="relative shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-3 py-3 md:px-5 md:py-4"
+      className="relative flex shrink-0 flex-col border-t border-[var(--border)] bg-[var(--surface)] px-3 pb-3 pt-4 md:px-5 md:pb-4 md:pt-5"
       onSubmit={submitMessage}
+      style={{ height: `${panelHeight}px` }}
     >
+      <div
+        aria-label={t("im.messageInput.resizeHandle")}
+        aria-orientation="horizontal"
+        aria-valuemax={MAX_MESSAGE_INPUT_HEIGHT_PX}
+        aria-valuemin={MIN_MESSAGE_INPUT_HEIGHT_PX}
+        aria-valuenow={panelHeight}
+        className="group absolute left-0 top-0 flex h-3 w-full -translate-y-1/2 cursor-row-resize touch-none items-center justify-center"
+        onPointerCancel={handleResizePointerEnd}
+        onPointerDown={handleResizePointerDown}
+        onPointerMove={handleResizePointerMove}
+        onPointerUp={handleResizePointerEnd}
+        role="separator"
+      >
+        <span
+          aria-hidden="true"
+          className="h-1 w-12 rounded-full bg-[var(--border)] transition-colors group-hover:bg-[var(--accent)]"
+        />
+      </div>
       {disabled && disabledReason ? (
         <p className="mb-3 rounded-[calc(var(--radius)*0.65)] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-sm font-semibold text-[var(--muted-foreground)]">
           {disabledReason}
         </p>
       ) : null}
-      <div className="flex items-end gap-2 md:gap-3">
+      <div className="flex min-h-0 flex-1 items-end gap-2 md:gap-3">
         <Textarea
           ref={textareaRef}
           aria-label={t("im.messageInput.label")}
-          className="max-h-40 min-h-10 flex-1 resize-y rounded-[calc(var(--radius)*0.65)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm leading-6 shadow-none"
+          className="h-full min-h-10 flex-1 resize-none rounded-[calc(var(--radius)*0.65)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm leading-6 shadow-none"
           disabled={disabled}
           onChange={(event) => {
             setBody(event.target.value);
@@ -172,5 +241,12 @@ export function MessageInput({
         </p>
       ) : null}
     </form>
+  );
+}
+
+function clampMessageInputHeight(height: number) {
+  return Math.min(
+    MAX_MESSAGE_INPUT_HEIGHT_PX,
+    Math.max(MIN_MESSAGE_INPUT_HEIGHT_PX, height),
   );
 }
