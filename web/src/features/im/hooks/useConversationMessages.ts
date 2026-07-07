@@ -37,21 +37,34 @@ export function useConversationMessages(
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const conversationId = conversation?.conversation_id ?? "";
+  const latestMessageSeq = conversation?.latest_message_seq ?? 0;
   const canonicalMessagesKey = imQueryKeys.messages(conversationId);
   const [isFetchingOlder, setIsFetchingOlder] = useState(false);
   const [loadedAllHistoryByConversationId, setLoadedAllHistoryByConversationId] =
     useState<Record<string, boolean>>({});
+  const [latestFetchBeforeSeqByConversationId, setLatestFetchBeforeSeqByConversationId] =
+    useState<Record<string, number>>(() =>
+      conversation
+        ? {
+            [conversation.conversation_id]: conversation.latest_message_seq + 1,
+          }
+        : {},
+    );
   const inFlightHistorySyncsRef = useRef<Record<string, number>>({});
   const historySyncMarker = useImStore((state) =>
     conversationId ? state.historySyncMarkers[conversationId] : undefined,
   );
+  const latestFetchBeforeSeq = conversationId
+    ? (latestFetchBeforeSeqByConversationId[conversationId] ??
+      latestMessageSeq + 1)
+    : 1;
 
   const latestQuery = useMemo(
     () => ({
-      before_seq: (conversation?.latest_message_seq ?? 0) + 1,
+      before_seq: latestFetchBeforeSeq,
       limit: HISTORY_PAGE_SIZE,
     }),
-    [conversation?.latest_message_seq],
+    [latestFetchBeforeSeq],
   );
 
   const canonicalMessagesQuery = useQuery({
@@ -70,6 +83,43 @@ export function useConversationMessages(
       apiClient.listMessages(conversationId, latestQuery) as Promise<Message[]>,
     enabled: Boolean(conversation),
   });
+
+  useEffect(() => {
+    if (!conversationId) {
+      return;
+    }
+
+    const nextBeforeSeq = latestMessageSeq + 1;
+
+    queueMicrotask(() => {
+      setLatestFetchBeforeSeqByConversationId((targets) => {
+        const currentBeforeSeq = targets[conversationId];
+
+        if (currentBeforeSeq === undefined) {
+          return {
+            ...targets,
+            [conversationId]: nextBeforeSeq,
+          };
+        }
+
+        if (nextBeforeSeq <= currentBeforeSeq) {
+          return targets;
+        }
+
+        const existingMessages =
+          queryClient.getQueryData<ChatMessage[]>(imQueryKeys.messages(conversationId)) ?? [];
+
+        if (isMessageSeqLoaded(existingMessages, latestMessageSeq)) {
+          return targets;
+        }
+
+        return {
+          ...targets,
+          [conversationId]: nextBeforeSeq,
+        };
+      });
+    });
+  }, [conversationId, latestMessageSeq, queryClient]);
 
   useEffect(() => {
     if (!conversation || !latestMessagesQuery.data) {
@@ -238,6 +288,16 @@ function markAllHistoryLoaded(
     ...loadedAllHistoryByConversationId,
     [conversationId]: true,
   }));
+}
+
+function isMessageSeqLoaded(messages: ChatMessage[], messageSeq: number) {
+  if (messageSeq <= 0) {
+    return true;
+  }
+
+  return messages.some(
+    (message) => isServerSequenced(message) && message.message_seq >= messageSeq,
+  );
 }
 
 function latestPageRevealsLoadedMiddleGap(

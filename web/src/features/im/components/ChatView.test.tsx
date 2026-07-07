@@ -12,6 +12,7 @@ import {
   render,
 } from "@/app/test-utils";
 import { imQueryKeys } from "@/features/im/api/imQueries";
+import { applyRealtimeEvent } from "@/features/im/state/cacheUpdates";
 import { useImStore } from "@/features/im/state/imStore";
 import { ChatView } from "./ChatView";
 import type { ApiClient } from "@/shared/api/client";
@@ -590,6 +591,118 @@ describe("ChatView", () => {
         before_seq: 8,
         limit: 50,
       });
+    });
+  });
+
+  it("does not refetch the latest page when realtime appends the current conversation message", async () => {
+    const initialLatestMessage = message(7);
+    const realtimeMessage = message(8);
+    const listMessages = vi
+      .fn<ApiClient["listMessages"]>()
+      .mockResolvedValue([message(6), initialLatestMessage]);
+    const { queryClient } = await renderChatView({
+      conversations: [
+        conversation({
+          latest_message_seq: initialLatestMessage.message_seq,
+          read_seq: initialLatestMessage.message_seq,
+          unread_count: 0,
+          latest_message: latestMessageSummary(initialLatestMessage),
+        }),
+      ],
+      listMessages,
+    });
+
+    expect(await screen.findByText("Message 7")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(listMessages).toHaveBeenCalledWith("conversation-1", {
+        before_seq: 8,
+        limit: 50,
+      });
+    });
+
+    listMessages.mockClear();
+
+    act(() => {
+      applyRealtimeEvent({
+        queryClient,
+        store: useImStore,
+        currentUserId: localUser.user_id,
+        event: {
+          type: "message.created",
+          payload: {
+            conversation_id: "conversation-1",
+            message: realtimeMessage,
+          },
+        },
+      });
+    });
+
+    expect(await screen.findByText("Message 8")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        queryClient
+          .getQueryData<ChatMessage[]>(imQueryKeys.messages("conversation-1"))
+          ?.map((candidate) => candidate.message_seq),
+      ).toEqual([6, 7, 8]);
+    });
+    expect(listMessages).not.toHaveBeenCalled();
+  });
+
+  it("refetches the latest page when the conversation summary advances without the latest cached message", async () => {
+    const initialLatestMessage = message(7);
+    const recoveredLatestMessage = message(9);
+    const listMessages = vi
+      .fn<ApiClient["listMessages"]>()
+      .mockResolvedValueOnce([message(6), initialLatestMessage])
+      .mockResolvedValueOnce([message(8), recoveredLatestMessage]);
+    const { queryClient } = await renderChatView({
+      conversations: [
+        conversation({
+          latest_message_seq: initialLatestMessage.message_seq,
+          read_seq: initialLatestMessage.message_seq,
+          unread_count: 0,
+          latest_message: latestMessageSummary(initialLatestMessage),
+        }),
+      ],
+      listMessages,
+    });
+
+    expect(await screen.findByText("Message 7")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(listMessages).toHaveBeenCalledWith("conversation-1", {
+        before_seq: 8,
+        limit: 50,
+      });
+    });
+
+    listMessages.mockClear();
+
+    act(() => {
+      queryClient.setQueryData<ConversationSummary[]>(
+        imQueryKeys.conversations(),
+        [
+          conversation({
+            latest_message_seq: recoveredLatestMessage.message_seq,
+            read_seq: initialLatestMessage.message_seq,
+            unread_count: 2,
+            latest_message: latestMessageSummary(recoveredLatestMessage),
+          }),
+        ],
+      );
+    });
+
+    await waitFor(() => {
+      expect(listMessages).toHaveBeenCalledWith("conversation-1", {
+        before_seq: 10,
+        limit: 50,
+      });
+    });
+    await waitFor(() => {
+      expect(
+        queryClient
+          .getQueryData<ChatMessage[]>(imQueryKeys.messages("conversation-1"))
+          ?.map((candidate) => candidate.message_seq),
+      ).toEqual([6, 7, 8, 9]);
     });
   });
 
