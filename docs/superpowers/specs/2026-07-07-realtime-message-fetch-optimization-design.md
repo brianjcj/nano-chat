@@ -24,7 +24,7 @@ Keep the change localized to the web message-loading flow:
 - Decouple the latest-page fetch request from every live `conversation.latest_message_seq` change.
 - Track a per-open-conversation latest-page bootstrap target in `useConversationMessages`. The target is set when the conversation is first opened or when an explicit recovery refetch is needed, not when realtime events alone append messages.
 - Continue merging fetched latest pages into the canonical `imQueryKeys.messages(conversationId)` cache with `mergeMessagesBySeq`.
-- Keep realtime event handling in `cacheUpdates.ts` responsible for appending the incoming message and marking `historySyncNeeded` when `message_seq` skips past the highest contiguous loaded sequence.
+- Historical/superseded: keep realtime event handling in `cacheUpdates.ts` responsible for appending the incoming message and marking the old gap-recovery state when `message_seq` skips past the highest contiguous loaded sequence.
 - Make the fetch guard conservative: if the conversation has not completed its initial latest-page bootstrap, do not let a newly appended realtime message suppress that initial fetch.
 - Leave older-history pagination unchanged: the "Load older messages" action still requests `before_seq = current minimum message_seq` with `limit = 50`.
 
