@@ -43,7 +43,11 @@ export function MessageList({
   const { t } = useTranslation();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const pendingHistoryPrependRef = useRef<PendingHistoryPrepend | null>(null);
+  const latestMessageKeyRef = useRef<string | null>(null);
   const oldestMessageSeq = getMinimumMessageSeq(messages);
+  const latestMessage = messages[messages.length - 1] ?? null;
+  const latestMessageKey = latestMessage ? getMessageScrollKey(latestMessage) : null;
+  const latestMessageSenderId = latestMessage?.sender.user_id ?? null;
   const timestampedMessages = getTimestampedMessages(messages);
 
   useLayoutEffect(() => {
@@ -52,6 +56,10 @@ export function MessageList({
     if (!scrollContainer) {
       return;
     }
+
+    const didLatestMessageChange =
+      latestMessageKey !== null && latestMessageKey !== latestMessageKeyRef.current;
+    latestMessageKeyRef.current = latestMessageKey;
 
     const pendingHistoryPrepend = pendingHistoryPrependRef.current;
 
@@ -74,10 +82,25 @@ export function MessageList({
       }
     }
 
+    if (didLatestMessageChange && latestMessageSenderId === currentUserId) {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      onNearBottomChange(true);
+      return;
+    }
+
     if (isNearBottom) {
       scrollContainer.scrollTop = scrollContainer.scrollHeight;
     }
-  }, [isFetchingOlder, isNearBottom, messages.length, oldestMessageSeq]);
+  }, [
+    currentUserId,
+    isFetchingOlder,
+    isNearBottom,
+    latestMessageKey,
+    latestMessageSenderId,
+    messages.length,
+    oldestMessageSeq,
+    onNearBottomChange,
+  ]);
 
   async function handleLoadOlderClick() {
     const scrollContainer = scrollContainerRef.current;
@@ -332,6 +355,10 @@ function isScrollNearBottom(scrollContainer: HTMLDivElement) {
       scrollContainer.clientHeight <=
     NEAR_BOTTOM_THRESHOLD_PX
   );
+}
+
+function getMessageScrollKey(message: ChatMessage) {
+  return message.client_msg_id ?? message.message_id;
 }
 
 function getMinimumMessageSeq(messages: ChatMessage[]) {

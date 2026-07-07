@@ -252,6 +252,79 @@ describe("MessageList", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("scrolls to the bottom when a current-user message is appended while away from bottom", async () => {
+    const user = userEvent.setup();
+    const i18nInstance = await createAppI18n({
+      language: "en-US",
+      useLanguageDetector: false,
+    });
+    let scrollHeight = 300;
+    let scrollTop = 80;
+    const onNearBottomChange = vi.fn();
+
+    function Harness() {
+      const [messages, setMessages] = useState<ChatMessage[]>([
+        message(1),
+        message(2),
+      ]);
+
+      return (
+        <I18nextProvider i18n={i18nInstance}>
+          <MessageList
+            currentUserId={localUser.user_id}
+            hasLoadedAllKnownHistory
+            isFetchingOlder={false}
+            isLoading={false}
+            isNearBottom={false}
+            loadOlder={vi.fn()}
+            messages={messages}
+            onNearBottomChange={onNearBottomChange}
+            onRetry={vi.fn()}
+          />
+          <button
+            onClick={() => {
+              scrollHeight = 500;
+              setMessages((currentMessages) => [
+                ...currentMessages,
+                { ...message(4), body: "Sent while scrolled up" },
+              ]);
+            }}
+            type="button"
+          >
+            Append sent message
+          </button>
+        </I18nextProvider>
+      );
+    }
+
+    render(<Harness />);
+
+    const scrollContainer = screen.getByLabelText("Message list");
+    Object.defineProperty(scrollContainer, "clientHeight", {
+      configurable: true,
+      value: 180,
+    });
+    Object.defineProperty(scrollContainer, "scrollHeight", {
+      configurable: true,
+      get: () => scrollHeight,
+    });
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = value;
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Append sent message" }));
+
+    expect(await screen.findByText("Sent while scrolled up")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(scrollTop).toBe(500);
+    });
+    expect(onNearBottomChange).toHaveBeenCalledWith(true);
+  });
+
   it("preserves scroll position when older history is prepended", async () => {
     const user = userEvent.setup();
     const i18nInstance = await createAppI18n({
