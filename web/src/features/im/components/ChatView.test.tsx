@@ -1164,7 +1164,7 @@ describe("ChatView", () => {
     );
   });
 
-  it("continues history backfill when a full before_seq page leaves a larger gap", async () => {
+  it("continues history backfill when a full before_seq page overlaps the high side of a larger gap", async () => {
     useImStore.getState().markHistoryBackfillNeeded("conversation-1", 102);
     const firstBackfillPage = Array.from({ length: 50 }, (_, index) =>
       message(index + 52),
@@ -1188,6 +1188,8 @@ describe("ChatView", () => {
     const queryClient = createQueryClient();
     queryClient.setQueryData(imQueryKeys.messages("conversation-1"), [
       message(1),
+      message(100),
+      message(101),
       message(102),
     ]);
 

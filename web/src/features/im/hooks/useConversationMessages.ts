@@ -167,7 +167,7 @@ export function useConversationMessages(
 
     const existingMessagesBeforeRequest =
       queryClient.getQueryData<ChatMessage[]>(imQueryKeys.messages(conversationId)) ?? [];
-    const loadedLowerBoundarySeq = getHighestLoadedMessageSeqBefore(
+    const loadedLowerBoundarySeq = getLoadedLowerBoundarySeqForBackfill(
       existingMessagesBeforeRequest,
       beforeSeq,
     );
@@ -346,22 +346,50 @@ function getMinimumMessageSeq(messages: ChatMessage[] | Message[]) {
   return Math.min(...seqs);
 }
 
-function getHighestLoadedMessageSeqBefore(
+function getLoadedLowerBoundarySeqForBackfill(
   messages: ChatMessage[],
   beforeSeq: number,
 ) {
-  const seqs = messages
-    .map((message) => message.message_seq)
-    .filter(
-      (messageSeq): messageSeq is number =>
-        typeof messageSeq === "number" && messageSeq < beforeSeq,
-    );
+  const seqs = [
+    ...new Set(
+      messages
+        .map((message) => message.message_seq)
+        .filter(
+          (messageSeq): messageSeq is number =>
+            typeof messageSeq === "number" &&
+            messageSeq > 0 &&
+            messageSeq < beforeSeq,
+        ),
+    ),
+  ].sort((left, right) => left - right);
 
   if (seqs.length === 0) {
     return 0;
   }
 
-  return Math.max(...seqs);
+  const loadedSeqs = new Set(seqs);
+  let firstMissingBelowHighSide = beforeSeq - 1;
+
+  while (
+    firstMissingBelowHighSide > 0 &&
+    loadedSeqs.has(firstMissingBelowHighSide)
+  ) {
+    firstMissingBelowHighSide -= 1;
+  }
+
+  if (firstMissingBelowHighSide === 0) {
+    return beforeSeq - 1;
+  }
+
+  const lowerSideSeqs = seqs.filter(
+    (messageSeq) => messageSeq < firstMissingBelowHighSide,
+  );
+
+  if (lowerSideSeqs.length === 0) {
+    return 0;
+  }
+
+  return Math.max(...lowerSideSeqs);
 }
 
 function backfillReachedLowerBoundary(
