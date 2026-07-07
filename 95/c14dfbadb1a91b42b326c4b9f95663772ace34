@@ -1,0 +1,20 @@
+docs/superpowers/plans/2026-07-07-realtime-gap-backfill-before-seq.md
+  s_d8e78963a79f09::t_fbe1b83148cacb 1-643
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "95c14dfbadb1a91b42b326c4b9f95663772ace34",
+  "prompts": {},
+  "logical_commit_id": "95c14dfbadb1a91b42b326c4b9f95663772ace34",
+  "sessions": {
+    "s_d8e78963a79f09": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3cbf-46c2-73ac-96f0-cf6e13f7d0f7",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
