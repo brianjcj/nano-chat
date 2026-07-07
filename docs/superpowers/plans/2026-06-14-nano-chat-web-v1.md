@@ -519,7 +519,7 @@ Use injectable `WebSocketCtor` and timer hooks for tests.
 
 - current feature area, current conversation id, direct draft, connection status
 - local unread corrections
-- history sync markers
+- history backfill markers
 - mobile panel state
 
 - [ ] **Step 6: Wire realtime bridge**

@@ -104,7 +104,7 @@ In `web/src/features/im/state/cacheUpdates.test.ts`, replace the two tests named
 
 - [ ] **Step 2: Update failing chat backfill tests in `ChatView.test.tsx`**
 
-In `web/src/features/im/components/ChatView.test.tsx`, replace the three tests named `consumes a history sync marker by fetching after_seq and merging missing messages`, `detects a reconnect latest-page gap and syncs the inaccessible middle messages`, and `continues history sync when a full after_seq page leaves a larger gap` with these tests:
+In `web/src/features/im/components/ChatView.test.tsx`, replace the three legacy forward-sync recovery tests with these before-seq backfill tests:
 
 ```ts
   it("consumes a history backfill marker by fetching before_seq and merging missing messages", async () => {
@@ -595,7 +595,7 @@ Expected: commit succeeds.
 
 **Interfaces:**
 - Consumes: existing Message History API documentation for `after_seq`, `before_seq`, and `limit`.
-- Produces: realtime sync guidance that describes Web automatic gap recovery with `before_seq` backfill and does not instruct Web clients to use `after_seq=<last_contiguous_seq>` for this path.
+- Produces: realtime sync guidance that describes Web automatic gap recovery with `before_seq` backfill and does not instruct Web clients to use forward recovery from the last contiguous sequence for this path.
 
 - [ ] **Step 1: Update realtime sync documentation**
 
@@ -610,7 +610,7 @@ Realtime notifications are best-effort and at-most-once. They are not the source
 Run:
 
 ```bash
-rg -n "after_seq=<last_contiguous_seq>|history sync marker|historySyncMarkers|markHistorySyncNeeded|clearHistorySyncMarker" docs web/src/features/im
+rg -n "<stale forward-sync recovery wording or old marker names>" docs web/src/features/im
 ```
 
 Expected: no output. If the command finds a stale reference in docs or `web/src/features/im`, update that reference to the new before-seq backfill wording/name.
@@ -638,6 +638,6 @@ Expected: commit succeeds.
 
 ## Self-Review
 
-- Spec coverage: Task 1 implements before-seq realtime gap markers, latest-page middle-gap backfill, repeated backward backfill, duplicate-fetch preservation, initial latest-page preservation, and manual older-history preservation. Task 2 updates the realtime reconnect guidance that previously instructed clients to use `after_seq=<last_contiguous_seq>`.
+- Spec coverage: Task 1 implements before-seq realtime gap markers, latest-page middle-gap backfill, repeated backward backfill, duplicate-fetch preservation, initial latest-page preservation, and manual older-history preservation. Task 2 updates the realtime reconnect guidance that previously instructed clients to use forward recovery from the last contiguous sequence.
 - Placeholder scan: this plan contains exact file paths, code snippets, commands, expected outcomes, and no placeholder sections.
 - Type consistency: marker names are consistently `HistoryBackfillMarker`, `historyBackfillMarkers`, `markHistoryBackfillNeeded`, and `clearHistoryBackfillMarker`; query payloads use existing `before_seq` and `limit` fields from `MessageHistoryQuery`.

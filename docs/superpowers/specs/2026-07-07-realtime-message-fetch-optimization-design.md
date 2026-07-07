@@ -13,7 +13,7 @@ The Web IM chat view loads a latest message page in `web/src/features/im/hooks/u
 - Keep using the realtime `message.created` payload as the source for normal in-order new messages while the WebSocket is connected.
 - Do not fetch the latest 50-message page just because a realtime event advanced `latest_message_seq` for the currently open conversation.
 - Preserve the existing initial conversation load: opening a conversation still fetches its latest page so earlier visible history is available.
-- Preserve the existing gap recovery behavior: if a realtime event reveals a missing sequence gap, continue using the current `after_seq` history sync marker flow to fetch missing messages.
+- Superseded gap recovery note: automatic Web gap recovery now uses backward `before_seq` history backfill markers, while this optimization's latest-page suppression remains unchanged.
 - Preserve reconnect/focus recovery: explicit query invalidation after reconnect, browser focus, or online recovery must still be able to fetch the latest page from the backend.
 - Do not change backend APIs for this iteration; the existing `after_seq`, `before_seq`, and `limit` query parameters are enough.
 
@@ -34,5 +34,5 @@ Update web tests around `ChatView` / `useConversationMessages` to cover:
 
 - Initial conversation rendering still calls `listMessages(conversationId, { before_seq: latest_message_seq + 1, limit: 50 })`.
 - After initial messages are loaded, applying a realtime `message.created` event for the current conversation appends the message to the canonical cache without issuing a second latest-page `limit: 50` request.
-- A realtime gap still creates/consumes the existing history sync marker and calls `listMessages` with `after_seq` to fill missing messages.
+- Superseded by the later before-seq backfill design: realtime gaps create/consume history backfill markers and call `listMessages` with `before_seq` to fill missing messages.
 - Existing load-older history behavior remains unchanged.

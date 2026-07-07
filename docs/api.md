@@ -899,7 +899,7 @@ Postgres NOTIFY payloads include `origin_instance_id`, optional `origin_connecti
 
 ### Sync and reconnect behavior
 
-Realtime notifications are best-effort and at-most-once. They are not the source of truth: message history and conversation sync APIs remain authoritative. Clients should track the highest contiguous `message_seq` seen per conversation. If a `message.created` event reveals a sequence gap, reconnects occur, or the client suspects missed events, recover by calling `GET /api/v1/conversations/{conversation_id}/messages?after_seq=<last_contiguous_seq>`.
+Realtime notifications are best-effort and at-most-once. They are not the source of truth: message history and conversation sync APIs remain authoritative. Web clients should track loaded `message_seq` windows per conversation. If a `message.created` event reveals a sequence gap, reconnects occur, or the client suspects missed events, the Web application recovers by paging backward from the upper side of the gap: call `GET /api/v1/conversations/{conversation_id}/messages?before_seq=<gap_upper_seq>&limit=50`, merge the returned messages, and continue with `before_seq=<minimum_seq_from_previous_page>` while full pages still do not reach the already-loaded lower side of the gap. Stop when the page reaches or overlaps existing loaded messages, returns fewer than `limit`, or returns no messages. The API still supports `after_seq` for clients that choose a forward synchronization strategy.
 
 ## Errors
 

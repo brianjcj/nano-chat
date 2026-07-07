@@ -12,7 +12,7 @@
 
 - Do not change backend APIs for this iteration; use the existing `after_seq`, `before_seq`, and `limit` query parameters.
 - Preserve initial conversation load: opening a conversation still fetches its latest page.
-- Preserve gap recovery: realtime sequence gaps still use the existing `after_seq` history sync marker flow.
+- Superseded gap recovery note: realtime sequence gaps now use backward `before_seq` history backfill markers.
 - Preserve older-history pagination: "Load older messages" still requests `before_seq = current minimum message_seq` with `limit = 50`.
 - Preserve reconnect/focus recovery: when the conversation summary advances without the latest message in local cache, the hook must fetch a new latest page.
 
@@ -198,8 +198,8 @@ export function useConversationMessages(
         : {},
     );
   const inFlightHistorySyncsRef = useRef<Record<string, number>>({});
-  const historySyncMarker = useImStore((state) =>
-    conversationId ? state.historySyncMarkers[conversationId] : undefined,
+  const historyBackfillMarker = useImStore((state) =>
+    conversationId ? state.historyBackfillMarkers[conversationId] : undefined,
   );
   const latestFetchBeforeSeq = conversationId
     ? (latestFetchBeforeSeqByConversationId[conversationId] ??

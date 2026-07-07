@@ -24,7 +24,7 @@ This supersedes the gap-recovery bullet in `docs/superpowers/specs/2026-07-07-re
 
 Keep the change localized to the Web IM state and message-loading flow:
 
-- Replace the Web store's automatic history sync marker payload from `after_seq` semantics to `before_seq` backfill semantics.
+- Replace the Web store's automatic history backfill marker payload with `before_seq` backfill semantics.
 - Prefer renaming marker helpers/types from "history sync" to "history backfill" so the names match the new direction.
 - In realtime event handling (`cacheUpdates.ts`), detect gaps against the highest loaded server sequence for the conversation. If the incoming message's sequence is more than one greater than the loaded tail, record a backfill marker with `before_seq = incoming message_seq`.
 - In latest-page merge handling (`useConversationMessages.ts`), if the fetched latest page starts after the already-loaded lower side of the gap, record a backfill marker with `before_seq = fetched minimum message_seq`.
@@ -32,7 +32,7 @@ Keep the change localized to the Web IM state and message-loading flow:
   - Clear when the page is short, empty, or reaches/overlaps already-loaded messages.
   - Continue with `before_seq = fetched minimum message_seq` when a full page still leaves a gap below it.
 - Keep the existing latest-page duplicate-suppression logic from the previous optimization.
-- Update API/client documentation that currently advises Web clients to recover realtime gaps with `after_seq=<last_contiguous_seq>` so it describes backward `before_seq` backfill for the Web application.
+- Update API/client documentation that previously advised forward recovery from the last contiguous sequence so it describes backward `before_seq` backfill for the Web application.
 
 ## Testing
 
