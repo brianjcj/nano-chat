@@ -1,5 +1,9 @@
 # Realtime message fetch optimization design
 
+## Supersession note
+
+The gap-recovery requirement in this design was later superseded by `docs/superpowers/specs/2026-07-07-realtime-gap-backfill-before-seq-design.md`, which changes automatic Web gap recovery from `after_seq` sync to backward `before_seq` backfill.
+
 ## Context
 
 The Web IM chat view loads a latest message page in `web/src/features/im/hooks/useConversationMessages.ts` with `before_seq = conversation.latest_message_seq + 1` and `limit = 50`. A realtime `message.created` event already carries the complete new message and `web/src/features/im/state/cacheUpdates.ts` merges that message into the canonical message cache. However, the same realtime event also updates the conversation summary's `latest_message_seq`, which changes the latest-page query key and causes the chat view to fetch another 50-message page that mostly duplicates messages already loaded.
