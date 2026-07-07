@@ -1,0 +1,25 @@
+web/src/features/im/components/MessageList.tsx
+  s_a1881b034e16f8::t_2189a380ecd754 46,48-50,60-63,83-88,90,94-103,358-361
+  s_a1881b034e16f8::t_72ad4c4ee10286 89
+  s_a1881b034e16f8::t_e95fa8bab93c41 362-363
+web/src/features/im/components/MessageList.test.tsx
+  s_a1881b034e16f8::t_3e87abfd999089 255-288,290-327
+  s_a1881b034e16f8::t_c55cf38fe38b02 289
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "381537f7fcb1c4d9c7cf5d6ee10203d542633671",
+  "prompts": {},
+  "logical_commit_id": "381537f7fcb1c4d9c7cf5d6ee10203d542633671",
+  "sessions": {
+    "s_a1881b034e16f8": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3819-fe49-779c-aaf6-70d81e5b0229",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
