@@ -93,8 +93,15 @@ export const appResources = {
         settings: {
           title: "设置",
           description: "调整聊天界面的显示偏好。",
+          colorTheme: "颜色主题",
           messageDisplay: "消息显示",
           sequenceDescription: "用于排查消息顺序问题，默认隐藏。",
+          themes: {
+            mist: "雾蓝",
+            midnight: "午夜",
+            sakura: "樱花",
+            forest: "森林",
+          },
         },
       },
       im: {
@@ -346,8 +353,15 @@ export const appResources = {
         settings: {
           title: "Settings",
           description: "Adjust how the chat interface is displayed.",
+          colorTheme: "Color theme",
           messageDisplay: "Message display",
           sequenceDescription: "Useful for checking message ordering; hidden by default.",
+          themes: {
+            mist: "Mist",
+            midnight: "Midnight",
+            sakura: "Sakura",
+            forest: "Forest",
+          },
         },
       },
       im: {

@@ -1,4 +1,4 @@
-import { Settings } from "lucide-react";
+import { Palette, Settings } from "lucide-react";
 import {
   useEffect,
   useId,
@@ -9,6 +9,8 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { useImStore } from "@/features/im/state/imStore";
+import { COLOR_THEMES, type ColorTheme } from "@/shared/theme/colorTheme";
+import { useColorTheme } from "@/shared/theme/useColorTheme";
 import { cn } from "@/shared/utils/cn";
 
 type ShellSettingsMenuPlacement = "rail" | "mobileBar";
@@ -17,11 +19,19 @@ type ShellSettingsMenuProps = {
   placement: ShellSettingsMenuPlacement;
 };
 
+const COLOR_THEME_SWATCH_CLASS_NAMES: Record<ColorTheme, string> = {
+  mist: "bg-[linear-gradient(135deg,#edf4f7_0%,#0f9f8f_100%)]",
+  midnight: "bg-[linear-gradient(135deg,#0d1620_0%,#38cdbd_100%)]",
+  sakura: "bg-[linear-gradient(135deg,#fff1f5_0%,#d94d7b_100%)]",
+  forest: "bg-[linear-gradient(135deg,#eef7ee_0%,#2f9b61_100%)]",
+};
+
 export function ShellSettingsMenu({ placement }: ShellSettingsMenuProps) {
   const { t } = useTranslation();
   const disclosurePanelId = useId();
   const menuRootRef = useRef<HTMLDivElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const { theme, setTheme } = useColorTheme();
   const showMessageSequenceNumbers = useImStore(
     (state) => state.showMessageSequenceNumbers,
   );
@@ -91,7 +101,7 @@ export function ShellSettingsMenu({ placement }: ShellSettingsMenuProps) {
         <div
           aria-label={t("shell.settings.title")}
           className={cn(
-            "absolute z-50 w-80 rounded-[calc(var(--radius)*1.05)] border border-white/78 bg-white/94 p-3 text-[var(--foreground)] shadow-[0_24px_70px_var(--shadow-color)] backdrop-blur",
+            "absolute z-50 w-80 rounded-[calc(var(--radius)*1.05)] border border-[color-mix(in_oklab,var(--surface)_78%,var(--border))] bg-[color-mix(in_oklab,var(--surface)_94%,transparent)] p-3 text-[var(--foreground)] shadow-[0_24px_70px_var(--shadow-color)] backdrop-blur",
             getPanelPositionClassName(placement),
           )}
           id={disclosurePanelId}
@@ -99,7 +109,7 @@ export function ShellSettingsMenu({ placement }: ShellSettingsMenuProps) {
         >
           <div className="mb-3 rounded-[calc(var(--radius)*0.85)] bg-[var(--surface-muted)]/70 p-3">
             <div className="mb-1 flex items-center gap-2 text-sm font-black">
-              <span className="flex size-8 items-center justify-center rounded-full bg-[var(--foreground)] text-white shadow-sm">
+              <span className="flex size-8 items-center justify-center rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm">
                 <Settings aria-hidden="true" className="size-4" />
               </span>
               {t("shell.settings.title")}
@@ -109,45 +119,82 @@ export function ShellSettingsMenu({ placement }: ShellSettingsMenuProps) {
             </p>
           </div>
 
-          <div className="space-y-2">
-            <p className="px-1 text-xs font-black uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
-              {t("shell.settings.messageDisplay")}
-            </p>
-            <button
-              aria-checked={showMessageSequenceNumbers}
-              aria-label={t("im.chat.sequenceToggleAria")}
-              className="flex w-full items-center justify-between gap-3 rounded-[calc(var(--radius)*0.85)] border border-[var(--border)] bg-white/72 p-3 text-left transition-colors hover:bg-white"
-              onClick={toggleShowMessageSequenceNumbers}
-              role="switch"
-              type="button"
-            >
-              <span className="min-w-0">
-                <span className="block text-sm font-bold">
-                  {t("im.chat.sequenceToggleAria")}
-                </span>
-                <span className="mt-1 block text-xs leading-5 text-[var(--muted-foreground)]">
-                  {t("shell.settings.sequenceDescription")}
-                </span>
-              </span>
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "relative h-6 w-11 shrink-0 rounded-full border transition-colors",
-                  showMessageSequenceNumbers
-                    ? "border-[var(--primary)] bg-[var(--primary)]"
-                    : "border-[var(--border)] bg-[var(--surface-muted)]",
-                )}
+          <div className="space-y-4">
+            <section className="space-y-2">
+              <p className="flex items-center gap-2 px-1 text-xs font-black uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+                <Palette aria-hidden="true" className="size-3.5" />
+                {t("shell.settings.colorTheme")}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {COLOR_THEMES.map((colorTheme) => (
+                  <button
+                    key={colorTheme}
+                    aria-label={t(`shell.settings.themes.${colorTheme}`)}
+                    aria-pressed={theme === colorTheme}
+                    className={cn(
+                      "flex items-center gap-2 rounded-[calc(var(--radius)*0.75)] border p-2 text-left text-sm font-bold transition-colors",
+                      theme === colorTheme
+                        ? "border-[var(--primary)] bg-[color-mix(in_oklab,var(--primary)_12%,var(--surface))] text-[var(--foreground)]"
+                        : "border-[var(--border)] bg-[color-mix(in_oklab,var(--surface)_72%,transparent)] text-[var(--foreground)] hover:bg-[var(--surface)]",
+                    )}
+                    onClick={() => setTheme(colorTheme)}
+                    type="button"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-7 shrink-0 rounded-full border border-white/70 shadow-sm",
+                        COLOR_THEME_SWATCH_CLASS_NAMES[colorTheme],
+                      )}
+                    />
+                    <span className="truncate">
+                      {t(`shell.settings.themes.${colorTheme}`)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="space-y-2">
+              <p className="px-1 text-xs font-black uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+                {t("shell.settings.messageDisplay")}
+              </p>
+              <button
+                aria-checked={showMessageSequenceNumbers}
+                aria-label={t("im.chat.sequenceToggleAria")}
+                className="flex w-full items-center justify-between gap-3 rounded-[calc(var(--radius)*0.85)] border border-[var(--border)] bg-[color-mix(in_oklab,var(--surface)_72%,transparent)] p-3 text-left transition-colors hover:bg-[var(--surface)]"
+                onClick={toggleShowMessageSequenceNumbers}
+                role="switch"
+                type="button"
               >
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold">
+                    {t("im.chat.sequenceToggleAria")}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-[var(--muted-foreground)]">
+                    {t("shell.settings.sequenceDescription")}
+                  </span>
+                </span>
                 <span
+                  aria-hidden="true"
                   className={cn(
-                    "absolute top-1/2 size-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform",
+                    "relative h-6 w-11 shrink-0 rounded-full border transition-colors",
                     showMessageSequenceNumbers
-                      ? "translate-x-5"
-                      : "translate-x-1",
+                      ? "border-[var(--primary)] bg-[var(--primary)]"
+                      : "border-[var(--border)] bg-[var(--surface-muted)]",
                   )}
-                />
-              </span>
-            </button>
+                >
+                  <span
+                    className={cn(
+                      "absolute top-1/2 size-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform",
+                      showMessageSequenceNumbers
+                        ? "translate-x-5"
+                        : "translate-x-1",
+                    )}
+                  />
+                </span>
+              </button>
+            </section>
           </div>
         </div>
       ) : null}
@@ -171,7 +218,7 @@ function getTriggerClassName(
     return cn(
       "group flex min-h-12 items-center justify-center gap-2 rounded-[calc(var(--radius)*0.85)] px-4 text-white/74 transition-all duration-200 hover:bg-white/12 hover:text-white",
       isOpen &&
-        "bg-white text-[var(--foreground)] shadow-lg hover:bg-white hover:text-[var(--foreground)]",
+        "bg-[var(--surface)] text-[var(--foreground)] shadow-lg hover:bg-[var(--surface)] hover:text-[var(--foreground)]",
     );
   }
 

@@ -10,6 +10,7 @@ import {
 import { imQueryKeys } from "@/features/im/api/imQueries";
 import { useImStore } from "@/features/im/state/imStore";
 import type { ApiClient } from "@/shared/api/client";
+import { COLOR_THEME_STORAGE_KEY } from "@/shared/theme/colorTheme";
 import type { ConversationSummary, Message, UserSummary } from "@/shared/api/types";
 
 vi.mock("@/shared/realtime/useRealtimeBridge", () => ({
@@ -39,6 +40,7 @@ function getDesktopSettingsTrigger() {
 describe("AppShell", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    document.documentElement.removeAttribute("data-theme");
     useImStore.getState().reset();
   });
 
@@ -227,6 +229,34 @@ describe("AppShell", () => {
     expect(
       window.localStorage.getItem("nano-chat:show-message-sequence-numbers"),
     ).toBe("true");
+  });
+
+  it("opens shell settings and switches the color theme", async () => {
+    const user = userEvent.setup();
+    await renderAppRoute({
+      initialEntries: ["/app/im"],
+      session: makeAuthResponse(),
+      apiClient: createShellApiClient(),
+    });
+
+    await screen.findByLabelText("Feature rail");
+    await user.click(getDesktopSettingsTrigger());
+
+    const popup = screen.getByRole("region", { name: "Settings" });
+    expect(within(popup).getByText("Color theme")).toBeInTheDocument();
+
+    const midnightTheme = within(popup).getByRole("button", {
+      name: "Midnight",
+    });
+    expect(midnightTheme).toHaveAttribute("aria-pressed", "false");
+
+    await user.click(midnightTheme);
+
+    expect(midnightTheme).toHaveAttribute("aria-pressed", "true");
+    expect(document.documentElement).toHaveAttribute("data-theme", "midnight");
+    expect(window.localStorage.getItem(COLOR_THEME_STORAGE_KEY)).toBe(
+      "midnight",
+    );
   });
 
   it("shows translated connection status banners for realtime reconnection states", async () => {
