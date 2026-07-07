@@ -22,6 +22,8 @@ html[data-theme="mist"] {
   --muted-foreground: #5d7180;
   --primary: #0f9f8f;
   --primary-foreground: #ffffff;
+  --selection-background: color-mix(in oklab, var(--primary) 30%, white);
+  --selection-foreground: var(--foreground);
   --primary-shadow: rgb(15 159 143 / 22%);
   --accent: #315c7c;
   --accent-foreground: #ffffff;
@@ -55,6 +57,8 @@ html[data-theme="midnight"] {
   --muted-foreground: #9fb3c3;
   --primary: #38cdbd;
   --primary-foreground: #06201d;
+  --selection-background: var(--primary);
+  --selection-foreground: var(--primary-foreground);
   --primary-shadow: rgb(56 205 189 / 26%);
   --accent: #8bb8ff;
   --accent-foreground: #07111d;
@@ -183,8 +187,8 @@ textarea:disabled {
 }
 
 ::selection {
-  background: color-mix(in oklab, var(--primary) 30%, white);
-  color: var(--foreground);
+  background: var(--selection-background);
+  color: var(--selection-foreground);
 }
 
 :focus-visible {

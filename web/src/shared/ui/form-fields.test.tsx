@@ -78,4 +78,19 @@ describe("shared form fields", () => {
     expect(styles).toContain("--background-gradient-start:");
     expect(styles).toContain("--background-glow-primary:");
   });
+
+  it("uses theme-aware text selection colors with a dark-theme contrast override", () => {
+    expect(styles).toContain(
+      "--selection-background: color-mix(in oklab, var(--primary) 30%, white);",
+    );
+    expect(styles).toContain("--selection-foreground: var(--foreground);");
+    expect(styles).toContain("--selection-background: var(--primary);");
+    expect(styles).toContain("--selection-foreground: var(--primary-foreground);");
+    expect(styles).toContain(
+      "::selection {\n  background: var(--selection-background);\n  color: var(--selection-foreground);\n}",
+    );
+    expect(styles).not.toContain(
+      "::selection {\n  background: color-mix(in oklab, var(--primary) 30%, white);\n  color: var(--foreground);\n}",
+    );
+  });
 });
