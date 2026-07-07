@@ -147,6 +147,74 @@ Add the following tests inside `describe("AppShell", () => { ... })`, after the 
     expect(resizeHandle).toHaveAttribute("aria-valuenow", "368");
   });
 
+  it("falls back to the default sidebar width when localStorage reads are blocked", async () => {
+    const originalGetItem = Storage.prototype.getItem;
+    const getItemSpy = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(function (key) {
+        if (key === CONVERSATION_SIDEBAR_WIDTH_STORAGE_KEY) {
+          throw new Error("localStorage read blocked");
+        }
+
+        return originalGetItem.call(this, key);
+      });
+
+    try {
+      await renderAppRoute({
+        initialEntries: ["/app/im"],
+        session: makeAuthResponse(),
+        apiClient: createShellApiClient(),
+      });
+    } finally {
+      getItemSpy.mockRestore();
+    }
+
+    const listRegion = await screen.findByLabelText("Conversation list");
+    const listPanel = listRegion.closest("aside");
+    const resizeHandle = screen.getByRole("separator", {
+      name: "Resize conversation list",
+    });
+
+    expect(listPanel).toHaveStyle("--conversation-sidebar-width: 368px");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "368");
+  });
+
+  it("keeps resizing when sidebar width localStorage writes are blocked", async () => {
+    const originalSetItem = Storage.prototype.setItem;
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(function (key, value) {
+        if (key === CONVERSATION_SIDEBAR_WIDTH_STORAGE_KEY) {
+          throw new Error("localStorage write blocked");
+        }
+
+        return originalSetItem.call(this, key, value);
+      });
+
+    await renderAppRoute({
+      initialEntries: ["/app/im"],
+      session: makeAuthResponse(),
+      apiClient: createShellApiClient(),
+    });
+
+    const listRegion = await screen.findByLabelText("Conversation list");
+    const listPanel = listRegion.closest("aside");
+    const resizeHandle = screen.getByRole("separator", {
+      name: "Resize conversation list",
+    });
+
+    try {
+      fireEvent.pointerDown(resizeHandle, { clientX: 300, pointerId: 1 });
+      fireEvent.pointerMove(resizeHandle, { clientX: 360, pointerId: 1 });
+      fireEvent.pointerUp(resizeHandle, { clientX: 360, pointerId: 1 });
+    } finally {
+      setItemSpy.mockRestore();
+    }
+
+    expect(listPanel).toHaveStyle("--conversation-sidebar-width: 428px");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "428");
+  });
+
   it("resizes the focused conversation sidebar separator with keyboard controls", async () => {
     await renderAppRoute({
       initialEntries: ["/app/im"],
@@ -447,7 +515,8 @@ Confirm:
 - Pointer drag right increases width and clamps through `clampConversationSidebarWidth`.
 - Keyboard controls use ArrowLeft, ArrowRight, Home, and End.
 - Invalid persisted values fall back to `368px` instead of clamping.
-- Storage write failures are caught.
+- Storage read failures fall back to the default width.
+- Storage write failures are caught while the visible resize still succeeds.
 
 Commit:
 
