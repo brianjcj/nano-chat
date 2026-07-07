@@ -1,0 +1,32 @@
+web/src/features/shell/ShellSettingsMenu.tsx
+  s_e41a21f3d086e8::t_35ae085a705213 184
+web/src/features/shell/AppShell.test.tsx
+  s_e41a21f3d086e8::t_8c2edb120c7dba 258,261-263,265
+  s_e41a21f3d086e8::t_cc6b2d01e1dc03 259-260,264
+  s_e41a21f3d086e8::t_d8740e44b39463 339-346
+  s_e41a21f3d086e8::t_394b1124edcf60 51-58
+  s_e41a21f3d086e8::t_95f2824ad093b9 59-68
+web/src/shared/ui/button.test.tsx
+  s_e41a21f3d086e8::t_c691b73d1d88ab 1-20
+web/src/features/shell/UserMenu.tsx
+  s_e41a21f3d086e8::t_b17f7922785052 189,362-363,387-388
+web/src/shared/ui/button.tsx
+  s_e41a21f3d086e8::t_a6a08e7fe991eb 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "d1155aeefa62c585bb7f178c47a8f5994d708205",
+  "prompts": {},
+  "logical_commit_id": "d80459f3d2920bcca8936d4a4f77db810e967f53",
+  "sessions": {
+    "s_e41a21f3d086e8": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3a63-7de9-7d1c-a26a-27fbeb22620b",
+        "model": "gpt-5.5"
+      },
+      "human_author": null
+    }
+  }
+}
