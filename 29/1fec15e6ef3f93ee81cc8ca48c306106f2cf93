@@ -1,0 +1,22 @@
+docs/superpowers/specs/2026-07-07-realtime-gap-backfill-before-seq-design.md
+  s_d8e78963a79f09::t_3fcd89eb97c247 1-44
+docs/superpowers/specs/2026-07-07-realtime-message-fetch-optimization-design.md
+  s_d8e78963a79f09::t_2b2b55d5ad8796 3-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "291fec15e6ef3f93ee81cc8ca48c306106f2cf93",
+  "prompts": {},
+  "logical_commit_id": "291fec15e6ef3f93ee81cc8ca48c306106f2cf93",
+  "sessions": {
+    "s_d8e78963a79f09": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3cbf-46c2-73ac-96f0-cf6e13f7d0f7",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
