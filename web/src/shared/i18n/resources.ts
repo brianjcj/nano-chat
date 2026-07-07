@@ -108,6 +108,7 @@ export const appResources = {
         conversationList: {
           title: "会话",
           region: "会话列表",
+          resizeHandle: "调整会话列表宽度",
           emptyTitle: "还没有会话",
           emptyDescription: "查找用户发起单聊，或创建一个群聊。",
           error: "会话加载失败，请稍后重试。",
@@ -368,6 +369,7 @@ export const appResources = {
         conversationList: {
           title: "Conversations",
           region: "Conversation list",
+          resizeHandle: "Resize conversation list",
           emptyTitle: "No conversations yet",
           emptyDescription: "Look up a user for a direct chat or create a group.",
           error: "Could not load conversations. Try again soon.",

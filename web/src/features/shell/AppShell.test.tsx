@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,6 +16,9 @@ import type { ConversationSummary, Message, UserSummary } from "@/shared/api/typ
 vi.mock("@/shared/realtime/useRealtimeBridge", () => ({
   useRealtimeBridge: vi.fn(),
 }));
+
+const CONVERSATION_SIDEBAR_WIDTH_STORAGE_KEY =
+  "nano-chat:conversation-sidebar-width";
 
 function createShellApiClient(overrides: Partial<ApiClient> = {}) {
   return createFakeApiClient({
@@ -173,6 +176,202 @@ describe("AppShell", () => {
     expect(listPanel).toHaveClass("h-full", "min-h-0", "flex-col");
     expect(listRegion).toHaveClass("h-full", "min-h-0", "flex-1");
     expect(listBody).toHaveClass("min-h-0", "flex-1", "overflow-y-auto");
+  });
+
+  it("starts the desktop conversation sidebar at the default width and exposes a resize separator", async () => {
+    await renderAppRoute({
+      initialEntries: ["/app/im"],
+      session: makeAuthResponse(),
+      apiClient: createShellApiClient(),
+    });
+
+    const listRegion = await screen.findByLabelText("Conversation list");
+    const listPanel = listRegion.closest("aside");
+    const resizeHandle = screen.getByRole("separator", {
+      name: "Resize conversation list",
+    });
+
+    expect(listPanel).toHaveClass(
+      "relative",
+      "md:w-[var(--conversation-sidebar-width)]",
+    );
+    expect(listPanel).toHaveStyle("--conversation-sidebar-width: 368px");
+    expect(resizeHandle).toHaveClass("hidden", "md:flex");
+    expect(resizeHandle).toHaveAttribute("aria-orientation", "vertical");
+    expect(resizeHandle).toHaveAttribute("aria-valuemin", "288");
+    expect(resizeHandle).toHaveAttribute("aria-valuemax", "544");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "368");
+  });
+
+  it("resizes the desktop conversation sidebar by dragging the vertical separator and persists the width", async () => {
+    await renderAppRoute({
+      initialEntries: ["/app/im"],
+      session: makeAuthResponse(),
+      apiClient: createShellApiClient(),
+    });
+
+    const listRegion = await screen.findByLabelText("Conversation list");
+    const listPanel = listRegion.closest("aside");
+    const resizeHandle = screen.getByRole("separator", {
+      name: "Resize conversation list",
+    });
+
+    fireEvent.pointerDown(resizeHandle, { clientX: 300, pointerId: 1 });
+    fireEvent.pointerMove(resizeHandle, { clientX: 360, pointerId: 1 });
+    fireEvent.pointerUp(resizeHandle, { clientX: 360, pointerId: 1 });
+
+    expect(listPanel).toHaveStyle("--conversation-sidebar-width: 428px");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "428");
+    expect(
+      window.localStorage.getItem(CONVERSATION_SIDEBAR_WIDTH_STORAGE_KEY),
+    ).toBe("428");
+  });
+
+  it("restores a valid persisted conversation sidebar width on remount", async () => {
+    window.localStorage.setItem(CONVERSATION_SIDEBAR_WIDTH_STORAGE_KEY, "456");
+
+    await renderAppRoute({
+      initialEntries: ["/app/im"],
+      session: makeAuthResponse(),
+      apiClient: createShellApiClient(),
+    });
+
+    const listRegion = await screen.findByLabelText("Conversation list");
+    const listPanel = listRegion.closest("aside");
+    const resizeHandle = screen.getByRole("separator", {
+      name: "Resize conversation list",
+    });
+
+    expect(listPanel).toHaveStyle("--conversation-sidebar-width: 456px");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "456");
+  });
+
+  it("falls back to the default sidebar width for invalid persisted values", async () => {
+    window.localStorage.setItem(CONVERSATION_SIDEBAR_WIDTH_STORAGE_KEY, "120");
+
+    await renderAppRoute({
+      initialEntries: ["/app/im"],
+      session: makeAuthResponse(),
+      apiClient: createShellApiClient(),
+    });
+
+    const listRegion = await screen.findByLabelText("Conversation list");
+    const listPanel = listRegion.closest("aside");
+    const resizeHandle = screen.getByRole("separator", {
+      name: "Resize conversation list",
+    });
+
+    expect(listPanel).toHaveStyle("--conversation-sidebar-width: 368px");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "368");
+  });
+
+  it("falls back to the default sidebar width when localStorage reads are blocked", async () => {
+    const originalGetItem = Storage.prototype.getItem;
+    const getItemSpy = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(function (this: Storage, key) {
+        if (key === CONVERSATION_SIDEBAR_WIDTH_STORAGE_KEY) {
+          throw new Error("localStorage read blocked");
+        }
+
+        return originalGetItem.call(this, key);
+      });
+
+    try {
+      await renderAppRoute({
+        initialEntries: ["/app/im"],
+        session: makeAuthResponse(),
+        apiClient: createShellApiClient(),
+      });
+    } finally {
+      getItemSpy.mockRestore();
+    }
+
+    const listRegion = await screen.findByLabelText("Conversation list");
+    const listPanel = listRegion.closest("aside");
+    const resizeHandle = screen.getByRole("separator", {
+      name: "Resize conversation list",
+    });
+
+    expect(listPanel).toHaveStyle("--conversation-sidebar-width: 368px");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "368");
+  });
+
+  it("keeps resizing when sidebar width localStorage writes are blocked", async () => {
+    const originalSetItem = Storage.prototype.setItem;
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(function (this: Storage, key, value) {
+        if (key === CONVERSATION_SIDEBAR_WIDTH_STORAGE_KEY) {
+          throw new Error("localStorage write blocked");
+        }
+
+        return originalSetItem.call(this, key, value);
+      });
+
+    await renderAppRoute({
+      initialEntries: ["/app/im"],
+      session: makeAuthResponse(),
+      apiClient: createShellApiClient(),
+    });
+
+    const listRegion = await screen.findByLabelText("Conversation list");
+    const listPanel = listRegion.closest("aside");
+    const resizeHandle = screen.getByRole("separator", {
+      name: "Resize conversation list",
+    });
+
+    try {
+      fireEvent.pointerDown(resizeHandle, { clientX: 300, pointerId: 1 });
+      fireEvent.pointerMove(resizeHandle, { clientX: 360, pointerId: 1 });
+      fireEvent.pointerUp(resizeHandle, { clientX: 360, pointerId: 1 });
+    } finally {
+      setItemSpy.mockRestore();
+    }
+
+    expect(listPanel).toHaveStyle("--conversation-sidebar-width: 428px");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "428");
+  });
+
+  it("resizes the focused conversation sidebar separator with keyboard controls", async () => {
+    await renderAppRoute({
+      initialEntries: ["/app/im"],
+      session: makeAuthResponse(),
+      apiClient: createShellApiClient(),
+    });
+
+    const listRegion = await screen.findByLabelText("Conversation list");
+    const listPanel = listRegion.closest("aside");
+    const resizeHandle = screen.getByRole("separator", {
+      name: "Resize conversation list",
+    });
+
+    expect(resizeHandle).toHaveAttribute("tabindex", "0");
+    resizeHandle.focus();
+    expect(resizeHandle).toHaveFocus();
+
+    fireEvent.keyDown(resizeHandle, { key: "ArrowRight" });
+
+    expect(listPanel).toHaveStyle("--conversation-sidebar-width: 376px");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "376");
+    expect(
+      window.localStorage.getItem(CONVERSATION_SIDEBAR_WIDTH_STORAGE_KEY),
+    ).toBe("376");
+
+    fireEvent.keyDown(resizeHandle, { key: "ArrowLeft" });
+
+    expect(listPanel).toHaveStyle("--conversation-sidebar-width: 368px");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "368");
+
+    fireEvent.keyDown(resizeHandle, { key: "End" });
+
+    expect(listPanel).toHaveStyle("--conversation-sidebar-width: 544px");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "544");
+
+    fireEvent.keyDown(resizeHandle, { key: "Home" });
+
+    expect(listPanel).toHaveStyle("--conversation-sidebar-width: 288px");
+    expect(resizeHandle).toHaveAttribute("aria-valuenow", "288");
   });
 
   it("renders the mobile bottom feature bar and keeps the desktop rail hidden until the desktop breakpoint", async () => {
