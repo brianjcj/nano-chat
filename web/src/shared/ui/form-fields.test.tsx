@@ -50,4 +50,19 @@ describe("shared form fields", () => {
     expect(styles).not.toContain("--primary: #ff715f;");
     expect(styles).not.toContain("--accent: #8a6dff;");
   });
+
+  it("defines selectable color theme tokens", () => {
+    expect(styles).toContain('html[data-theme="mist"]');
+    expect(styles).toContain('html[data-theme="midnight"]');
+    expect(styles).toContain('html[data-theme="sakura"]');
+    expect(styles).toContain('html[data-theme="forest"]');
+    expect(styles).toContain("--background: #0d1620;");
+    expect(styles).toContain("--primary: #38cdbd;");
+    expect(styles).toContain("--background: #fff1f5;");
+    expect(styles).toContain("--primary: #d94d7b;");
+    expect(styles).toContain("--background: #eef7ee;");
+    expect(styles).toContain("--primary: #2f9b61;");
+    expect(styles).toContain("--background-gradient-start:");
+    expect(styles).toContain("--background-glow-primary:");
+  });
 });

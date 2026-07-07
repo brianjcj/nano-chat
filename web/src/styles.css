@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
-:root {
+:root,
+html[data-theme="mist"] {
   color-scheme: light;
   font-family:
     Inter,
@@ -31,7 +32,112 @@
   --destructive: #c8465a;
   --destructive-foreground: #ffffff;
   --shadow-color: rgb(18 35 45 / 10%);
+  --background-gradient-start: #edf4f7;
+  --background-gradient-mid: #f8fbfc;
+  --background-gradient-end: #e8f1f5;
+  --background-glow-primary: rgb(84 195 180 / 20%);
+  --background-glow-accent: rgb(49 92 124 / 14%);
+  --shell-chrome-start: #12232d;
+  --shell-chrome-end: #173446;
+  --shell-chrome-border: color-mix(in oklab, var(--primary) 26%, var(--foreground));
+  --shell-chrome-shadow: rgb(18 35 45 / 24%);
   --radius: 1rem;
+}
+
+html[data-theme="midnight"] {
+  color-scheme: dark;
+
+  --background: #0d1620;
+  --foreground: #edf7f5;
+  --surface: #162331;
+  --surface-muted: #101b26;
+  --muted: #263849;
+  --muted-foreground: #9fb3c3;
+  --primary: #38cdbd;
+  --primary-foreground: #06201d;
+  --primary-shadow: rgb(56 205 189 / 26%);
+  --accent: #8bb8ff;
+  --accent-foreground: #07111d;
+  --bubble-outgoing: #173f3d;
+  --bubble-incoming: #1b2a39;
+  --border: #294052;
+  --ring: #55d6c9;
+  --destructive: #ff6b86;
+  --destructive-foreground: #1c050b;
+  --shadow-color: rgb(0 0 0 / 34%);
+  --background-gradient-start: #0d1620;
+  --background-gradient-mid: #101c28;
+  --background-gradient-end: #071019;
+  --background-glow-primary: rgb(56 205 189 / 18%);
+  --background-glow-accent: rgb(139 184 255 / 12%);
+  --shell-chrome-start: #071019;
+  --shell-chrome-end: #0f2435;
+  --shell-chrome-border: color-mix(in oklab, var(--primary) 28%, #071019);
+  --shell-chrome-shadow: rgb(0 0 0 / 34%);
+}
+
+html[data-theme="sakura"] {
+  color-scheme: light;
+
+  --background: #fff1f5;
+  --foreground: #34212a;
+  --surface: #ffffff;
+  --surface-muted: #fff7fa;
+  --muted: #f4dce5;
+  --muted-foreground: #7e5b68;
+  --primary: #d94d7b;
+  --primary-foreground: #ffffff;
+  --primary-shadow: rgb(217 77 123 / 22%);
+  --accent: #8f5ac2;
+  --accent-foreground: #ffffff;
+  --bubble-outgoing: #ffe1ec;
+  --bubble-incoming: #ffffff;
+  --border: #edcfda;
+  --ring: #f18cac;
+  --destructive: #c8465a;
+  --destructive-foreground: #ffffff;
+  --shadow-color: rgb(74 33 48 / 10%);
+  --background-gradient-start: #fff1f5;
+  --background-gradient-mid: #fff8fb;
+  --background-gradient-end: #f8e8ff;
+  --background-glow-primary: rgb(217 77 123 / 18%);
+  --background-glow-accent: rgb(143 90 194 / 12%);
+  --shell-chrome-start: #4b2635;
+  --shell-chrome-end: #743653;
+  --shell-chrome-border: color-mix(in oklab, var(--primary) 28%, #4b2635);
+  --shell-chrome-shadow: rgb(74 33 48 / 24%);
+}
+
+html[data-theme="forest"] {
+  color-scheme: light;
+
+  --background: #eef7ee;
+  --foreground: #173021;
+  --surface: #ffffff;
+  --surface-muted: #f6fbf5;
+  --muted: #d9ebd8;
+  --muted-foreground: #5e755f;
+  --primary: #2f9b61;
+  --primary-foreground: #ffffff;
+  --primary-shadow: rgb(47 155 97 / 22%);
+  --accent: #3c6f4b;
+  --accent-foreground: #ffffff;
+  --bubble-outgoing: #dcf4e4;
+  --bubble-incoming: #ffffff;
+  --border: #cee1cd;
+  --ring: #67bd82;
+  --destructive: #b94b59;
+  --destructive-foreground: #ffffff;
+  --shadow-color: rgb(23 48 33 / 10%);
+  --background-gradient-start: #eef7ee;
+  --background-gradient-mid: #fbf8ed;
+  --background-gradient-end: #e2f1df;
+  --background-glow-primary: rgb(47 155 97 / 18%);
+  --background-glow-accent: rgb(60 111 75 / 12%);
+  --shell-chrome-start: #173021;
+  --shell-chrome-end: #244832;
+  --shell-chrome-border: color-mix(in oklab, var(--primary) 28%, #173021);
+  --shell-chrome-shadow: rgb(23 48 33 / 24%);
 }
 
 * {
@@ -49,9 +155,9 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 18% 12%, rgb(84 195 180 / 20%), transparent 28rem),
-    radial-gradient(circle at 88% 4%, rgb(49 92 124 / 14%), transparent 30rem),
-    linear-gradient(135deg, #edf4f7 0%, #f8fbfc 48%, #e8f1f5 100%);
+    radial-gradient(circle at 18% 12%, var(--background-glow-primary), transparent 28rem),
+    radial-gradient(circle at 88% 4%, var(--background-glow-accent), transparent 30rem),
+    linear-gradient(135deg, var(--background-gradient-start) 0%, var(--background-gradient-mid) 48%, var(--background-gradient-end) 100%);
   color: var(--foreground);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -89,6 +195,74 @@ textarea:disabled {
 input:focus,
 textarea:focus {
   outline: none;
+}
+
+html[data-theme="midnight"] .bg-white {
+  background-color: var(--surface);
+}
+
+html[data-theme="midnight"] .bg-white\/44 {
+  background-color: color-mix(in oklab, var(--surface) 44%, transparent);
+}
+
+html[data-theme="midnight"] .bg-white\/50 {
+  background-color: color-mix(in oklab, var(--surface) 50%, transparent);
+}
+
+html[data-theme="midnight"] .bg-white\/54 {
+  background-color: color-mix(in oklab, var(--surface) 54%, transparent);
+}
+
+html[data-theme="midnight"] .bg-white\/58 {
+  background-color: color-mix(in oklab, var(--surface) 58%, transparent);
+}
+
+html[data-theme="midnight"] .bg-white\/62 {
+  background-color: color-mix(in oklab, var(--surface) 62%, transparent);
+}
+
+html[data-theme="midnight"] .bg-white\/70 {
+  background-color: color-mix(in oklab, var(--surface) 70%, transparent);
+}
+
+html[data-theme="midnight"] .bg-white\/72 {
+  background-color: color-mix(in oklab, var(--surface) 72%, transparent);
+}
+
+html[data-theme="midnight"] .bg-white\/76 {
+  background-color: color-mix(in oklab, var(--surface) 76%, transparent);
+}
+
+html[data-theme="midnight"] .bg-white\/78 {
+  background-color: color-mix(in oklab, var(--surface) 78%, transparent);
+}
+
+html[data-theme="midnight"] .bg-white\/88 {
+  background-color: color-mix(in oklab, var(--surface) 88%, transparent);
+}
+
+html[data-theme="midnight"] .bg-white\/94 {
+  background-color: color-mix(in oklab, var(--surface) 94%, transparent);
+}
+
+html[data-theme="midnight"] .bg-white\/95 {
+  background-color: color-mix(in oklab, var(--surface) 95%, transparent);
+}
+
+html[data-theme="midnight"] .border-white\/70,
+html[data-theme="midnight"] .border-white\/72,
+html[data-theme="midnight"] .border-white\/74,
+html[data-theme="midnight"] .border-white\/78 {
+  border-color: color-mix(in oklab, var(--border) 78%, transparent);
+}
+
+html[data-theme="midnight"] .ring-white\/70,
+html[data-theme="midnight"] .ring-white\/80 {
+  --tw-ring-color: color-mix(in oklab, var(--border) 80%, transparent);
+}
+
+html[data-theme="midnight"] .hover\:bg-white:hover {
+  background-color: var(--surface);
 }
 
 #root {
