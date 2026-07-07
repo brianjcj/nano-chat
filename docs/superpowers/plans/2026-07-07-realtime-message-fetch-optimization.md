@@ -198,8 +198,8 @@ export function useConversationMessages(
         : {},
     );
   const inFlightHistorySyncsRef = useRef<Record<string, number>>({});
-  const historyBackfillMarker = useImStore((state) =>
-    conversationId ? state.historyBackfillMarkers[conversationId] : undefined,
+  const historySyncMarker = useImStore((state) =>
+    conversationId ? state.historySyncMarkers[conversationId] : undefined,
   );
   const latestFetchBeforeSeq = conversationId
     ? (latestFetchBeforeSeqByConversationId[conversationId] ??
@@ -301,6 +301,6 @@ Expected: commit succeeds and `git status --short` shows no changes to those two
 
 ## Self-Review
 
-- Spec coverage: the task preserves initial latest-page loading, suppresses duplicate latest-page fetches after in-order realtime messages, preserves `after_seq` gap sync, preserves older-history pagination, and preserves recovery fetches when a conversation summary is ahead of local cache.
+- Spec coverage: the task preserves initial latest-page loading, suppresses duplicate latest-page fetches after in-order realtime messages, preserves the then-current `after_seq` gap sync described by this historical plan (superseded by the later before-seq backfill plan), preserves older-history pagination, and preserves recovery fetches when a conversation summary is ahead of local cache.
 - Placeholder scan: this plan contains exact file paths, test code, implementation code, commands, and expected outcomes.
 - Type consistency: the plan uses existing project types `ChatMessage`, `ConversationSummary`, `ApiClient["listMessages"]`, `Message`, and existing functions `applyRealtimeEvent`, `imQueryKeys.messages`, and `isServerSequenced`.

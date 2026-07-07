@@ -610,7 +610,7 @@ Realtime notifications are best-effort and at-most-once. They are not the source
 Run:
 
 ```bash
-rg -n "<stale forward-sync recovery wording or old marker names>" docs web/src/features/im
+rg -n "after_seq=<last_contiguous_seq>|history sync marker|historySyncMarkers|markHistorySyncNeeded|clearHistorySyncMarker" docs/api.md web/src/features/im
 ```
 
 Expected: no output. If the command finds a stale reference in docs or `web/src/features/im`, update that reference to the new before-seq backfill wording/name.
