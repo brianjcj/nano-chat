@@ -1,0 +1,21 @@
+docs/superpowers/plans/2026-07-07-realtime-message-fetch-optimization.md
+  s_d8e78963a79f09::t_7e18ab98343cdc 289
+  s_d8e78963a79f09::t_e4bdb2e9aae991 1-288,290-306
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "0be8fec9b45f4bd7e11974f3be5f2d2ecb0e3879",
+  "prompts": {},
+  "logical_commit_id": "0be8fec9b45f4bd7e11974f3be5f2d2ecb0e3879",
+  "sessions": {
+    "s_d8e78963a79f09": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3cbf-46c2-73ac-96f0-cf6e13f7d0f7",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
