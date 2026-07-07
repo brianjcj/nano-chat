@@ -1,0 +1,20 @@
+docs/superpowers/specs/2026-07-07-conversation-sidebar-resize-design.md
+  s_370039136b09a4::t_2f3f7700817ea1 1-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "aed39589293b0ebe9717722142ab80dce8eff591",
+  "prompts": {},
+  "logical_commit_id": "aed39589293b0ebe9717722142ab80dce8eff591",
+  "sessions": {
+    "s_370039136b09a4": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3bc7-d8ac-7d58-a490-bacc0ed81341",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
