@@ -37,6 +37,17 @@ function getDesktopSettingsTrigger() {
   });
 }
 
+function expectShellChromeTokens(
+  element: HTMLElement,
+  shadowClass = "shadow-[0_24px_70px_var(--shell-chrome-shadow)]",
+) {
+  expect(element).toHaveClass(
+    "border-[var(--shell-chrome-border)]",
+    "bg-[linear-gradient(135deg,var(--shell-chrome-start)_0%,var(--shell-chrome-end)_100%)]",
+    shadowClass,
+  );
+}
+
 describe("AppShell", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -157,7 +168,12 @@ describe("AppShell", () => {
     const mobileFeatureBar = screen.getByLabelText("Mobile feature bar");
 
     expect(featureRail).toHaveClass("hidden", "md:flex");
+    expect(featureRail).toHaveClass(
+      "border-[var(--shell-chrome-border)]",
+      "bg-[linear-gradient(180deg,var(--shell-chrome-start)_0%,var(--shell-chrome-end)_100%)]",
+    );
     expect(mobileFeatureBar).toHaveClass("md:hidden");
+    expectShellChromeTokens(mobileFeatureBar);
     expect(
       within(mobileFeatureBar).getByRole("button", { name: /User menu/i }),
     ).toBeInTheDocument();
@@ -268,8 +284,11 @@ describe("AppShell", () => {
       apiClient: createShellApiClient(),
     });
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Reconnecting…",
+    const banner = await screen.findByRole("status");
+    expect(banner).toHaveTextContent("Reconnecting…");
+    expectShellChromeTokens(
+      banner,
+      "shadow-[0_18px_58px_var(--shell-chrome-shadow)]",
     );
 
     await i18n.changeLanguage("zh-CN");

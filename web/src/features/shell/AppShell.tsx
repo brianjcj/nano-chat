@@ -104,7 +104,7 @@ function ConnectionStatusBanner({ status }: { status: RealtimeStatus }) {
 
   return (
     <div
-      className="fixed inset-x-4 top-20 z-30 mx-auto flex max-w-xl items-center gap-3 rounded-full border border-white/70 bg-[linear-gradient(135deg,#12232d_0%,#173446_100%)] px-4 py-3 text-sm font-bold text-white shadow-[0_18px_58px_rgb(18_35_45_/24%)] md:top-5"
+      className="fixed inset-x-4 top-20 z-30 mx-auto flex max-w-xl items-center gap-3 rounded-full border border-[var(--shell-chrome-border)] bg-[linear-gradient(135deg,var(--shell-chrome-start)_0%,var(--shell-chrome-end)_100%)] px-4 py-3 text-sm font-bold text-white shadow-[0_18px_58px_var(--shell-chrome-shadow)] md:top-5"
       role="status"
     >
       <WifiOff aria-hidden="true" className="size-4 text-[var(--primary)]" />

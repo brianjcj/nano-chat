@@ -17,7 +17,7 @@ export function DesktopRail() {
   return (
     <aside
       aria-label={t("shell.featureRail")}
-      className="hidden w-[4.75rem] shrink-0 flex-col items-center border-r border-[color-mix(in_oklab,var(--primary)_26%,var(--foreground))] bg-[linear-gradient(180deg,#12232d_0%,#173446_100%)] px-2.5 py-4 text-white md:flex"
+      className="hidden w-[4.75rem] shrink-0 flex-col items-center border-r border-[var(--shell-chrome-border)] bg-[linear-gradient(180deg,var(--shell-chrome-start)_0%,var(--shell-chrome-end)_100%)] px-2.5 py-4 text-white md:flex"
     >
       <div className="mb-5">
         <UserMenu placement="rail" />

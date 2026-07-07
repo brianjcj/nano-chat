@@ -20,17 +20,30 @@ function expectSingleSubtleFocusLine(element: HTMLElement) {
   expect(className).toContain("focus:outline-none");
 }
 
+function expectThemeAwareSurfaceBackground(element: HTMLElement) {
+  const className = element.getAttribute("class") ?? "";
+
+  expect(className).toContain("bg-[color-mix(in_oklab,var(--surface)_80%,transparent)]");
+  expect(className).toContain("focus:bg-[var(--surface)]");
+  expect(className).not.toContain("bg-white/80");
+  expect(className).not.toContain("focus:bg-white");
+}
+
 describe("shared form fields", () => {
-  it("uses a single subtle focus line for inputs", () => {
+  it("uses a single subtle focus line and theme-aware surface background for inputs", () => {
     render(<Input aria-label="Display name" />);
 
-    expectSingleSubtleFocusLine(screen.getByRole("textbox", { name: "Display name" }));
+    const input = screen.getByRole("textbox", { name: "Display name" });
+    expectSingleSubtleFocusLine(input);
+    expectThemeAwareSurfaceBackground(input);
   });
 
-  it("uses a single subtle focus line for textareas", () => {
+  it("uses a single subtle focus line and theme-aware surface background for textareas", () => {
     render(<Textarea aria-label="Message" />);
 
-    expectSingleSubtleFocusLine(screen.getByRole("textbox", { name: "Message" }));
+    const textarea = screen.getByRole("textbox", { name: "Message" });
+    expectSingleSubtleFocusLine(textarea);
+    expectThemeAwareSurfaceBackground(textarea);
   });
 
   it("opts form fields out of the global thick focus outline", () => {

@@ -25,7 +25,7 @@ export function MobileFeatureBar() {
   return (
     <nav
       aria-label={t("shell.mobileFeatureBar")}
-      className="fixed inset-x-3 bottom-3 z-30 flex items-center justify-center gap-2 rounded-[calc(var(--radius)*1.05)] border border-white/70 bg-[linear-gradient(135deg,#12232d_0%,#173446_100%)] p-2 text-white shadow-[0_24px_70px_rgb(18_35_45_/24%)] backdrop-blur md:hidden"
+      className="fixed inset-x-3 bottom-3 z-30 flex items-center justify-center gap-2 rounded-[calc(var(--radius)*1.05)] border border-[var(--shell-chrome-border)] bg-[linear-gradient(135deg,var(--shell-chrome-start)_0%,var(--shell-chrome-end)_100%)] p-2 text-white shadow-[0_24px_70px_var(--shell-chrome-shadow)] backdrop-blur md:hidden"
     >
       <NavLink
         className={({ isActive }) =>
