@@ -1,0 +1,23 @@
+web/src/features/calls/components/CallUi.test.tsx
+  s_e41a21f3d086e8::t_8efd5db7d9d7d5 64-74
+  s_e41a21f3d086e8::t_cc3d1fa0921807 47-55
+web/src/features/calls/components/ChatHeaderCallButtons.tsx
+  s_e41a21f3d086e8::t_fa3182ab446577 8-10,40,44,54,58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "785b8e80dd0db995659eb7f04181a423b2a905f6",
+  "prompts": {},
+  "logical_commit_id": "785b8e80dd0db995659eb7f04181a423b2a905f6",
+  "sessions": {
+    "s_e41a21f3d086e8": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3a63-7de9-7d1c-a26a-27fbeb22620b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
