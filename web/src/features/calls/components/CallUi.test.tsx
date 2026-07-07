@@ -44,6 +44,15 @@ describe("call UI", () => {
     expect(screen.getByRole("button", { name: /视频通话/ })).toBeEnabled();
   });
 
+  it("uses quiet theme-aware chrome for direct call buttons", async () => {
+    await renderCallUi(
+      <ChatHeaderCallButtons conversation={directConversation} disabled={false} />,
+    );
+
+    expectDirectCallButtonChrome(screen.getByRole("button", { name: /语音通话/ }));
+    expectDirectCallButtonChrome(screen.getByRole("button", { name: /视频通话/ }));
+  });
+
   it("does not render call buttons for group conversations", async () => {
     await renderCallUi(
       <ChatHeaderCallButtons conversation={groupConversation} disabled={false} />,
@@ -51,6 +60,17 @@ describe("call UI", () => {
     expect(screen.queryByRole("button", { name: /语音通话/ })).not.toBeInTheDocument();
   });
 });
+
+function expectDirectCallButtonChrome(button: HTMLElement) {
+  expect(button).toHaveClass(
+    "border-[color-mix(in_oklab,var(--primary)_24%,var(--border))]",
+    "bg-[color-mix(in_oklab,var(--surface)_72%,transparent)]",
+    "text-[var(--primary)]",
+    "hover:bg-[color-mix(in_oklab,var(--primary)_12%,var(--surface))]",
+    "hover:text-[var(--primary)]",
+  );
+  expect(button).not.toHaveClass("bg-white/75");
+}
 
 async function renderCallUi(ui: ReactElement) {
   const i18nInstance = await createAppI18n({

@@ -5,6 +5,9 @@ import { useOptionalCall } from "../CallProvider";
 import type { ConversationSummary } from "@/shared/api/types";
 import { Button } from "@/shared/ui/button";
 
+const DIRECT_CALL_BUTTON_CLASS_NAME =
+  "border border-[color-mix(in_oklab,var(--primary)_24%,var(--border))] bg-[color-mix(in_oklab,var(--surface)_72%,transparent)] text-[var(--primary)] shadow-[0_10px_24px_color-mix(in_oklab,var(--primary-shadow)_46%,transparent)] hover:bg-[color-mix(in_oklab,var(--primary)_12%,var(--surface))] hover:text-[var(--primary)] hover:shadow-[0_12px_28px_var(--primary-shadow)]";
+
 export function ChatHeaderCallButtons({
   conversation,
   disabled,
@@ -34,10 +37,11 @@ export function ChatHeaderCallButtons({
         onClick={() => {
           void call?.startCall(conversation, "audio");
         }}
+        className={DIRECT_CALL_BUTTON_CLASS_NAME}
         size="icon"
         title={audioLabel}
         type="button"
-        variant="secondary"
+        variant="ghost"
       >
         <Phone aria-hidden="true" className="size-4" />
       </Button>
@@ -47,10 +51,11 @@ export function ChatHeaderCallButtons({
         onClick={() => {
           void call?.startCall(conversation, "video");
         }}
+        className={DIRECT_CALL_BUTTON_CLASS_NAME}
         size="icon"
         title={videoLabel}
         type="button"
-        variant="secondary"
+        variant="ghost"
       >
         <Video aria-hidden="true" className="size-4" />
       </Button>
