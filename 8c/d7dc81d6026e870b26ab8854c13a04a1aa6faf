@@ -1,0 +1,22 @@
+web/src/shared/ui/form-fields.test.tsx
+  s_370039136b09a4::t_f865ea261a6429 81-95
+web/src/styles.css
+  s_370039136b09a4::t_ad122c0eb08e01 25-26,60-61,190-191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "8cd7dc81d6026e870b26ab8854c13a04a1aa6faf",
+  "prompts": {},
+  "logical_commit_id": "8cd7dc81d6026e870b26ab8854c13a04a1aa6faf",
+  "sessions": {
+    "s_370039136b09a4": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3bc7-d8ac-7d58-a490-bacc0ed81341",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
