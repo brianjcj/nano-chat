@@ -1,0 +1,20 @@
+docs/superpowers/specs/2026-07-07-web-color-themes-design.md
+  s_e41a21f3d086e8::t_9350934abc6457 1-120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "74b5b2673cc7ecfc4961f12e6d1c74fdf20d31b3",
+  "prompts": {},
+  "logical_commit_id": "74b5b2673cc7ecfc4961f12e6d1c74fdf20d31b3",
+  "sessions": {
+    "s_e41a21f3d086e8": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f3a63-7de9-7d1c-a26a-27fbeb22620b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "jiangchengjun <jiangchengjun@joyy.com>"
+    }
+  }
+}
