@@ -12,7 +12,7 @@ const buttonVariants = cva(
         primary:
           "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-[0_14px_30px_var(--primary-shadow)] hover:translate-y-[-1px] hover:brightness-105 active:translate-y-0",
         secondary:
-          "border border-[var(--border)] bg-white/75 text-[var(--foreground)] shadow-sm hover:bg-[var(--surface-muted)]",
+          "border border-[color-mix(in_oklab,var(--surface)_72%,var(--border))] bg-[color-mix(in_oklab,var(--surface)_76%,transparent)] text-[var(--foreground)] shadow-sm hover:border-[color-mix(in_oklab,var(--primary)_28%,var(--border))] hover:bg-[color-mix(in_oklab,var(--primary)_10%,var(--surface))]",
         ghost:
           "text-[var(--muted-foreground)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]",
         destructive:

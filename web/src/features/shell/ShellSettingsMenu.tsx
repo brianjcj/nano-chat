@@ -181,7 +181,7 @@ export function ShellSettingsMenu({ placement }: ShellSettingsMenuProps) {
                     "relative h-6 w-11 shrink-0 rounded-full border transition-colors",
                     showMessageSequenceNumbers
                       ? "border-[var(--primary)] bg-[var(--primary)]"
-                      : "border-[var(--border)] bg-[var(--surface-muted)]",
+                      : "border-[color-mix(in_oklab,var(--muted-foreground)_38%,var(--border))] bg-[color-mix(in_oklab,var(--muted)_68%,var(--surface))]",
                   )}
                 >
                   <span

@@ -48,6 +48,24 @@ function expectShellChromeTokens(
   );
 }
 
+function expectThemeAwarePopupChrome(element: HTMLElement) {
+  expect(element).toHaveClass(
+    "border-[color-mix(in_oklab,var(--surface)_78%,var(--border))]",
+    "bg-[color-mix(in_oklab,var(--surface)_94%,transparent)]",
+  );
+  expect(element).not.toHaveClass("bg-white/94");
+}
+
+function getSwitchTrack(switchButton: HTMLElement) {
+  const track = switchButton.querySelector("span[aria-hidden='true']");
+
+  if (!(track instanceof HTMLElement)) {
+    throw new Error("Switch track was not found.");
+  }
+
+  return track;
+}
+
 describe("AppShell", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -237,6 +255,14 @@ describe("AppShell", () => {
     });
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(sequenceSwitch).toHaveAttribute("aria-checked", "false");
+    expect(getSwitchTrack(sequenceSwitch)).toHaveClass(
+      "border-[color-mix(in_oklab,var(--muted-foreground)_38%,var(--border))]",
+      "bg-[color-mix(in_oklab,var(--muted)_68%,var(--surface))]",
+    );
+    expect(getSwitchTrack(sequenceSwitch)).not.toHaveClass(
+      "bg-[var(--surface-muted)]",
+      "bg-[color-mix(in_oklab,var(--surface)_76%,transparent)]",
+    );
 
     await user.click(sequenceSwitch);
 
@@ -310,6 +336,14 @@ describe("AppShell", () => {
     await user.click(getDesktopUserMenuTrigger());
 
     const popup = screen.getByRole("region", { name: "User menu" });
+    expectThemeAwarePopupChrome(popup);
+    const inactiveLanguageButton = within(popup).getByRole("button", {
+      name: "中文",
+    });
+    expect(inactiveLanguageButton).toHaveClass(
+      "bg-[color-mix(in_oklab,var(--surface)_72%,transparent)]",
+    );
+    expect(inactiveLanguageButton).not.toHaveClass("bg-white/72");
     expect(within(popup).getByText("jcj")).toBeInTheDocument();
     expect(within(popup).queryByText("@jcj")).not.toBeInTheDocument();
   });

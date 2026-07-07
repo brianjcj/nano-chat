@@ -186,7 +186,7 @@ export function UserMenu({ placement = "floating" }: UserMenuProps) {
         <div
           aria-label={t("shell.userMenu.title")}
           className={cn(
-            "absolute z-50 w-72 rounded-[calc(var(--radius)*1.05)] border border-white/78 bg-white/94 p-3 text-[var(--foreground)] shadow-[0_24px_70px_var(--shadow-color)] backdrop-blur",
+            "absolute z-50 w-72 rounded-[calc(var(--radius)*1.05)] border border-[color-mix(in_oklab,var(--surface)_78%,var(--border))] bg-[color-mix(in_oklab,var(--surface)_94%,transparent)] p-3 text-[var(--foreground)] shadow-[0_24px_70px_var(--shadow-color)] backdrop-blur",
             getPanelPositionClassName(placement),
           )}
           id={disclosurePanelId}
@@ -359,7 +359,8 @@ function MenuButton({
     <button
       className={cn(
         "flex w-full items-center gap-2 rounded-[calc(var(--radius)*0.8)] px-3 py-2.5 text-left text-sm font-bold transition-colors hover:bg-[var(--surface-muted)]",
-        destructive && "text-[var(--destructive)] hover:bg-red-50",
+        destructive &&
+          "text-[var(--destructive)] hover:bg-[color-mix(in_oklab,var(--destructive)_10%,var(--surface))]",
       )}
       onClick={onClick}
       type="button"
@@ -383,8 +384,8 @@ function LanguageButton({
       className={cn(
         "rounded-[calc(var(--radius)*0.65)] border px-3 py-2 text-sm font-bold transition-colors",
         active
-          ? "border-[var(--primary)] bg-[color-mix(in_oklab,var(--primary)_14%,white)] text-[var(--foreground)]"
-          : "border-[var(--border)] bg-white/72 text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
+          ? "border-[var(--primary)] bg-[color-mix(in_oklab,var(--primary)_14%,var(--surface))] text-[var(--foreground)]"
+          : "border-[var(--border)] bg-[color-mix(in_oklab,var(--surface)_72%,transparent)] text-[var(--muted-foreground)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]",
       )}
       onClick={onClick}
       type="button"
