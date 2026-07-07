@@ -62,7 +62,7 @@ function applyMessageCreated(
 ): void {
   const { conversation_id: conversationId, message } = event.payload;
   const currentConversationId = store.getState().currentConversationId;
-  const highestContiguousSeq = getHighestContiguousMessageSeq(
+  const highestContiguousLoadedSeq = getHighestContiguousLoadedMessageSeq(
     queryClient,
     conversationId,
   );
@@ -91,10 +91,10 @@ function applyMessageCreated(
   }
 
   if (currentConversationId === conversationId) {
-    if (message.message_seq > highestContiguousSeq + 1) {
+    if (message.message_seq > highestContiguousLoadedSeq + 1) {
       store
         .getState()
-        .markHistorySyncNeeded(conversationId, highestContiguousSeq);
+        .markHistoryBackfillNeeded(conversationId, message.message_seq);
     }
     return;
   }
@@ -325,7 +325,7 @@ function isMessageCoveredByConversationSummary(
   );
 }
 
-function getHighestContiguousMessageSeq(
+function getHighestContiguousLoadedMessageSeq(
   queryClient: QueryClient,
   conversationId: string,
 ): number {
@@ -346,9 +346,16 @@ function getHighestContiguousMessageSeq(
   ]
     .filter((messageSeq) => messageSeq > 0)
     .sort((left, right) => left - right);
-  let highestContiguousSeq = 0;
 
-  for (const messageSeq of messageSeqs) {
+  if (messageSeqs.length === 0) {
+    return 0;
+  }
+
+  let highestContiguousSeq = messageSeqs[0];
+
+  for (let index = 1; index < messageSeqs.length; index += 1) {
+    const messageSeq = messageSeqs[index];
+
     if (messageSeq === highestContiguousSeq + 1) {
       highestContiguousSeq = messageSeq;
       continue;

@@ -359,7 +359,7 @@ describe("IM realtime cache updates", () => {
     );
   });
 
-  it("marks history sync needed when message.created reveals a sequence gap in the current conversation", () => {
+  it("marks history backfill needed with before_seq when message.created reveals a sequence gap in the current conversation", () => {
     const queryClient = createQueryClient();
     queryClient.setQueryData(imQueryKeys.messages("conversation-1"), [
       makeMessage(1),
@@ -372,12 +372,31 @@ describe("IM realtime cache updates", () => {
       event: messageCreated(makeMessage(3)),
     });
 
-    expect(useImStore.getState().historySyncMarkers).toMatchObject({
-      "conversation-1": { after_seq: 1 },
+    expect(useImStore.getState().historyBackfillMarkers).toMatchObject({
+      "conversation-1": { before_seq: 3 },
     });
   });
 
-  it("marks history sync needed after the highest contiguous sequence when cached messages have an existing gap", () => {
+  it("does not mark history backfill when realtime extends a loaded recent window", () => {
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(imQueryKeys.messages("conversation-1"), [
+      makeMessage(51),
+      makeMessage(52),
+    ]);
+    useImStore.getState().setCurrentConversationId("conversation-1");
+
+    applyRealtimeEvent({
+      queryClient,
+      store: useImStore,
+      event: messageCreated(makeMessage(53)),
+    });
+
+    expect(useImStore.getState().historyBackfillMarkers).not.toHaveProperty(
+      "conversation-1",
+    );
+  });
+
+  it("marks history backfill from the incoming seq when the loaded window already has a gap", () => {
     const queryClient = createQueryClient();
     queryClient.setQueryData(imQueryKeys.messages("conversation-1"), [
       makeMessage(1),
@@ -391,8 +410,8 @@ describe("IM realtime cache updates", () => {
       event: messageCreated(makeMessage(4)),
     });
 
-    expect(useImStore.getState().historySyncMarkers).toMatchObject({
-      "conversation-1": { after_seq: 1 },
+    expect(useImStore.getState().historyBackfillMarkers).toMatchObject({
+      "conversation-1": { before_seq: 4 },
     });
   });
 

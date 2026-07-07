@@ -15,8 +15,8 @@ export type WorkspaceNotice = {
   type: "left_group";
 };
 
-export type HistorySyncMarker = {
-  after_seq: number;
+export type HistoryBackfillMarker = {
+  before_seq: number;
 };
 
 export type MobilePanelState = "conversations" | "chat" | "details";
@@ -31,7 +31,7 @@ type ImStoreData = {
   showMessageSequenceNumbers: boolean;
   unreadCorrections: Record<string, number>;
   unreadCorrectionMaxMessageSeqs: Record<string, number>;
-  historySyncMarkers: Record<string, HistorySyncMarker>;
+  historyBackfillMarkers: Record<string, HistoryBackfillMarker>;
   mobilePanel: MobilePanelState;
 };
 
@@ -49,8 +49,8 @@ type ImStoreActions = {
     maxMessageSeq?: number,
   ) => void;
   clearUnreadCorrection: (conversationId: string) => void;
-  markHistorySyncNeeded: (conversationId: string, afterSeq: number) => void;
-  clearHistorySyncMarker: (conversationId: string) => void;
+  markHistoryBackfillNeeded: (conversationId: string, beforeSeq: number) => void;
+  clearHistoryBackfillMarker: (conversationId: string) => void;
   setMobilePanel: (panel: MobilePanelState) => void;
   reset: () => void;
 };
@@ -121,20 +121,20 @@ export const useImStore = create<ImStoreState>((set) => ({
       return { unreadCorrections, unreadCorrectionMaxMessageSeqs };
     });
   },
-  markHistorySyncNeeded(conversationId, afterSeq) {
+  markHistoryBackfillNeeded(conversationId, beforeSeq) {
     set((state) => ({
-      historySyncMarkers: {
-        ...state.historySyncMarkers,
-        [conversationId]: { after_seq: afterSeq },
+      historyBackfillMarkers: {
+        ...state.historyBackfillMarkers,
+        [conversationId]: { before_seq: beforeSeq },
       },
     }));
   },
-  clearHistorySyncMarker(conversationId) {
+  clearHistoryBackfillMarker(conversationId) {
     set((state) => {
-      const historySyncMarkers = { ...state.historySyncMarkers };
-      delete historySyncMarkers[conversationId];
+      const historyBackfillMarkers = { ...state.historyBackfillMarkers };
+      delete historyBackfillMarkers[conversationId];
 
-      return { historySyncMarkers };
+      return { historyBackfillMarkers };
     });
   },
   setMobilePanel(panel) {
@@ -155,7 +155,7 @@ export function createInitialImStoreData(): ImStoreData {
     showMessageSequenceNumbers: readShowMessageSequenceNumbers(),
     unreadCorrections: {},
     unreadCorrectionMaxMessageSeqs: {},
-    historySyncMarkers: {},
+    historyBackfillMarkers: {},
     mobilePanel: "conversations",
   };
 }

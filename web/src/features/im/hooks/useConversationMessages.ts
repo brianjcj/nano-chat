@@ -20,7 +20,6 @@ import {
 } from "@/shared/utils/message";
 
 const HISTORY_PAGE_SIZE = 50;
-const HISTORY_SYNC_PAGE_SIZE = 100;
 
 type UseConversationMessagesResult = {
   messages: ChatMessage[];
@@ -50,9 +49,9 @@ export function useConversationMessages(
           }
         : {},
     );
-  const inFlightHistorySyncsRef = useRef<Record<string, number>>({});
-  const historySyncMarker = useImStore((state) =>
-    conversationId ? state.historySyncMarkers[conversationId] : undefined,
+  const inFlightHistoryBackfillsRef = useRef<Record<string, number>>({});
+  const historyBackfillMarker = useImStore((state) =>
+    conversationId ? state.historyBackfillMarkers[conversationId] : undefined,
   );
   const latestFetchBeforeSeq = conversationId
     ? (latestFetchBeforeSeqByConversationId[conversationId] ??
@@ -133,12 +132,17 @@ export function useConversationMessages(
     const existingMessages =
       queryClient.getQueryData<ChatMessage[]>(canonicalMessagesKey) ?? [];
 
-    if (latestPageRevealsLoadedMiddleGap(existingMessages, fetchedMessages)) {
+    const backfillBeforeSeq = getBackfillBeforeSeqForLatestPageGap(
+      existingMessages,
+      fetchedMessages,
+    );
+
+    if (backfillBeforeSeq !== null) {
       useImStore
         .getState()
-        .markHistorySyncNeeded(
+        .markHistoryBackfillNeeded(
           conversation.conversation_id,
-          getHighestContiguousLoadedSeq(existingMessages),
+          backfillBeforeSeq,
         );
     }
 
@@ -150,59 +154,70 @@ export function useConversationMessages(
   }, [conversation, latestMessagesQuery.data, queryClient]);
 
   useEffect(() => {
-    if (!conversation || !historySyncMarker) {
+    if (!conversation || !historyBackfillMarker) {
       return;
     }
 
     const conversationId = conversation.conversation_id;
-    const afterSeq = historySyncMarker.after_seq;
+    const beforeSeq = historyBackfillMarker.before_seq;
 
-    if (inFlightHistorySyncsRef.current[conversationId] === afterSeq) {
+    if (inFlightHistoryBackfillsRef.current[conversationId] === beforeSeq) {
       return;
     }
 
-    inFlightHistorySyncsRef.current[conversationId] = afterSeq;
+    const existingMessagesBeforeRequest =
+      queryClient.getQueryData<ChatMessage[]>(imQueryKeys.messages(conversationId)) ?? [];
+    const loadedLowerBoundarySeq = getHighestLoadedMessageSeqBefore(
+      existingMessagesBeforeRequest,
+      beforeSeq,
+    );
+
+    inFlightHistoryBackfillsRef.current[conversationId] = beforeSeq;
 
     void apiClient
       .listMessages(conversationId, {
-        after_seq: afterSeq,
-        limit: HISTORY_SYNC_PAGE_SIZE,
+        before_seq: beforeSeq,
+        limit: HISTORY_PAGE_SIZE,
       })
-      .then((syncedMessages) => {
+      .then((backfilledMessages) => {
         queryClient.setQueryData<ChatMessage[]>(
           imQueryKeys.messages(conversationId),
           (existingMessages = []) =>
-            mergeMessagesBySeq(existingMessages, syncedMessages),
+            mergeMessagesBySeq(existingMessages, backfilledMessages),
         );
 
         const latestMarker =
-          useImStore.getState().historySyncMarkers[conversationId];
+          useImStore.getState().historyBackfillMarkers[conversationId];
 
-        if (latestMarker?.after_seq === afterSeq) {
-          const highestSyncedSeq = getHighestMessageSeq(syncedMessages);
+        if (latestMarker?.before_seq === beforeSeq) {
+          const fetchedMinimumSeq = getMinimumMessageSeq(backfilledMessages);
 
           if (
-            syncedMessages.length >= HISTORY_SYNC_PAGE_SIZE &&
-            highestSyncedSeq > afterSeq
+            backfilledMessages.length >= HISTORY_PAGE_SIZE &&
+            Number.isFinite(fetchedMinimumSeq) &&
+            !backfillReachedLowerBoundary(
+              fetchedMinimumSeq,
+              loadedLowerBoundarySeq,
+            )
           ) {
             useImStore
               .getState()
-              .markHistorySyncNeeded(conversationId, highestSyncedSeq);
+              .markHistoryBackfillNeeded(conversationId, fetchedMinimumSeq);
             return;
           }
 
-          useImStore.getState().clearHistorySyncMarker(conversationId);
+          useImStore.getState().clearHistoryBackfillMarker(conversationId);
         }
       })
       .catch(() => {
-        // Keep the marker so a later render/reconnect can retry the sync.
+        // Keep the marker so a later render/reconnect can retry the backfill.
       })
       .finally(() => {
-        if (inFlightHistorySyncsRef.current[conversationId] === afterSeq) {
-          delete inFlightHistorySyncsRef.current[conversationId];
+        if (inFlightHistoryBackfillsRef.current[conversationId] === beforeSeq) {
+          delete inFlightHistoryBackfillsRef.current[conversationId];
         }
       });
-  }, [apiClient, conversation, historySyncMarker, queryClient]);
+  }, [apiClient, conversation, historyBackfillMarker, queryClient]);
 
   const messages = canonicalMessagesQuery.data ?? [];
   const hasLoadedAllKnownHistory = Boolean(
@@ -300,7 +315,7 @@ function isMessageSeqLoaded(messages: ChatMessage[], messageSeq: number) {
   );
 }
 
-function latestPageRevealsLoadedMiddleGap(
+function getBackfillBeforeSeqForLatestPageGap(
   existingMessages: ChatMessage[],
   fetchedMessages: Message[],
 ) {
@@ -308,15 +323,15 @@ function latestPageRevealsLoadedMiddleGap(
     getHighestContiguousLoadedSeq(existingMessages);
 
   if (highestContiguousLoadedSeq <= 0) {
-    return false;
+    return null;
   }
 
   const fetchedMinimumSeq = getMinimumMessageSeq(fetchedMessages);
 
-  return (
-    Number.isFinite(fetchedMinimumSeq) &&
+  return Number.isFinite(fetchedMinimumSeq) &&
     fetchedMinimumSeq > highestContiguousLoadedSeq + 1
-  );
+    ? fetchedMinimumSeq
+    : null;
 }
 
 function getMinimumMessageSeq(messages: ChatMessage[] | Message[]) {
@@ -331,16 +346,32 @@ function getMinimumMessageSeq(messages: ChatMessage[] | Message[]) {
   return Math.min(...seqs);
 }
 
-function getHighestMessageSeq(messages: ChatMessage[] | Message[]) {
+function getHighestLoadedMessageSeqBefore(
+  messages: ChatMessage[],
+  beforeSeq: number,
+) {
   const seqs = messages
     .map((message) => message.message_seq)
-    .filter((messageSeq): messageSeq is number => typeof messageSeq === "number");
+    .filter(
+      (messageSeq): messageSeq is number =>
+        typeof messageSeq === "number" && messageSeq < beforeSeq,
+    );
 
   if (seqs.length === 0) {
     return 0;
   }
 
   return Math.max(...seqs);
+}
+
+function backfillReachedLowerBoundary(
+  fetchedMinimumSeq: number,
+  loadedLowerBoundarySeq: number,
+) {
+  const targetMinimumSeq =
+    loadedLowerBoundarySeq > 0 ? loadedLowerBoundarySeq + 1 : 1;
+
+  return fetchedMinimumSeq <= targetMinimumSeq;
 }
 
 function getHighestContiguousLoadedSeq(messages: ChatMessage[]) {

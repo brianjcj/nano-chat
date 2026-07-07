@@ -1065,12 +1065,12 @@ describe("ChatView", () => {
     });
   });
 
-  it("consumes a history sync marker by fetching after_seq and merging missing messages", async () => {
-    useImStore.getState().markHistorySyncNeeded("conversation-1", 1);
+  it("consumes a history backfill marker by fetching before_seq and merging missing messages", async () => {
+    useImStore.getState().markHistoryBackfillNeeded("conversation-1", 3);
     const listMessages = vi
       .fn<ApiClient["listMessages"]>()
       .mockImplementation((_conversationId, query) => {
-        if (query?.after_seq === 1) {
+        if (query?.before_seq === 3) {
           return Promise.resolve([message(2)]);
         }
 
@@ -1088,10 +1088,13 @@ describe("ChatView", () => {
 
     await waitFor(() => {
       expect(listMessages).toHaveBeenCalledWith("conversation-1", {
-        after_seq: 1,
-        limit: 100,
+        before_seq: 3,
+        limit: 50,
       });
     });
+    expect(
+      listMessages.mock.calls.some(([, query]) => query?.after_seq !== undefined),
+    ).toBe(false);
     await waitFor(() => {
       expect(
         queryClient
@@ -1099,12 +1102,12 @@ describe("ChatView", () => {
           ?.map((candidate) => candidate.message_seq),
       ).toEqual([1, 2, 3]);
     });
-    expect(useImStore.getState().historySyncMarkers).not.toHaveProperty(
+    expect(useImStore.getState().historyBackfillMarkers).not.toHaveProperty(
       "conversation-1",
     );
   });
 
-  it("detects a reconnect latest-page gap and syncs the inaccessible middle messages", async () => {
+  it("detects a reconnect latest-page gap and backfills the inaccessible middle messages with before_seq", async () => {
     const queryClient = createQueryClient();
     queryClient.setQueryData(
       imQueryKeys.messages("conversation-1"),
@@ -1119,7 +1122,7 @@ describe("ChatView", () => {
     const listMessages = vi
       .fn<ApiClient["listMessages"]>()
       .mockImplementation((_conversationId, query) => {
-        if (query?.after_seq === 100) {
+        if (query?.before_seq === 151) {
           return Promise.resolve(missingMiddlePage);
         }
 
@@ -1142,10 +1145,13 @@ describe("ChatView", () => {
     });
     await waitFor(() => {
       expect(listMessages).toHaveBeenCalledWith("conversation-1", {
-        after_seq: 100,
-        limit: 100,
+        before_seq: 151,
+        limit: 50,
       });
     });
+    expect(
+      listMessages.mock.calls.some(([, query]) => query?.after_seq !== undefined),
+    ).toBe(false);
     await waitFor(() => {
       expect(
         queryClient
@@ -1153,34 +1159,41 @@ describe("ChatView", () => {
           ?.map((candidate) => candidate.message_seq),
       ).toEqual(Array.from({ length: 200 }, (_, index) => index + 1));
     });
-    expect(useImStore.getState().historySyncMarkers).not.toHaveProperty(
+    expect(useImStore.getState().historyBackfillMarkers).not.toHaveProperty(
       "conversation-1",
     );
   });
 
-  it("continues history sync when a full after_seq page leaves a larger gap", async () => {
-    useImStore.getState().markHistorySyncNeeded("conversation-1", 1);
-    const firstGapPage = Array.from({ length: 100 }, (_, index) =>
+  it("continues history backfill when a full before_seq page leaves a larger gap", async () => {
+    useImStore.getState().markHistoryBackfillNeeded("conversation-1", 102);
+    const firstBackfillPage = Array.from({ length: 50 }, (_, index) =>
+      message(index + 52),
+    );
+    const secondBackfillPage = Array.from({ length: 50 }, (_, index) =>
       message(index + 2),
     );
     const listMessages = vi
       .fn<ApiClient["listMessages"]>()
       .mockImplementation((_conversationId, query) => {
-        if (query?.after_seq === 1) {
-          return Promise.resolve(firstGapPage);
+        if (query?.before_seq === 102) {
+          return Promise.resolve(firstBackfillPage);
         }
 
-        if (query?.after_seq === 101) {
-          return Promise.resolve([message(102)]);
+        if (query?.before_seq === 52) {
+          return Promise.resolve(secondBackfillPage);
         }
 
-        return Promise.resolve([message(1), message(103)]);
+        return Promise.resolve([message(102)]);
       });
     const queryClient = createQueryClient();
+    queryClient.setQueryData(imQueryKeys.messages("conversation-1"), [
+      message(1),
+      message(102),
+    ]);
 
     await renderChatView({
       conversations: [
-        conversation({ latest_message_seq: 103, read_seq: 103, unread_count: 0 }),
+        conversation({ latest_message_seq: 102, read_seq: 102, unread_count: 0 }),
       ],
       listMessages,
       queryClient,
@@ -1188,24 +1201,27 @@ describe("ChatView", () => {
 
     await waitFor(() => {
       expect(listMessages).toHaveBeenCalledWith("conversation-1", {
-        after_seq: 1,
-        limit: 100,
+        before_seq: 102,
+        limit: 50,
       });
     });
     await waitFor(() => {
       expect(listMessages).toHaveBeenCalledWith("conversation-1", {
-        after_seq: 101,
-        limit: 100,
+        before_seq: 52,
+        limit: 50,
       });
     });
+    expect(
+      listMessages.mock.calls.some(([, query]) => query?.after_seq !== undefined),
+    ).toBe(false);
     await waitFor(() => {
       expect(
         queryClient
           .getQueryData<ChatMessage[]>(imQueryKeys.messages("conversation-1"))
           ?.map((candidate) => candidate.message_seq),
-      ).toEqual(Array.from({ length: 103 }, (_, index) => index + 1));
+      ).toEqual(Array.from({ length: 102 }, (_, index) => index + 1));
     });
-    expect(useImStore.getState().historySyncMarkers).not.toHaveProperty(
+    expect(useImStore.getState().historyBackfillMarkers).not.toHaveProperty(
       "conversation-1",
     );
   });
