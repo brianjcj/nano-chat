@@ -1,7 +1,14 @@
 mod common;
 
 use axum::http::StatusCode;
-use nano_chat::{conversations::service as conversations_service, error::ErrorCode};
+use nano_chat::{
+    calls::{
+        service as calls_service,
+        types::{CallInviteOutcome, CallMediaType},
+    },
+    conversations::service as conversations_service,
+    error::ErrorCode,
+};
 use serde_json::json;
 use sqlx::Row;
 use tower::ServiceExt;
@@ -70,6 +77,88 @@ async fn text_messages_return_type_and_empty_metadata() {
     let history = ctx.messages(&alice, sent.conversation_id, "").await;
     assert_eq!(history[0].message_type, "text");
     assert_eq!(history[0].metadata, serde_json::json!({}));
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn call_event_message_persists_details_and_updates_history() {
+    let ctx = common::TestContext::new().await;
+    let alice = ctx.register("alice").await;
+    let bob = ctx.register("bob").await;
+    let seed = ctx
+        .send_direct_message(&alice, "bob", "seed-text", "hello before call")
+        .await;
+
+    let outcome = calls_service::invite_with_outcome(
+        &ctx.pool,
+        &ctx.state.registry,
+        alice.current_user(),
+        seed.conversation_id,
+        CallMediaType::Video,
+    )
+    .await
+    .expect("offline call attempt should be recorded");
+    let result = match outcome {
+        CallInviteOutcome::Offline(result) => result,
+        _ => panic!("offline bob should produce an offline call record"),
+    };
+    let call_event = result
+        .call_event_message
+        .as_ref()
+        .expect("offline call attempt should create a call event message");
+    let metadata = json!({
+        "call_id": result.call.call_id,
+        "media_type": "video",
+        "outcome": "offline",
+        "duration_seconds": 0,
+        "caller_user_id": alice.user_id,
+        "callee_user_id": bob.user_id,
+    });
+
+    assert_eq!(call_event.conversation_id, seed.conversation_id);
+    assert_eq!(call_event.message_seq, seed.message.message_seq + 1);
+    assert_eq!(call_event.body, "视频通话 对方离线");
+    assert_eq!(call_event.message_type, "call_event");
+    assert_eq!(call_event.metadata, metadata);
+
+    let conversation_row = sqlx::query(
+        "select last_message_seq, last_message_id
+         from conversations
+         where conversation_id = $1",
+    )
+    .bind(seed.conversation_id)
+    .fetch_one(&ctx.pool)
+    .await
+    .expect("load updated conversation");
+    assert_eq!(
+        conversation_row.get::<i64, _>("last_message_seq"),
+        call_event.message_seq
+    );
+    assert_eq!(
+        conversation_row.get::<uuid::Uuid, _>("last_message_id"),
+        call_event.message_id
+    );
+
+    let history = ctx.messages(&bob, seed.conversation_id, "").await;
+    assert_eq!(history.len(), 2);
+    let history_call_event = history.last().expect("call event in history");
+    assert_eq!(history_call_event.message_id, call_event.message_id);
+    assert_eq!(history_call_event.message_type, "call_event");
+    assert_eq!(history_call_event.metadata, metadata);
+
+    let bob_conversations = ctx.conversations(&bob).await;
+    let listed = bob_conversations
+        .iter()
+        .find(|conversation| conversation.conversation_id == seed.conversation_id)
+        .expect("conversation should remain listed");
+    assert_eq!(listed.latest_message_seq, call_event.message_seq);
+    let latest = listed
+        .latest_message
+        .as_ref()
+        .expect("latest message summary");
+    assert_eq!(latest.message_id, call_event.message_id);
+    assert_eq!(latest.message_type, "call_event");
+    assert_eq!(latest.metadata, metadata);
 }
 
 #[tokio::test]

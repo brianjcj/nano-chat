@@ -15,6 +15,18 @@ pnpm install
 
 ## Local development
 
+### tmux helper
+
+From the repository root, start the usual local development stack in tmux:
+
+```bash
+./scripts/dev-tmux.sh
+```
+
+This starts Postgres through Docker Compose, runs SQL migrations, starts the Rust backend, and starts Vite. Use `./scripts/dev-tmux.sh compose` to run the full Docker Compose stack, `./scripts/dev-tmux.sh logs` to attach to the session, and `./scripts/dev-tmux.sh stop` to close the tmux session.
+
+### Manual startup
+
 Start the Rust backend first from the repository root. The backend reads environment variables directly and does not auto-load `.env`:
 
 ```bash
