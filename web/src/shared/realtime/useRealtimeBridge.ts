@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
+import { useNavigate, type NavigateFunction } from "react-router";
 
 import { useSession } from "@/app/AppProviders";
 import { imQueryKeys } from "@/features/im/api/imQueries";
@@ -25,6 +26,7 @@ export function useRealtimeBridge(options: UseRealtimeBridgeOptions = {}) {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { getValidSession } = useSession();
+  const navigate = useNavigate();
   const setRealtimeStatus = useImStore((state) => state.setRealtimeStatus);
   const contextClient = useOptionalRealtimeClient();
   const wsUrl = useMemo(() => getAppEnv().wsUrl, []);
@@ -62,7 +64,7 @@ export function useRealtimeBridge(options: UseRealtimeBridgeOptions = {}) {
           currentUserId,
         })
       ) {
-        showRealtimeNotification(event, t);
+        showRealtimeNotification(event, t, navigate);
       }
 
       applyRealtimeEvent({
@@ -95,17 +97,27 @@ export function useRealtimeBridge(options: UseRealtimeBridgeOptions = {}) {
       unsubscribeStatus();
       client.disconnect();
     };
-  }, [client, getValidSession, queryClient, setRealtimeStatus, t]);
+  }, [client, getValidSession, navigate, queryClient, setRealtimeStatus, t]);
 
   return client;
 }
 
-function showRealtimeNotification(event: RealtimeIncoming, t: TFunction) {
+function showRealtimeNotification(
+  event: RealtimeIncoming,
+  t: TFunction,
+  navigate: NavigateFunction,
+) {
   if (event.type === "message.created") {
+    const conversationId = event.payload.conversation_id;
+
     showBrowserNotification({
       body: event.payload.message.body,
       enabled: true,
-      tag: `nano-chat:message:${event.payload.conversation_id}`,
+      onClick: () => {
+        focusAppWindow();
+        navigate(`/app/im/conversations/${encodeURIComponent(conversationId)}`);
+      },
+      tag: `nano-chat:message:${conversationId}`,
       title: getUserDisplayName(event.payload.message.sender),
     });
     return;
@@ -117,12 +129,19 @@ function showRealtimeNotification(event: RealtimeIncoming, t: TFunction) {
 
     showBrowserNotification({
       enabled: true,
+      onClick: focusAppWindow,
       tag: `nano-chat:call:${call.call_id}`,
       title:
         call.media_type === "audio"
           ? t("calls.status.incomingAudio", { name: callerName })
           : t("calls.status.incomingVideo", { name: callerName }),
     });
+  }
+}
+
+function focusAppWindow() {
+  if (typeof window.focus === "function") {
+    window.focus();
   }
 }
 

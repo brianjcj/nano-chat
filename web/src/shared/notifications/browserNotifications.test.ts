@@ -60,6 +60,23 @@ describe("browser notification permission", () => {
       tag: "message-1",
     });
   });
+
+  it("wires notification click callbacks", () => {
+    const onClick = vi.fn();
+    const NotificationMock = createNotificationMock(() => "granted");
+    installNotificationGlobal(NotificationMock);
+
+    showBrowserNotification({
+      enabled: true,
+      onClick,
+      title: "Bob",
+    });
+    const [notification] = NotificationMock.mock.instances as Notification[];
+
+    notification.onclick?.(new Event("click"));
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("realtime notification filtering", () => {
@@ -145,7 +162,7 @@ function createNotificationMock(
   getPermission: () => NotificationPermission,
   requestPermission = vi.fn(async () => getPermission()),
 ) {
-  const NotificationMock = vi.fn();
+  const NotificationMock = vi.fn(function (this: Notification) {});
 
   Object.defineProperty(NotificationMock, "permission", {
     configurable: true,

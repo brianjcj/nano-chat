@@ -10,6 +10,7 @@ type NotificationContext = {
 type ShowBrowserNotificationOptions = {
   body?: string;
   enabled: boolean;
+  onClick?: (event: Event) => void;
   tag?: string;
   title: string;
 };
@@ -37,16 +38,23 @@ export async function requestBrowserNotificationPermission(): Promise<BrowserNot
 export function showBrowserNotification({
   body,
   enabled,
+  onClick,
   tag,
   title,
-}: ShowBrowserNotificationOptions): void {
+}: ShowBrowserNotificationOptions): Notification | undefined {
   const NotificationApi = getNotificationApi();
 
   if (!enabled || !NotificationApi || NotificationApi.permission !== "granted") {
-    return;
+    return undefined;
   }
 
-  new NotificationApi(title, { body, tag });
+  const notification = new NotificationApi(title, { body, tag });
+
+  if (onClick) {
+    notification.onclick = onClick;
+  }
+
+  return notification;
 }
 
 export function shouldNotifyForRealtimeEvent(
