@@ -96,6 +96,11 @@ export const appResources = {
           colorTheme: "颜色主题",
           messageDisplay: "消息显示",
           sequenceDescription: "用于排查消息顺序问题，默认隐藏。",
+          notifications: "通知",
+          browserNotifications: "浏览器通知",
+          browserNotificationsDescription: "应用打开时提示新消息和来电。",
+          browserNotificationsUnsupported: "当前浏览器不支持通知。",
+          browserNotificationsBlocked: "通知已被浏览器阻止，请在浏览器设置中开启。",
           themes: {
             mist: "雾蓝",
             midnight: "午夜",
@@ -357,6 +362,11 @@ export const appResources = {
           colorTheme: "Color theme",
           messageDisplay: "Message display",
           sequenceDescription: "Useful for checking message ordering; hidden by default.",
+          notifications: "Notifications",
+          browserNotifications: "Browser notifications",
+          browserNotificationsDescription: "Alert on new messages and incoming calls while Nano Chat is open.",
+          browserNotificationsUnsupported: "Notifications are not available in this browser.",
+          browserNotificationsBlocked: "Notifications are blocked in browser settings.",
           themes: {
             mist: "Mist",
             midnight: "Midnight",

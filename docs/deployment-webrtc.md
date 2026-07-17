@@ -12,9 +12,4 @@ Run: docker compose up -d --build
 
 ## Smoke test
 
-1. Point DNS for NANO_CHAT_DOMAIN and TURN_PUBLIC_HOST at the VPS.
-2. Open TCP 80/443/3478 and UDP 3478 plus the TURN_RELAY_MIN_PORT-TURN_RELAY_MAX_PORT range (49160-49200 by default).
-3. Run `docker compose up -d --build`.
-4. Open `https://$NANO_CHAT_DOMAIN/healthz` and expect `200 OK`.
-5. Log in from two browsers, create a direct conversation, and start an audio call.
-6. Confirm `GET /api/v1/calls/ice-servers` returns one STUN server and one TURN server with temporary credentials.
+After DNS, firewall, environment, and `docker compose up -d --build` are in place, run the concise real-VPS checklist in [deployment-smoke.md](deployment-smoke.md).

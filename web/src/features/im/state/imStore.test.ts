@@ -4,6 +4,8 @@ import { useImStore } from "./imStore";
 
 const SHOW_MESSAGE_SEQUENCE_NUMBERS_STORAGE_KEY =
   "nano-chat:show-message-sequence-numbers";
+const BROWSER_NOTIFICATIONS_ENABLED_STORAGE_KEY =
+  "nano-chat:browser-notifications-enabled";
 
 describe("IM store feature area", () => {
   beforeEach(() => {
@@ -54,6 +56,22 @@ describe("IM store feature area", () => {
     expect(window.localStorage.getItem(SHOW_MESSAGE_SEQUENCE_NUMBERS_STORAGE_KEY)).toBe(
       "false",
     );
+  });
+
+  it("persists whether browser notifications are enabled", () => {
+    expect(useImStore.getState().browserNotificationsEnabled).toBe(false);
+
+    window.localStorage.setItem(BROWSER_NOTIFICATIONS_ENABLED_STORAGE_KEY, "true");
+    useImStore.getState().reset();
+
+    expect(useImStore.getState().browserNotificationsEnabled).toBe(true);
+
+    useImStore.getState().setBrowserNotificationsEnabled(false);
+
+    expect(useImStore.getState().browserNotificationsEnabled).toBe(false);
+    expect(
+      window.localStorage.getItem(BROWSER_NOTIFICATIONS_ENABLED_STORAGE_KEY),
+    ).toBe("false");
   });
 
   it("tracks the highest realtime message sequence for unread corrections", () => {

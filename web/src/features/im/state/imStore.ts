@@ -4,6 +4,8 @@ import type { RealtimeStatus } from "@/shared/realtime/realtimeClient";
 
 export const SHOW_MESSAGE_SEQUENCE_NUMBERS_STORAGE_KEY =
   "nano-chat:show-message-sequence-numbers";
+export const BROWSER_NOTIFICATIONS_ENABLED_STORAGE_KEY =
+  "nano-chat:browser-notifications-enabled";
 
 export type DirectDraft = {
   target_username: string;
@@ -29,6 +31,7 @@ type ImStoreData = {
   workspaceNotice: WorkspaceNotice | null;
   realtimeStatus: RealtimeStatus;
   showMessageSequenceNumbers: boolean;
+  browserNotificationsEnabled: boolean;
   unreadCorrections: Record<string, number>;
   unreadCorrectionMaxMessageSeqs: Record<string, number>;
   historyBackfillMarkers: Record<string, HistoryBackfillMarker>;
@@ -43,6 +46,7 @@ type ImStoreActions = {
   setRealtimeStatus: (status: RealtimeStatus) => void;
   setShowMessageSequenceNumbers: (show: boolean) => void;
   toggleShowMessageSequenceNumbers: () => void;
+  setBrowserNotificationsEnabled: (enabled: boolean) => void;
   incrementUnreadCorrection: (
     conversationId: string,
     amount?: number,
@@ -85,6 +89,10 @@ export const useImStore = create<ImStoreState>((set) => ({
       writeShowMessageSequenceNumbers(showMessageSequenceNumbers);
       return { showMessageSequenceNumbers };
     });
+  },
+  setBrowserNotificationsEnabled(enabled) {
+    writeBrowserNotificationsEnabled(enabled);
+    set({ browserNotificationsEnabled: enabled });
   },
   incrementUnreadCorrection(conversationId, amount = 1, maxMessageSeq) {
     set((state) => {
@@ -153,6 +161,7 @@ export function createInitialImStoreData(): ImStoreData {
     workspaceNotice: null,
     realtimeStatus: "idle",
     showMessageSequenceNumbers: readShowMessageSequenceNumbers(),
+    browserNotificationsEnabled: readBrowserNotificationsEnabled(),
     unreadCorrections: {},
     unreadCorrectionMaxMessageSeqs: {},
     historyBackfillMarkers: {},
@@ -175,6 +184,27 @@ function writeShowMessageSequenceNumbers(show: boolean) {
     globalThis.localStorage?.setItem(
       SHOW_MESSAGE_SEQUENCE_NUMBERS_STORAGE_KEY,
       show ? "true" : "false",
+    );
+  } catch {
+    // Setting persistence is best-effort when storage is unavailable.
+  }
+}
+
+function readBrowserNotificationsEnabled() {
+  try {
+    return globalThis.localStorage?.getItem(
+      BROWSER_NOTIFICATIONS_ENABLED_STORAGE_KEY,
+    ) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writeBrowserNotificationsEnabled(enabled: boolean) {
+  try {
+    globalThis.localStorage?.setItem(
+      BROWSER_NOTIFICATIONS_ENABLED_STORAGE_KEY,
+      enabled ? "true" : "false",
     );
   } catch {
     // Setting persistence is best-effort when storage is unavailable.

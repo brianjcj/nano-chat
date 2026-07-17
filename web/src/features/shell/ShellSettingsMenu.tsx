@@ -9,6 +9,10 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { useImStore } from "@/features/im/state/imStore";
+import {
+  getBrowserNotificationPermission,
+  requestBrowserNotificationPermission,
+} from "@/shared/notifications/browserNotifications";
 import { COLOR_THEMES, type ColorTheme } from "@/shared/theme/colorTheme";
 import { useColorTheme } from "@/shared/theme/useColorTheme";
 import { cn } from "@/shared/utils/cn";
@@ -38,6 +42,19 @@ export function ShellSettingsMenu({ placement }: ShellSettingsMenuProps) {
   const toggleShowMessageSequenceNumbers = useImStore(
     (state) => state.toggleShowMessageSequenceNumbers,
   );
+  const browserNotificationsEnabled = useImStore(
+    (state) => state.browserNotificationsEnabled,
+  );
+  const setBrowserNotificationsEnabled = useImStore(
+    (state) => state.setBrowserNotificationsEnabled,
+  );
+  const [browserNotificationPermission, setBrowserNotificationPermission] =
+    useState(getBrowserNotificationPermission);
+  const browserNotificationsChecked =
+    browserNotificationsEnabled && browserNotificationPermission === "granted";
+  const browserNotificationsUnavailable =
+    browserNotificationPermission === "unsupported" ||
+    browserNotificationPermission === "denied";
 
   useEffect(() => {
     if (!isOpen) {
@@ -72,6 +89,21 @@ export function ShellSettingsMenu({ placement }: ShellSettingsMenuProps) {
 
     event.stopPropagation();
     setIsOpen(false);
+  }
+
+  async function toggleBrowserNotifications() {
+    if (browserNotificationsUnavailable) {
+      return;
+    }
+
+    if (browserNotificationsChecked) {
+      setBrowserNotificationsEnabled(false);
+      return;
+    }
+
+    const permission = await requestBrowserNotificationPermission();
+    setBrowserNotificationPermission(permission);
+    setBrowserNotificationsEnabled(permission === "granted");
   }
 
   return (
@@ -195,11 +227,71 @@ export function ShellSettingsMenu({ placement }: ShellSettingsMenuProps) {
                 </span>
               </button>
             </section>
+
+            <section className="space-y-2">
+              <p className="px-1 text-xs font-black uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+                {t("shell.settings.notifications")}
+              </p>
+              <button
+                aria-checked={browserNotificationsChecked}
+                aria-label={t("shell.settings.browserNotifications")}
+                className="flex w-full items-center justify-between gap-3 rounded-[calc(var(--radius)*0.85)] border border-[var(--border)] bg-[color-mix(in_oklab,var(--surface)_72%,transparent)] p-3 text-left transition-colors hover:bg-[var(--surface)] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={browserNotificationsUnavailable}
+                onClick={() => void toggleBrowserNotifications()}
+                role="switch"
+                type="button"
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold">
+                    {t("shell.settings.browserNotifications")}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-[var(--muted-foreground)]">
+                    {t(
+                      getBrowserNotificationDescriptionKey(
+                        browserNotificationPermission,
+                      ),
+                    )}
+                  </span>
+                </span>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "relative h-6 w-11 shrink-0 rounded-full border transition-colors",
+                    browserNotificationsChecked
+                      ? "border-[var(--primary)] bg-[var(--primary)]"
+                      : "border-[color-mix(in_oklab,var(--muted-foreground)_38%,var(--border))] bg-[color-mix(in_oklab,var(--muted)_68%,var(--surface))]",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "absolute top-1/2 size-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform",
+                      browserNotificationsChecked
+                        ? "translate-x-5"
+                        : "translate-x-1",
+                    )}
+                  />
+                </span>
+              </button>
+            </section>
           </div>
         </div>
       ) : null}
     </div>
   );
+}
+
+function getBrowserNotificationDescriptionKey(
+  permission: ReturnType<typeof getBrowserNotificationPermission>,
+) {
+  if (permission === "unsupported") {
+    return "shell.settings.browserNotificationsUnsupported";
+  }
+
+  if (permission === "denied") {
+    return "shell.settings.browserNotificationsBlocked";
+  }
+
+  return "shell.settings.browserNotificationsDescription";
 }
 
 function getWrapperClassName(placement: ShellSettingsMenuPlacement) {

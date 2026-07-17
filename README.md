@@ -26,4 +26,4 @@ Backend integration tests require Postgres and a test database URL (`TEST_DATABA
 
 ## Deployment and WebRTC
 
-See [docs/deployment-webrtc.md](docs/deployment-webrtc.md) and [docs/api.md](docs/api.md).
+See [docs/deployment-webrtc.md](docs/deployment-webrtc.md) for setup, [docs/deployment-smoke.md](docs/deployment-smoke.md) for post-deploy validation, and [docs/api.md](docs/api.md) for API details.

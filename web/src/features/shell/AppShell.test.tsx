@@ -19,6 +19,8 @@ vi.mock("@/shared/realtime/useRealtimeBridge", () => ({
 
 const CONVERSATION_SIDEBAR_WIDTH_STORAGE_KEY =
   "nano-chat:conversation-sidebar-width";
+const BROWSER_NOTIFICATIONS_ENABLED_STORAGE_KEY =
+  "nano-chat:browser-notifications-enabled";
 
 function createShellApiClient(overrides: Partial<ApiClient> = {}) {
   return createFakeApiClient({
@@ -67,6 +69,43 @@ function getSwitchTrack(switchButton: HTMLElement) {
   }
 
   return track;
+}
+
+function installNotificationGlobal(value: typeof Notification) {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "Notification",
+  );
+  Object.defineProperty(globalThis, "Notification", {
+    configurable: true,
+    value,
+  });
+
+  return () => {
+    if (originalDescriptor) {
+      Object.defineProperty(globalThis, "Notification", originalDescriptor);
+    } else {
+      delete (globalThis as { Notification?: typeof Notification }).Notification;
+    }
+  };
+}
+
+function createNotificationMock(
+  getPermission: () => NotificationPermission,
+  requestPermission: () => Promise<NotificationPermission>,
+) {
+  const NotificationMock = vi.fn();
+
+  Object.defineProperty(NotificationMock, "permission", {
+    configurable: true,
+    get: getPermission,
+  });
+  Object.defineProperty(NotificationMock, "requestPermission", {
+    configurable: true,
+    value: requestPermission,
+  });
+
+  return NotificationMock as unknown as typeof Notification;
 }
 
 describe("AppShell", () => {
@@ -470,6 +509,48 @@ describe("AppShell", () => {
     expect(
       window.localStorage.getItem("nano-chat:show-message-sequence-numbers"),
     ).toBe("true");
+  });
+
+  it("opens shell settings and enables browser notifications after permission grants", async () => {
+    const user = userEvent.setup();
+    let permission: NotificationPermission = "default";
+    const requestPermission = vi.fn(async () => {
+      permission = "granted";
+      return permission;
+    });
+    const restoreNotification = installNotificationGlobal(
+      createNotificationMock(() => permission, requestPermission),
+    );
+
+    try {
+      await renderAppRoute({
+        initialEntries: ["/app/im"],
+        session: makeAuthResponse(),
+        apiClient: createShellApiClient(),
+      });
+
+      await screen.findByLabelText("Feature rail");
+      await user.click(getDesktopSettingsTrigger());
+
+      const popup = screen.getByRole("region", { name: "Settings" });
+      const notificationSwitch = within(popup).getByRole("switch", {
+        name: "Browser notifications",
+      });
+      expect(notificationSwitch).toHaveAttribute("aria-checked", "false");
+
+      await user.click(notificationSwitch);
+
+      await waitFor(() => {
+        expect(notificationSwitch).toHaveAttribute("aria-checked", "true");
+      });
+      expect(requestPermission).toHaveBeenCalledTimes(1);
+      expect(useImStore.getState().browserNotificationsEnabled).toBe(true);
+      expect(
+        window.localStorage.getItem(BROWSER_NOTIFICATIONS_ENABLED_STORAGE_KEY),
+      ).toBe("true");
+    } finally {
+      restoreNotification();
+    }
   });
 
   it("opens shell settings and switches the color theme", async () => {
